@@ -74,19 +74,28 @@ class ClientsControllers extends Controller
             ->orderByDesc('fecha_promesa')
             ->get();
 
-        // C) CCD opcional
-        $ccd = collect();
+        // C) CCD opcional (por DNI) + mapa por código (operación)
+        $ccd        = collect();   // lista completa (para la tabla de abajo)
+        $ccdByCodigo= collect();   // mapa: codigo → [docs]
+
         if (Schema::hasTable('ccd_clientes')) {
             $cols = DB::getSchemaBuilder()->getColumnListing('ccd_clientes');
-            $sel = collect(['id','dni','documento','nombre','archivo','ruta','url','created_at'])
-                  ->filter(fn($c)=>in_array($c,$cols))->all();
+
+            // Selección flexible según columnas disponibles
+            $sel = collect(['id','dni','codigo','documento','nombre','pdf','archivo','ruta','url','created_at'])
+                    ->filter(fn($c)=>in_array($c,$cols))->all();
+
             if ($sel) {
                 $ccd = DB::table('ccd_clientes')
                     ->select($sel)
-                    ->where('dni',$dni)
+                    ->where('dni', $dni)
                     ->orderByDesc('id')
-                    ->limit(50)
                     ->get();
+
+                // Si existe la columna 'codigo', armamos el mapa por código
+                if (in_array('codigo', $cols)) {
+                    $ccdByCodigo = $ccd->groupBy('codigo'); // p.ej. '6799186', '07213726-1', etc.
+                }
             }
         }
 
@@ -140,7 +149,9 @@ class ClientsControllers extends Controller
 
         return view('clientes.show', compact(
             'dni','titular','cuentas','pagos','promesas','ccd','pagosPorOperacion'
-        ));
+        ) + [
+            'ccdByCodigo' => $ccdByCodigo,
+        ]);
     }
 
     public function storePromesa(string $dni, Request $r)

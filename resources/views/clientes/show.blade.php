@@ -146,22 +146,26 @@
 
     <div class="table-responsive max-h-320">
       <table class="table table-sm table-striped table-hover align-middle tbl-compact mb-0" id="tblCuentas">
-        <thead>
-          <tr>
-            <th class="text-center" style="width:36px"><input type="checkbox" id="chkAll"></th>
-            <th>Cartera</th>
-            <th class="text-nowrap">Operación</th>
-            <th>Moneda</th>
-            <th>Entidad</th>
-            <th>Producto</th>
-            <th class="text-end text-nowrap">Saldo Capital</th>
-            <th class="text-end text-nowrap">Deuda Total</th>
-            <th class="text-nowrap">
-              Pagos
-              <i class="bi bi-info-circle ms-1" data-bs-toggle="tooltip" title="Conteo y total de pagos aplicados a esta operación."></i>
-            </th>
-          </tr>
-        </thead>
+      <thead>
+        <tr>
+          <th class="text-center" style="width:36px"><input type="checkbox" id="chkAll"></th>
+          <th>Cartera</th>
+          <th class="text-nowrap">Operación</th>
+          <th>Moneda</th>
+          <th>Entidad</th>
+          <th>Producto</th>
+          <th class="text-end text-nowrap">Saldo Capital</th>
+          <th class="text-end text-nowrap">Deuda Total</th>
+
+          {{-- NUEVA COLUMNA CCD --}}
+          <th class="text-nowrap">CCD</th>
+
+          <th class="text-nowrap">
+            Pagos
+            <i class="bi bi-info-circle ms-1" data-bs-toggle="tooltip" title="Conteo y total de pagos aplicados a esta operación."></i>
+          </th>
+        </tr>
+      </thead>
         <tbody>
           @foreach ($cuentas as $c)
             @php
@@ -169,6 +173,15 @@
               $sum = (float)($c->pagos_sum ?? 0);
               $hasList = isset($c->pagos_list) && (($c->pagos_list instanceof \Illuminate\Support\Collection && $c->pagos_list->count()) || (is_array($c->pagos_list) && count($c->pagos_list)));
               $collapseId = 'pagos-'.$loop->index;
+
+              // Docs por código (operación) ya precargados desde el controller
+              $docsCcd = ($ccdByCodigo[$c->operacion] ?? collect());
+              $mkUrl = function($path){
+                  $p = (string)($path ?? '');
+                  if ($p === '') return null;
+                  return \Illuminate\Support\Str::startsWith($p, ['http://','https://','/']) ? $p : url($p);
+                  // Si tus PDFs están en storage/app/public, cambia a: return asset('storage/'.$p);
+              };
             @endphp
             <tr>
               <td class="text-center">
@@ -181,6 +194,48 @@
               <td>{{ $c->producto ?? '—' }}</td>
               <td class="text-end text-nowrap">{{ number_format((float)($c->saldo_capital ?? 0), 2) }}</td>
               <td class="text-end text-nowrap">{{ number_format((float)($c->deuda_total ?? 0), 2) }}</td>
+
+              {{-- === CELDA CCD === --}}
+              <td class="text-nowrap">
+                @if($docsCcd->count() === 1)
+                  @php
+                    $d    = $docsCcd->first();
+                    $path = $d->pdf ?? $d->archivo ?? $d->ruta ?? $d->url ?? null;
+                    $href = $mkUrl($path);
+                  @endphp
+                  @if($href)
+                    <a href="{{ $href }}" target="_blank" download
+                      class="btn btn-sm btn-outline-primary" title="Descargar CCD">
+                      <i class="bi bi-filetype-pdf me-1"></i> CCD
+                    </a>
+                  @else
+                    <span class="text-secondary">—</span>
+                  @endif
+
+                @elseif($docsCcd->count() > 1)
+                  <div class="btn-group">
+                    <button class="btn btn-sm btn-outline-primary dropdown-toggle" data-bs-toggle="dropdown">
+                      <i class="bi bi-filetype-pdf me-1"></i> CCD ({{ $docsCcd->count() }})
+                    </button>
+                    <ul class="dropdown-menu dropdown-menu-end">
+                      @foreach($docsCcd as $d)
+                        @php
+                          $path = $d->pdf ?? $d->archivo ?? $d->ruta ?? $d->url ?? null;
+                          $href = $mkUrl($path);
+                          $name = $d->nombre ?? $d->documento ?? $d->codigo ?? ('CCD '.$d->id);
+                        @endphp
+                        @if($href)
+                          <li><a class="dropdown-item" href="{{ $href }}" target="_blank" download>{{ $name }}</a></li>
+                        @endif
+                      @endforeach
+                    </ul>
+                  </div>
+                @else
+                  <span class="text-secondary">—</span>
+                @endif
+              </td>
+              {{-- === /CELDA CCD === --}}
+
               <td class="text-nowrap">
                 <span class="badge rounded-pill text-bg-light border">{{ $cnt }} pago(s)</span>
                 @if($sum > 0)
@@ -213,6 +268,7 @@
               </td>
             </tr>
           @endforeach
+
         </tbody>
       </table>
     </div>
@@ -574,18 +630,46 @@
   {{-- DOCUMENTOS CCD --}}
   @if($ccd->count())
     <div class="card pad mt-3">
-      <h2 class="h6 mb-2 d-flex align-items-center gap-2"><i class="bi bi-journal-text"></i> Documentos CCD</h2>
+      <h2 class="h6 mb-2 d-flex align-items-center gap-2">
+        <i class="bi bi-journal-text"></i> Documentos CCD
+      </h2>
       <div class="table-responsive max-h-260">
         <table class="table table-sm align-middle tbl-compact" id="tblCCD">
-          <thead><tr><th>ID</th><th>Documento</th><th>Archivo</th><th>Fecha</th></tr></thead>
+          <thead>
+            <tr>
+              <th>ID</th>
+              <th>Código</th>
+              <th>Nombre</th>
+              <th>Archivo</th>
+              <th>Fecha</th>
+              <th class="text-end">Acción</th>
+            </tr>
+          </thead>
           <tbody>
             @foreach($ccd as $d)
-              @php $path = $d->archivo ?? $d->ruta ?? $d->url ?? '-'; @endphp
+              @php
+                $path = $d->pdf ?? $d->archivo ?? $d->ruta ?? $d->url ?? null;
+                $href = $path ? (\Illuminate\Support\Str::startsWith($path, ['http://','https://','/']) ? $path : url($path)) : null;
+                $name = $d->nombre ?? $d->documento ?? '-';
+              @endphp
               <tr>
                 <td>{{ $d->id }}</td>
-                <td>{{ $d->documento ?? ($d->nombre ?? '-') }}</td>
-                <td class="text-truncate" style="max-width:420px;"><code class="small">{{ $path }}</code></td>
-                <td class="text-nowrap">{{ isset($d->created_at)? \Carbon\Carbon::parse($d->created_at)->format('d/m/Y H:i'):'' }}</td>
+                <td class="text-nowrap">{{ $d->codigo ?? '—' }}</td>
+                <td class="text-truncate" style="max-width:260px">{{ $name }}</td>
+                <td class="text-truncate" style="max-width:360px"><code class="small">{{ $path ?: '-' }}</code></td>
+                <td class="text-nowrap">
+                  {{ isset($d->created_at) ? \Carbon\Carbon::parse($d->created_at)->format('d/m/Y H:i') : '' }}
+                </td>
+                <td class="text-end">
+                  @if($href)
+                    <a href="{{ $href }}" target="_blank" download
+                      class="btn btn-sm btn-outline-primary">
+                      <i class="bi bi-download me-1"></i> Descargar
+                    </a>
+                  @else
+                    <span class="text-secondary">—</span>
+                  @endif
+                </td>
               </tr>
             @endforeach
           </tbody>
@@ -593,6 +677,7 @@
       </div>
     </div>
   @endif
+
 @endsection
 
 @push('scripts')
