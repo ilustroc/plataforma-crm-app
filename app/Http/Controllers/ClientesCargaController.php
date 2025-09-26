@@ -1,0 +1,192 @@
+<?php
+
+namespace App\Http\Controllers;
+
+use Illuminate\Http\Request;
+use App\Models\ClienteCuenta; // <-- ¡IMPORTANTE!
+
+
+class ClientesCargaController extends Controller
+{
+    public function templateClientesMaster()
+    {
+        $headers = [
+            'CARTERA','TIPO_DOC','DNI','OPERACIÓN','CONCATENAR','AGENTE','TITULAR','AÑO_CASTIGO',
+            'MONEDA','ENTIDAD','PRODUCTO','COSECHA','DEPARTAMENTO','ZONA','UBICACIÓN_GEOGRAFICA',
+            'FECHA_COMPRA','EDAD','SEXO','ESTADO_CIVIL','TELF1','TELF2','TELF3',
+            'SALDO_CAPITAL','INTERES','DEUDA_TOTAL','LABORAL','VEHICULOS','PROPIEDADES',
+            'CONSOLIDADO_VEHICULOS_PROPIEDADES','CLASIFICACION','SCORE','CORREO_ELECTRONICO',
+            'DIRECCION','PROVINCIA','DISTRITO',
+        ];
+
+        return response()->streamDownload(function () use ($headers) {
+            $out = fopen('php://output', 'w');
+            // BOM UTF-8 para que Excel muestre bien tildes/ñ
+            fwrite($out, "\xEF\xBB\xBF");
+            fputcsv($out, $headers);
+            fclose($out);
+        }, 'template_clientes_master.csv', [
+            'Content-Type'  => 'text/csv; charset=UTF-8',
+            'Cache-Control' => 'no-store, no-cache, must-revalidate',
+        ]);
+    }
+
+
+public function importClientesMaster(Request $r)
+{
+  $r->validate(['archivo'=>['required','file','mimes:csv,txt','max:40960']]);
+  $path = $r->file('archivo')->getRealPath();
+  [$ok,$skip,$err] = $this->doImportClientesMaster($path);
+
+  return back()->with('ok', "Importados: $ok, Omitidos: $skip")
+               ->with('warn', implode("\n", array_slice($err,0,10)));
+}
+
+private function doImportClientesMaster(string $filepath): array
+{
+  $fh = fopen($filepath,'r'); if(!$fh) return [0,0,['No se pudo abrir el archivo']];
+  $first = fgets($fh); if($first===false){ fclose($fh); return [0,0,['Archivo vacío']]; }
+  $del = (substr_count($first,';')>substr_count($first,','))?';':','; rewind($fh);
+
+  $headers = fgetcsv($fh,0,$del); if(!$headers){ fclose($fh); return [0,0,['Sin encabezados']]; }
+
+  // normalizador de encabezados
+  $norm = function(string $s): string {
+    $s = preg_replace('/^\xEF\xBB\xBF/u','',$s);           // BOM
+    $s = str_replace("\xC2\xA0",' ',$s);                   // NBSP
+    $s = strtoupper(trim($s));
+    $s = strtr($s, ['Á'=>'A','É'=>'E','Í'=>'I','Ó'=>'O','Ú'=>'U','Ü'=>'U','Ñ'=>'N']);
+    $s = preg_replace('/[^A-Z0-9]+/','_',$s);
+    return trim($s,'_');
+  };
+
+  $map = [];
+  foreach($headers as $i=>$h) $map[$i] = $norm($h);
+
+  // alias → canon
+  $alias = [
+    'TIPO_DOC'=>'TIPO_DOC','TIPO_DOCUMENTO'=>'TIPO_DOC',
+    'OPERACION'=>'OPERACION','OPERACIÓN'=>'OPERACION',
+    'CONCATENAR_DNI_Y_OPERACION'=>'CONCATENAR','CONCATENAR'=>'CONCATENAR',
+    'UBICACION_GEOGRAFICA'=>'UBICACION_GEOGRAFICA','UBICACIÓN_GEOGRÁFICA'=>'UBICACION_GEOGRAFICA',
+    'SALDO_CAPITAL'=>'SALDO_CAPITAL','INTERES'=>'INTERES','INTERÉS'=>'INTERES',
+    'DEUDA_TOTAL'=>'DEUDA_TOTAL','CLASIFICACION'=>'CLASIFICACION','CLASIFICACIÓN'=>'CLASIFICACION',
+    'CORREO_ELECTRONICO'=>'CORREO_ELECTRONICO','CORREO_ELECTRÓNICO'=>'CORREO_ELECTRONICO',
+  ];
+
+  $toUtf8 = function(?string $s): ?string {
+    if ($s===null) return null; $s = trim($s);
+    if ($s==='') return null;
+    if (!mb_check_encoding($s,'UTF-8')) $s = mb_convert_encoding($s,'UTF-8','UTF-8, ISO-8859-1, Windows-1252');
+    return preg_replace('/[\x00-\x1F\x7F]/u','',$s);
+  };
+  $num = function(?string $v): ?float {
+    if ($v===null) return null; $v=trim($v); if($v==='') return null;
+    // quita espacios y miles, acepta coma decimal
+    if (str_contains($v,',') && str_contains($v,'.')) { $v=str_replace(['.',' '],'',$v); $v=str_replace(',','.',$v); }
+    elseif (str_contains($v,',')) { $v=str_replace(['.',' '],'',$v); $v=str_replace(',','.',$v); }
+    else { $v=str_replace(' ','',$v); }
+    return is_numeric($v)?(float)$v:null;
+  };
+  $date = function(?string $v): ?string {
+    if(!$v) return null; $v=trim($v);
+    if (preg_match('#^\d{4}$#',$v)) return $v.'-01-01';
+    if (preg_match('#^(\d{2})/(\d{2})/(\d{4})$#',$v,$m)) return "{$m[3]}-{$m[2]}-{$m[1]}";
+    if (preg_match('#^\d{4}-\d{2}-\d{2}$#',$v)) return $v;
+    return null;
+  };
+
+  $ok=0; $skip=0; $err=[]; $rowNum=1;
+
+  while(($row=fgetcsv($fh,0,$del))!==false){
+    $rowNum++; $data=[];
+    foreach($row as $i=>$val){
+      $k = $map[$i] ?? null; if(!$k) continue;
+      $k = $alias[$k] ?? $k;
+      $val = $toUtf8((string)$val);
+
+      switch ($k) {
+        case 'CARTERA':                $data['cartera']=$val; break;
+        case 'TIPO_DOC':               $data['tipo_doc']=$val; break;
+        case 'DNI':                    $data['dni']=$val; break;
+        case 'OPERACION':              $data['operacion']=$val; break;
+        case 'CONCATENAR':             $data['concatenar']=$val; break;
+        case 'AGENTE':                 $data['agente']=$val; break;
+        case 'TITULAR':                $data['titular']=$val; break;
+        case 'ANO_CASTIGO': // por si llega sin tilde
+        case 'ANIO_CASTIGO':
+        case 'AÑO_CASTIGO':            $data['anio_castigo']=$val? (int)$val:null; break;
+        case 'MONEDA':                 $data['moneda']=$val; break;
+        case 'ENTIDAD':                $data['entidad']=$val; break;
+        case 'PRODUCTO':               $data['producto']=$val; break;
+        case 'COSECHA':                $data['cosecha']=$val; break;
+        case 'DEPARTAMENTO':           $data['departamento']=$val; break;
+        case 'ZONA':                   $data['zona']=$val; break;
+        case 'UBICACION_GEOGRAFICA':   $data['ubicacion_geografica']=$val; break;
+        case 'FECHA_COMPRA':           $data['fecha_compra']=$date($val); break;
+        case 'EDAD':                   $data['edad']=$val? (int)$val:null; break;
+        case 'SEXO':                   $data['sexo']=$val; break;
+        case 'ESTADO_CIVIL':           $data['estado_civil']=$val; break;
+        case 'TELF1':                  $data['telf1']=$val; break;
+        case 'TELF2':                  $data['telf2']=$val; break;
+        case 'TELF3':                  $data['telf3']=$val; break;
+        case 'SALDO_CAPITAL':          $data['saldo_capital']=$num($val); break;
+        case 'INTERES':                $data['interes']=$num($val); break;
+        case 'DEUDA_TOTAL':            $data['deuda_total']=$num($val); break;
+        case 'LABORAL':                $data['laboral']=$val; break;
+        case 'VEHICULOS':
+        case 'VEHÍCULOS':              $data['vehiculos']=$val; break;
+        case 'PROPIEDADES':            $data['propiedades']=$val; break;
+        case 'CONSOLIDADO_VEHICULOS_PROPIEDADES':
+        case 'CONSOLIDADO_VEHICULOS_PROPIEDADES_':
+        case 'CONSOLIDADO_VEHICULOS_PROPIEDADES__': // por si normaliza doble "_"
+        case 'CONSOLIDADO_VEHICULOS_PROPIEDADES___':
+        case 'CONSOLIDADO_VEHICULOS_PROPIEDADES____':
+        case 'CONSOLIDADO_VEHICULOS_PROPIEDADES_____':
+        case 'CONSOLIDADO_VEHICULOS_PROPIEDADES______':
+        case 'CONSOLIDADO_VEHICULOS_PROPIEDADES_______':
+        case 'CONSOLIDADO_VEHICULOS_PROPIEDADES________':
+        case 'CONSOLIDADO_VEHICULOS_PROPIEDADES_________':
+        case 'CONSOLIDADO_VEHICULOS_PROPIEDADES__________': $data['consolidado_veh_prop']=$val; break;
+        case 'CLASIFICACION':          $data['clasificacion']=$val; break;
+        case 'SCORE':                  $data['score']=$val? (int)$val:null; break;
+        case 'CORREO_ELECTRONICO':     $data['correo_electronico']=$val; break;
+        case 'DIRECCION':              $data['direccion']=$val; break;
+        case 'PROVINCIA':              $data['provincia']=$val; break;
+        case 'DISTRITO':               $data['distrito']=$val; break;
+      }
+    }
+
+    // construir concatenar si no vino
+    if (empty($data['concatenar']) && !empty($data['dni']) && !empty($data['operacion'])) {
+      $data['concatenar'] = $data['dni'].$data['operacion'];
+    }
+
+    // clave mínima: DNI u OPERACION (ideal ambos)
+    if (empty($data['dni']) && empty($data['operacion']) && empty($data['concatenar'])) {
+      $skip++; $err[]="Fila {$rowNum}: sin clave (DNI/OPERACION/CONCATENAR)."; continue;
+    }
+
+    try {
+      if (!empty($data['dni']) && !empty($data['operacion'])) {
+        ClienteCuenta::updateOrCreate(
+          ['dni'=>$data['dni'], 'operacion'=>$data['operacion']],
+          $data
+        );
+      } else {
+        // fallback usando 'concatenar' como unique
+        ClienteCuenta::updateOrCreate(
+          ['concatenar'=>$data['concatenar']],
+          $data
+        );
+      }
+      $ok++;
+    } catch(\Throwable $e){
+      $skip++; $err[]="Fila {$rowNum}: ".$e->getMessage();
+    }
+  }
+
+  fclose($fh);
+  return [$ok,$skip,$err];
+}
+}
