@@ -422,7 +422,8 @@
           <h5 class="modal-title"><i class="bi bi-journal-text me-1"></i> Nota</h5>
           <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Cerrar"></button>
         </div>
-        <div class="modal-body"><p id="notaFull" class="mb-0"></p></div>
+        <!-- usa white-space:pre-wrap para mostrar saltos de línea -->
+        <div class="modal-body"><div id="notaFull" class="mb-0" style="white-space:pre-wrap"></div></div>
         <div class="modal-footer"><button class="btn btn-primary" data-bs-dismiss="modal">Cerrar</button></div>
       </div>
     </div>
@@ -763,16 +764,28 @@
       try{ await copyTableToClipboard('tblPagos'); alert('Pagos copiados.'); }catch(e){ alert('No se pudo copiar.'); }
     });
     
-    // Modal Nota
-    document.querySelectorAll('[data-bs-target="#modalNota"][data-nota-json]').forEach(btn => {
-      btn.addEventListener('click', () => {
-        let text = '';
-        try { text = JSON.parse(btn.getAttribute('data-nota-json') ?? '""') || ''; }
-        catch(e) { text = ''; }
-        const target = document.querySelector('#modalNota #notaFull');
-        if (target) target.textContent = String(text);
+    // Modal Nota — soporta data-nota y data-nota-json
+    (function(){
+      const modal = document.getElementById('modalNota');
+      if (!modal) return;
+
+      modal.addEventListener('show.bs.modal', (ev) => {
+        const btn = ev.relatedTarget; // botón que abrió el modal
+        let txt = '';
+        if (!btn) return;
+
+        if (btn.hasAttribute('data-nota-json')) {
+          try { txt = JSON.parse(btn.getAttribute('data-nota-json') || '""') || ''; }
+          catch { txt = ''; }
+        } else if (btn.hasAttribute('data-nota')) {
+          // viene ya como texto plano
+          txt = btn.getAttribute('data-nota') || '';
+        }
+
+        const tgt = modal.querySelector('#notaFull');
+        if (tgt) tgt.textContent = String(txt);
       });
-    });
+    })();
     
     // ===== Selección de cuentas (para el modal de propuesta)
     const chkAll   = document.getElementById('chkAll');
