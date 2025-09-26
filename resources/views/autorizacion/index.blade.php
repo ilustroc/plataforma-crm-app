@@ -189,7 +189,6 @@
                   <th style="width:60px" class="text-center">#</th>
                   <th style="width:160px" class="text-center">Fecha</th>
                   <th class="text-end">Importe (S/)</th>
-                  <th style="width:120px" class="text-center">Tipo</th>
                 </tr>
               </thead>
               <tbody id="crono_body"></tbody>
