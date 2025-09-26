@@ -8,6 +8,7 @@ use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
+use App\Models\CnaSolicitud;
 
 class AutorizacionController extends Controller
 {
@@ -200,4 +201,130 @@ class AutorizacionController extends Controller
             abort(403, 'No autorizado.');
         }
     }
+    // ===== CNA: Bandeja =====
+    public function cnaIndex(Request $req)
+    {
+        $user = Auth::user();
+        $q    = trim((string)$req->q);
+
+        $base = CnaSolicitud::query()
+            ->when($q !== '', function($w) use ($q){
+                $w->where('dni','like',"%$q%")
+                ->orWhere('operacion','like',"%$q%")
+                ->orWhere('nro_carta','like',"%$q%");
+            });
+
+        // misma regla que promesas
+        if (in_array(strtolower($user->role), ['supervisor'])) {
+            $base->where('workflow_estado','pendiente');
+        } else {
+            $base->where('workflow_estado','preaprobada');
+        }
+
+        $rows = $base->orderByDesc('id')->get();
+
+        return view('autorizacion.cna', [
+            'rows' => $rows,
+            'q'    => $q,
+            'isSupervisor' => in_array(strtolower($user->role), ['supervisor']),
+        ]);
+    }
+
+    // ===== CNA: crear desde ficha del cliente =====
+    public function cnaStore(string $dni, Request $r)
+    {
+        $r->validate([
+            'operacion'       => 'required|string|max:50',
+            'nro_carta'       => 'nullable|string|max:50',
+            'fecha'           => 'required|date',
+            'monto_negociado' => 'required|numeric|min:0.01',
+        ]);
+
+        CnaSolicitud::create([
+            'dni'             => $dni,
+            'operacion'       => $r->operacion,
+            'nro_carta'       => $r->nro_carta ?: $this->nextCnaNumber(),
+            'fecha'           => $r->fecha,
+            'monto_negociado' => $r->monto_negociado,
+            'workflow_estado' => 'pendiente',
+            'user_id'         => Auth::id(),
+        ]);
+
+        return back()->with('ok','Solicitud de CNA registrada y enviada para autorización.');
+    }
+
+    private function nextCnaNumber(): string
+    {
+        $last = DB::table('cna_solicitudes')->orderByDesc('id')->value('nro_carta');
+        $num  = (int)preg_replace('/\D/','', (string)$last);
+        return str_pad($num + 1, 5, '0', STR_PAD_LEFT); // 00001, 00002, ...
+    }
+
+    // ===== CNA: decisiones =====
+    public function cnaPreaprobar(Request $req, CnaSolicitud $cna)
+    {
+        $this->authorizeActionFor('supervisor');
+        if (($cna->workflow_estado ?? 'pendiente') !== 'pendiente')
+            return back()->withErrors('Solo se puede pre-aprobar una CNA pendiente.');
+
+        $cna->update([
+            'workflow_estado'    => 'preaprobada',
+            'pre_aprobado_por'   => Auth::id(),
+            'pre_aprobado_at'    => now(),
+            'nota_preaprobacion' => trim((string)$req->input('nota_estado')) ?: null,
+            'rechazado_por'      => null,
+            'rechazado_at'       => null,
+            'nota_rechazo'       => null,
+        ]);
+        return back()->with('ok','CNA pre-aprobada.');
+    }
+
+    public function cnaRechazarSup(Request $req, CnaSolicitud $cna)
+    {
+        $this->authorizeActionFor('supervisor');
+        if (($cna->workflow_estado ?? 'pendiente') !== 'pendiente')
+            return back()->withErrors('Solo se puede rechazar una CNA pendiente.');
+
+        $cna->update([
+            'workflow_estado' => 'rechazada_sup',
+            'rechazado_por'   => Auth::id(),
+            'rechazado_at'    => now(),
+            'nota_rechazo'    => substr((string)$req->input('nota_estado'), 0, 500),
+        ]);
+        return back()->with('ok','CNA rechazada por supervisor.');
+    }
+
+    public function cnaAprobar(Request $req, CnaSolicitud $cna)
+    {
+        $this->authorizeActionFor('administrador');
+        if (($cna->workflow_estado ?? '') !== 'preaprobada')
+            return back()->withErrors('Solo se puede aprobar una CNA pre-aprobada.');
+
+        $cna->update([
+            'workflow_estado' => 'aprobada',
+            'aprobado_por'    => Auth::id(),
+            'aprobado_at'     => now(),
+            'nota_aprobacion' => trim((string)$req->input('nota_estado')) ?: null,
+            'rechazado_por'   => null,
+            'rechazado_at'    => null,
+            'nota_rechazo'    => null,
+        ]);
+        return back()->with('ok','CNA aprobada.');
+    }
+
+    public function cnaRechazarAdmin(Request $req, CnaSolicitud $cna)
+    {
+        $this->authorizeActionFor('administrador');
+        if (($cna->workflow_estado ?? '') !== 'preaprobada')
+            return back()->withErrors('Solo se puede rechazar una CNA pre-aprobada.');
+
+        $cna->update([
+            'workflow_estado' => 'rechazada',
+            'rechazado_por'   => Auth::id(),
+            'rechazado_at'    => now(),
+            'nota_rechazo'    => substr((string)$req->input('nota_estado'), 0, 500),
+        ]);
+        return back()->with('ok','CNA rechazada por administrador.');
+    }
+
 }

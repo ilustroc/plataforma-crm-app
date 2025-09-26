@@ -13,6 +13,7 @@ use App\Http\Controllers\DashboardController;
 use App\Http\Controllers\ClientesCargaController;
 use App\Http\Controllers\AutorizacionController;
 use App\Http\Controllers\PromesaPdfController;
+use App\Http\Controllers\CnaPdfController;
 
 /*
 |--------------------------------------------------------------------------
@@ -33,53 +34,10 @@ Route::post('/logout', [AuthController::class, 'logout'])->middleware('auth')->n
 
 /*
 |--------------------------------------------------------------------------
-| Ruta temporal para ver el final del log de Laravel
-|--------------------------------------------------------------------------
-*/
-Route::middleware('auth')->get('/__last-error', function () {
-    $files = glob(storage_path('logs/laravel-*.log'));
-    rsort($files);
-    $file = $files[0] ?? storage_path('logs/laravel.log');
-
-    if (!is_file($file)) {
-        return response('<pre>Sin logs en storage/logs.</pre>', 200)
-               ->header('Content-Type','text/html');
-    }
-
-    $n = (int) request('n', 300);
-    $n = max(50, min(2000, $n));
-    $lines = @file($file, FILE_IGNORE_NEW_LINES) ?: [];
-    $tail  = implode("\n", array_slice($lines, -$n));
-
-    return response('<pre style="white-space:pre-wrap">'.e($tail).'</pre>', 200)
-           ->header('Content-Type','text/html');
-});
-
-/*
-|--------------------------------------------------------------------------
 | Autenticados
 |--------------------------------------------------------------------------
 */
 Route::middleware('auth')->group(function () {
-
-    // ===== Ruta temporal para ver el final del log de Laravel (QUÍTALA LUEGO) =====
-    Route::get('/__last-error', function () {
-        $files = glob(storage_path('logs/laravel-*.log'));
-        rsort($files);
-        $file = $files[0] ?? storage_path('logs/laravel.log');
-
-        if (!is_file($file)) {
-            return response('<pre>Sin logs en storage/logs.</pre>', 200);
-        }
-
-        $n = (int) request('n', 200);
-        $n = max(50, min(2000, $n));
-
-        $lines = @file($file, FILE_IGNORE_NEW_LINES) ?: [];
-        $tail  = implode("\n", array_slice($lines, -$n));
-
-        return response('<pre style="white-space:pre-wrap">'.e($tail).'</pre>', 200);
-    })->middleware('role:administrador,sistemas')->name('__last_error');
 
     // Panel
     Route::get('/', [PanelController::class, 'index'])->name('panel');
@@ -92,6 +50,10 @@ Route::middleware('auth')->group(function () {
     // Crear promesa de pago (desde la vista del cliente)
     Route::post('/clientes/{dni}/promesas', [ClientsControllers::class,'storePromesa'])
         ->name('clientes.promesas.store');
+
+    // === Crear solicitud de CNA (desde la vista del cliente) ===
+    Route::post('/clientes/{dni}/cna', [AutorizacionController::class, 'cnaStore'])
+        ->name('clientes.cna.store');
 
     // Dashboard
     Route::get('/dashboard',[DashboardController::class,'index'])->name('dashboard');
@@ -123,7 +85,7 @@ Route::middleware('auth')->group(function () {
     | Autorización de Promesas (Supervisor/Admin)
     |--------------------------------------------------------------------------
     */
-    // Listado principal (muestra lo que corresponde según rol y filtros; soporta ?partial=1 para AJAX)
+    // Listado principal
     Route::get('/autorizacion', [AutorizacionController::class,'index'])->name('autorizacion');
 
     // Acciones de SUPERVISOR: Pre-aprobar / Rechazar (supervisor)
@@ -142,11 +104,40 @@ Route::middleware('auth')->group(function () {
             ->name('autorizacion.rechazar.admin');
     });
 
-    // PDF de la propuesta (solo visible/usable en aprobadas)
+    // PDF de la propuesta
     Route::middleware('role:administrador,supervisor')->group(function () {
-        Route::get('/promesas/{promesa}/acuerdo', [\App\Http\Controllers\PromesaPdfController::class, 'acuerdo'])
+        Route::get('/promesas/{promesa}/acuerdo', [PromesaPdfController::class, 'acuerdo'])
             ->name('promesas.acuerdo');
     });
+
+    /*
+    |--------------------------------------------------------------------------
+    | Autorización de CNA (Supervisor/Admin)
+    |--------------------------------------------------------------------------
+    */
+    // Bandeja CNA (misma lógica de visibilidad interna por rol)
+    Route::get('/autorizacion/cna', [AutorizacionController::class,'cnaIndex'])
+        ->name('autorizacion.cna.index');
+
+    // Decisiones CNA
+    Route::middleware('role:supervisor')->group(function () {
+        Route::post('/autorizacion/cna/{cna}/preaprobar',   [AutorizacionController::class,'cnaPreaprobar'])
+            ->name('autorizacion.cna.preaprobar');
+        Route::post('/autorizacion/cna/{cna}/rechazar-sup', [AutorizacionController::class,'cnaRechazarSup'])
+            ->name('autorizacion.cna.rechazar.sup');
+    });
+    Route::middleware('role:administrador')->group(function () {
+        Route::post('/autorizacion/cna/{cna}/aprobar',        [AutorizacionController::class,'cnaAprobar'])
+            ->name('autorizacion.cna.aprobar');
+        Route::post('/autorizacion/cna/{cna}/rechazar-admin', [AutorizacionController::class,'cnaRechazarAdmin'])
+            ->name('autorizacion.cna.rechazar.admin');
+    });
+
+    // PDF CNA_[DNI].pdf
+    Route::middleware('role:administrador,supervisor')->get(
+        '/autorizacion/cna/{cna}/pdf',
+        [CnaPdfController::class, 'download']
+    )->name('autorizacion.cna.pdf');
 
     /*
     |--------------------------------------------------------------------------
