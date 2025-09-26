@@ -7,7 +7,7 @@ use App\Models\PromesaPago;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
-use Illuminate\Support\Facades\Schema; // <-- agrega este use arriba
+use Illuminate\Support\Facades\Schema;
 
 class AutorizacionController extends Controller
 {
@@ -17,7 +17,7 @@ class AutorizacionController extends Controller
             $user   = Auth::user();
             $q      = trim((string)($req->q ?? ''));
             $status = $req->status;
-    
+
             // Base (sin paginación)
             $base = PromesaPago::query()
                 ->from('promesas_pago')
@@ -37,19 +37,19 @@ class AutorizacionController extends Controller
                           ->orWhere('cc.titular','like',"%{$q}%");
                     });
                 });
-    
+
             // Bandeja por rol (regla de negocio)
             if (in_array(strtolower($user->role), ['supervisor'])) {
                 $base->where('promesas_pago.workflow_estado','pendiente');
             } else {
                 $base->where('promesas_pago.workflow_estado','preaprobada');
             }
-    
+
             // Filtro manual por status (opcional)
             if (!empty($status)) {
                 $base->where('promesas_pago.workflow_estado', $status);
             }
-    
+
             $rows = $base->select([
                     'promesas_pago.*',
                     'cc.cartera','cc.titular','cc.entidad','cc.producto','cc.moneda',
@@ -66,57 +66,53 @@ class AutorizacionController extends Controller
                 ])
                 ->orderByDesc('promesas_pago.fecha_promesa')
                 ->get(); // SIN paginación
-    
-            // ====== CARGA DE CRONOGRAMAS (BLINDADO) ======
+
+            // ====== CARGA DE CRONOGRAMAS (tabla real: promesa_cuotas) ======
             $ids = $rows->pluck('id')->filter()->all();
             $cuotasById = collect();
-    
-            if (!empty($ids) && Schema::hasTable('promesas_cuotas')) {
-                // Si te falta alguna columna (p.e. es_balon), comenta esa selección y el uso abajo
-                $cuotasById = DB::table('promesas_cuotas')
+
+            if (!empty($ids) && Schema::hasTable('promesa_cuotas')) { // <— singular
+                $cuotasById = DB::table('promesa_cuotas')            // <— singular
                     ->select('promesa_id','nro','fecha','monto','es_balon')
                     ->whereIn('promesa_id', $ids)
                     ->orderBy('promesa_id')->orderBy('nro')
                     ->get()
                     ->groupBy('promesa_id');
             }
-    
+
             $rows = $rows->map(function($p) use ($cuotasById){
                 $list = $cuotasById[$p->id] ?? collect();
-    
-                // No usamos Carbon aquí para evitar formatos raros. Mostramos tal cual en la vista.
+
                 $p->cuotas      = $list;
                 $p->has_balon   = (int)$list->contains('es_balon', 1);
                 $p->cuotas_json = $list->map(function($c){
                     return [
                         'nro'      => (int)($c->nro ?? 0),
-                        'fecha'    => (string)($c->fecha ?? '—'), // sin parse
+                        'fecha'    => (string)($c->fecha ?? '—'),
                         'monto'    => (float)($c->monto ?? 0),
                         'es_balon' => (bool)($c->es_balon ?? false),
                     ];
                 })->values();
-    
+
                 return $p;
             });
-    
+
             return view('autorizacion.index', [
                 'rows'         => $rows, // colección simple
                 'q'            => $q,
                 'isSupervisor' => in_array(strtolower($user->role), ['supervisor']),
             ]);
-    
+
         } catch (\Throwable $e) {
-            // LOG CLAVE: léelo en storage/logs/laravel.log
             \Log::error('Autorizacion.index ERROR', [
                 'msg'   => $e->getMessage(),
                 'file'  => $e->getFile(),
                 'line'  => $e->getLine(),
             ]);
-    
-            // Respuesta temporal para ver el motivo exacto en el navegador
             return response('Error en Autorización: '.$e->getMessage(), 500);
         }
     }
+
     // ===== SUPERVISOR =====
     public function preaprobar(Request $req, PromesaPago $promesa)
     {
