@@ -147,8 +147,12 @@ class ClientsControllers extends Controller
             });
         }
 
+        // CNA: próximo nro de carta
+        $last = DB::table('cna_solicitudes')->orderByDesc('id')->value('nro_carta');
+        $cnaNextNro = str_pad(((int)preg_replace('/\D/','',$last ?? '0')) + 1, 5, '0', STR_PAD_LEFT);
+
         return view('clientes.show', compact(
-            'dni','titular','cuentas','pagos','promesas','ccd','pagosPorOperacion'
+            'dni','titular','cuentas','pagos','promesas','ccd','pagosPorOperacion','cnaNextNro'
         ) + [
             'ccdByCodigo' => $ccdByCodigo,
         ]);
