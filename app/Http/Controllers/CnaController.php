@@ -102,17 +102,20 @@ class CnaController extends Controller
     public function aprobar(CnaSolicitud $cna)
     {
         $this->authorizeRole('administrador');
+    
         if ($cna->workflow_estado !== 'preaprobada') {
             return back()->withErrors('Solo se puede aprobar una CNA pre-aprobada.');
         }
-
+    
         $cna->update([
             'workflow_estado' => 'aprobada',
-            'aprobado_por'    => Auth::id(),
+            'aprobado_por'    => \Auth::id(),
             'aprobado_at'     => now(),
         ]);
-
+    
+        // Genera DOCX + PDF desde la plantilla
         $this->generateOutputsFromTemplate($cna);
+    
         return back()->with('ok', 'CNA aprobada y archivos generados.');
     }
 
@@ -134,21 +137,24 @@ class CnaController extends Controller
     // ---- Descargas ----
     public function pdf($id)
     {
-        $cna = CnaSolicitud::findOrFail($id);
+        $cna = CnaSolicitud::findOrFail($id);    // evitamos model binding
         if ($cna->workflow_estado !== 'aprobada') {
             abort(403, 'Solo disponible para CNA aprobadas.');
         }
-
-        // Generar si falta
-        if (!$cna->pdf_path || !Storage::exists($cna->pdf_path)) {
-            $this->generateOutputsFromTemplate($cna);
+    
+        // Si no existe el archivo, vuelve a generarlo desde la plantilla
+        if (!$cna->pdf_path || !\Storage::exists($cna->pdf_path)) {
+            $this->generateOutputsFromTemplate($cna);  // <-- el método que SÍ tienes
             $cna->refresh();
         }
-
-        if ($cna->pdf_path && Storage::exists($cna->pdf_path)) {
-            return Storage::download($cna->pdf_path, basename($cna->pdf_path));
+    
+        // Descargar siempre desde storage
+        if ($cna->pdf_path && \Storage::exists($cna->pdf_path)) {
+            return \Storage::download($cna->pdf_path, basename($cna->pdf_path));
         }
-        abort(500, 'No se pudo generar el PDF de la CNA.');
+    
+        // Si por alguna razón no quedó el archivo, devuelve 404 claro
+        abort(404, 'Archivo PDF no encontrado.');
     }
 
     public function docx($id)
