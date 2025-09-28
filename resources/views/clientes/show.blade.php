@@ -130,31 +130,14 @@
     </div>
   </div>
 
-  {{-- CUENTAS --}}
+  {{-- CUENTAS --}} 
   <div class="card pad mb-3">
     <div class="d-flex justify-content-between align-items-center mb-2">
-      <h2 class="h6 mb-0 d-flex align-items-center gap-2">
-        <i class="bi bi-wallet2"></i><span>Cuentas</span>
-      </h2>
-
+      <h2 class="h6 mb-0 d-flex align-items-center gap-2"><i class="bi bi-wallet2"></i><span>Cuentas</span></h2>
       <div class="d-flex align-items-center gap-2">
-        {{-- Solicitar CNA (habilita con selección) --}}
-        <button class="btn btn-outline-secondary btn-sm"
-                id="btnCna"
-                type="button"
-                data-bs-toggle="modal"
-                data-bs-target="#modalCna"
-                disabled>
-          <i class="bi bi-file-earmark-text"></i> Solicitar CNA
-        </button>
-
+        <button class="btn btn-outline-secondary btn-sm" id="btnCopyCtas" type="button" title="Copiar cuentas" data-bs-toggle="tooltip"><i class="bi bi-clipboard"></i> Copiar</button>
         {{-- Generar propuesta (habilita con selección) --}}
-        <button class="btn btn-primary btn-sm"
-                id="btnPropuesta"
-                type="button"
-                data-bs-toggle="modal"
-                data-bs-target="#modalPropuesta"
-                disabled>
+        <button class="btn btn-primary btn-sm" id="btnPropuesta" type="button" data-bs-toggle="modal" data-bs-target="#modalPropuesta" disabled>
           <i class="bi bi-flag"></i> Generar propuesta
           <span class="ms-1 badge rounded-pill text-bg-light align-middle" id="selCount">0</span>
         </button>
@@ -163,11 +146,9 @@
 
     <div class="table-responsive max-h-320">
       <table class="table table-sm table-striped table-hover align-middle tbl-compact mb-0" id="tblCuentas">
-        <thead>
+      <thead>
         <tr>
-          <th class="text-center" style="width:36px">
-            <input type="checkbox" id="chkAll">
-          </th>
+          <th class="text-center" style="width:36px"><input type="checkbox" id="chkAll"></th>
           <th>Cartera</th>
           <th class="text-nowrap">Operación</th>
           <th>Moneda</th>
@@ -175,76 +156,119 @@
           <th>Producto</th>
           <th class="text-end text-nowrap">Saldo Capital</th>
           <th class="text-end text-nowrap">Deuda Total</th>
+
+          {{-- NUEVA COLUMNA CCD --}}
+          <th class="text-nowrap">CCD</th>
+
           <th class="text-nowrap">
             Pagos
-            <i class="bi bi-info-circle ms-1"
-              data-bs-toggle="tooltip"
-              title="Conteo y total de pagos aplicados a esta operación."></i>
+            <i class="bi bi-info-circle ms-1" data-bs-toggle="tooltip" title="Conteo y total de pagos aplicados a esta operación."></i>
           </th>
         </tr>
-        </thead>
+      </thead>
         <tbody>
-        @foreach ($cuentas as $c)
-          @php
-            $cnt = (int)($c->pagos_count ?? 0);
-            $sum = (float)($c->pagos_sum ?? 0);
-            $hasList = isset($c->pagos_list) && (
-              ($c->pagos_list instanceof \Illuminate\Support\Collection && $c->pagos_list->count()) ||
-              (is_array($c->pagos_list) && count($c->pagos_list))
-            );
-            $collapseId = 'pagos-'.$loop->index;
-          @endphp
-          <tr>
-            <td class="text-center">
-              <input type="checkbox"
-                    class="chkOp"
-                    value="{{ $c->operacion }}"
-                    {{ empty($c->operacion) ? 'disabled' : '' }}>
-            </td>
-            <td class="text-nowrap">{{ $c->cartera ?? '—' }}</td>
-            <td class="text-nowrap">{{ $c->operacion ?? '—' }}</td>
-            <td>{{ $c->moneda ?? '—' }}</td>
-            <td>{{ $c->entidad ?? '—' }}</td>
-            <td>{{ $c->producto ?? '—' }}</td>
-            <td class="text-end text-nowrap">{{ number_format((float)($c->saldo_capital ?? 0), 2) }}</td>
-            <td class="text-end text-nowrap">{{ number_format((float)($c->deuda_total ?? 0), 2) }}</td>
+          @foreach ($cuentas as $c)
+            @php
+              $cnt = (int)($c->pagos_count ?? 0);
+              $sum = (float)($c->pagos_sum ?? 0);
+              $hasList = isset($c->pagos_list) && (($c->pagos_list instanceof \Illuminate\Support\Collection && $c->pagos_list->count()) || (is_array($c->pagos_list) && count($c->pagos_list)));
+              $collapseId = 'pagos-'.$loop->index;
 
-            <td class="text-nowrap">
-              <span class="badge rounded-pill text-bg-light border">{{ $cnt }} pago(s)</span>
-              @if($sum > 0)
-                <small class="text-secondary ms-1">· S/ {{ number_format($sum, 2) }}</small>
-              @endif
+              // Docs por código (operación) ya precargados desde el controller
+              $docsCcd = ($ccdByCodigo[$c->operacion] ?? collect());
+              $mkUrl = function($path){
+                  $p = (string)($path ?? '');
+                  if ($p === '') return null;
+                  return \Illuminate\Support\Str::startsWith($p, ['http://','https://','/']) ? $p : url($p);
+                  // Si tus PDFs están en storage/app/public, cambia a: return asset('storage/'.$p);
+              };
+            @endphp
+            <tr>
+              <td class="text-center">
+                <input type="checkbox" class="chkOp" value="{{ $c->operacion }}" {{ empty($c->operacion) ? 'disabled' : '' }}>
+              </td>
+              <td class="text-nowrap">{{ $c->cartera ?? '—' }}</td>
+              <td class="text-nowrap">{{ $c->operacion ?? '—' }}</td>
+              <td>{{ $c->moneda ?? '—' }}</td>
+              <td>{{ $c->entidad ?? '—' }}</td>
+              <td>{{ $c->producto ?? '—' }}</td>
+              <td class="text-end text-nowrap">{{ number_format((float)($c->saldo_capital ?? 0), 2) }}</td>
+              <td class="text-end text-nowrap">{{ number_format((float)($c->deuda_total ?? 0), 2) }}</td>
 
-              @if($hasList)
-                <button class="btn btn-sm btn-outline-secondary ms-2"
-                        type="button"
-                        data-bs-toggle="collapse"
-                        data-bs-target="#{{ $collapseId }}"
-                        aria-expanded="false"
-                        aria-controls="{{ $collapseId }}">
-                  Ver detalle
-                </button>
-                <div class="collapse mt-2" id="{{ $collapseId }}">
-                  <ul class="list-unstyled mb-0 small">
-                    @foreach($c->pagos_list as $p)
-                      @php
-                        $f = !empty($p->fecha) ? \Carbon\Carbon::parse($p->fecha)->format('d/m/Y') : '—';
-                        $m = number_format((float)($p->monto ?? 0), 2);
-                        $src = $p->fuente ?? '—';
-                      @endphp
-                      <li class="d-flex align-items-center gap-2">
-                        <i class="bi bi-dot"></i>
-                        <span class="text-nowrap">{{ $f }}</span>
-                        <span>· S/ {{ $m }}</span>
-                        <span class="text-secondary">· {{ $src }}</span>
-                      </li>
-                    @endforeach
-                  </ul>
-                </div>
-              @endif
-            </td>
-          </tr>
-        @endforeach
+              {{-- === CELDA CCD === --}}
+              <td class="text-nowrap">
+                @if($docsCcd->count() === 1)
+                  @php
+                    $d    = $docsCcd->first();
+                    $path = $d->pdf ?? $d->archivo ?? $d->ruta ?? $d->url ?? null;
+                    $href = $mkUrl($path);
+                  @endphp
+                  @if($href)
+                    <a href="{{ $href }}" target="_blank" download
+                      class="btn btn-sm btn-outline-primary" title="Descargar CCD">
+                      <i class="bi bi-filetype-pdf me-1"></i> CCD
+                    </a>
+                  @else
+                    <span class="text-secondary">—</span>
+                  @endif
+
+                @elseif($docsCcd->count() > 1)
+                  <div class="btn-group">
+                    <button class="btn btn-sm btn-outline-primary dropdown-toggle" data-bs-toggle="dropdown">
+                      <i class="bi bi-filetype-pdf me-1"></i> CCD ({{ $docsCcd->count() }})
+                    </button>
+                    <ul class="dropdown-menu dropdown-menu-end">
+                      @foreach($docsCcd as $d)
+                        @php
+                          $path = $d->pdf ?? $d->archivo ?? $d->ruta ?? $d->url ?? null;
+                          $href = $mkUrl($path);
+                          $name = $d->nombre ?? $d->documento ?? $d->codigo ?? ('CCD '.$d->id);
+                        @endphp
+                        @if($href)
+                          <li><a class="dropdown-item" href="{{ $href }}" target="_blank" download>{{ $name }}</a></li>
+                        @endif
+                      @endforeach
+                    </ul>
+                  </div>
+                @else
+                  <span class="text-secondary">—</span>
+                @endif
+              </td>
+              {{-- === /CELDA CCD === --}}
+
+              <td class="text-nowrap">
+                <span class="badge rounded-pill text-bg-light border">{{ $cnt }} pago(s)</span>
+                @if($sum > 0)
+                  <small class="text-secondary ms-1">· S/ {{ number_format($sum, 2) }}</small>
+                @endif
+                @if($hasList)
+                  <button class="btn btn-sm btn-outline-secondary ms-2" type="button"
+                          data-bs-toggle="collapse" data-bs-target="#{{ $collapseId }}"
+                          aria-expanded="false" aria-controls="{{ $collapseId }}">
+                    Ver detalle
+                  </button>
+                  <div class="collapse mt-2" id="{{ $collapseId }}">
+                    <ul class="list-unstyled mb-0 small">
+                      @foreach($c->pagos_list as $p)
+                        @php
+                          $f = !empty($p->fecha) ? \Carbon\Carbon::parse($p->fecha)->format('d/m/Y') : '—';
+                          $m = number_format((float)($p->monto ?? 0), 2);
+                          $src = $p->fuente ?? '—';
+                        @endphp
+                        <li class="d-flex align-items-center gap-2">
+                          <i class="bi bi-dot"></i>
+                          <span class="text-nowrap">{{ $f }}</span>
+                          <span>· S/ {{ $m }}</span>
+                          <span class="text-secondary">· {{ $src }}</span>
+                        </li>
+                      @endforeach
+                    </ul>
+                  </div>
+                @endif
+              </td>
+            </tr>
+          @endforeach
+
         </tbody>
       </table>
     </div>
@@ -461,55 +485,6 @@
     </div>
   </div>
 
-  {{-- MODAL: Solicitar CNA --}}
-  <div class="modal fade" id="modalCna" tabindex="-1" aria-hidden="true">
-    <div class="modal-dialog modal-dialog-centered">
-      <div class="modal-content">
-        <form method="POST" action="{{ route('clientes.cna.store', $dni) }}" id="formCNA">
-          @csrf
-          <div class="modal-header">
-            <h5 class="modal-title">
-              <i class="bi bi-file-earmark-text me-1"></i> Solicitar Carta de No Adeudo
-            </h5>
-            <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Cerrar"></button>
-          </div>
-
-          <div class="modal-body">
-            <div class="mb-2 small text-secondary">
-              Operación seleccionada: <span id="cnaOpResumen" class="fw-bold">—</span>
-            </div>
-            <input type="hidden" name="operacion" id="cnaOpHidden">
-
-            <div class="mb-2">
-              <label class="form-label">N° Carta</label>
-              <input name="nro_carta"
-                    class="form-control"
-                    value="{{ $cnaNextNro ?? '00001' }}"
-                    maxlength="50">
-            </div>
-
-            <div class="mb-2">
-              <label class="form-label">Fecha</label>
-              <input type="date" name="fecha" class="form-control" required>
-            </div>
-
-            <div class="mb-2">
-              <label class="form-label">Monto negociado (S/)</label>
-              <input type="number" step="0.01" min="0.01" name="monto_negociado" class="form-control" required>
-            </div>
-          </div>
-
-          <div class="modal-footer">
-            <button class="btn btn-primary">
-              <i class="bi bi-check2-circle me-1"></i> Enviar
-            </button>
-          </div>
-        </form>
-      </div>
-    </div>
-  </div>
-
-
   {{-- MODAL: Generar Propuesta --}}
   <div class="modal fade" id="modalPropuesta" tabindex="-1" aria-hidden="true">
     <div class="modal-dialog modal-lg modal-dialog-centered">
@@ -707,252 +682,297 @@
 
 @push('scripts')
 <script>
-/* ================== Tooltips ================== */
-document.querySelectorAll('[data-bs-toggle="tooltip"]').forEach(el => {
-  new bootstrap.Tooltip(el);
-});
-
-/* ================== Map de saldos por operación ================== */
-// => { "6799186": 1400.23, ... }
-const OP_SALDOS = @json($cuentas->pluck('saldo_capital','operacion'));
-
-/* ================== Selección de cuentas ================== */
-const chkAll   = document.getElementById('chkAll');
-const chks     = Array.from(document.querySelectorAll('.chkOp'));
-const btnProp  = document.getElementById('btnPropuesta');
-const btnCna   = document.getElementById('btnCna');
-const selCount = document.getElementById('selCount');
-
-function refreshSelection() {
-  const selected = chks
-    .filter(c => c.checked && !c.disabled)
-    .map(c => c.value)
-    .filter(Boolean);
-
-  if (selCount) selCount.textContent = String(selected.length);
-  if (btnProp)  btnProp.disabled = selected.length === 0;
-  if (btnCna)   btnCna.disabled  = selected.length === 0; // pedimos al menos 1
-  return selected;
-}
-
-chkAll?.addEventListener('change', () => {
-  chks.forEach(c => { if (!c.disabled) c.checked = chkAll.checked; });
-  refreshSelection();
-});
-
-chks.forEach(c => c.addEventListener('change', () => {
-  const enabled = chks.filter(x => !x.disabled).length;
-  const checked = chks.filter(x => x.checked && !x.disabled).length;
-  if (enabled) chkAll.checked = (checked === enabled);
-  refreshSelection();
-}));
-
-/* ================== Modal CNA: set operación ================== */
-const modalCna    = document.getElementById('modalCna');
-const cnaOpHidden = document.getElementById('cnaOpHidden');
-const cnaOpRes    = document.getElementById('cnaOpResumen');
-
-modalCna?.addEventListener('show.bs.modal', () => {
-  const sel = refreshSelection();
-  const op  = sel[0] || '';
-  if (cnaOpHidden) cnaOpHidden.value = op;
-  if (cnaOpRes)    cnaOpRes.textContent = op || '—';
-  if (!op) {
-    // Seguridad: si no hay operación, cerramos el modal
-    setTimeout(() => bootstrap.Modal.getInstance(modalCna)?.hide(), 50);
-    alert('Selecciona al menos una operación para solicitar la CNA.');
-  }
-});
-
-/* ================== Modal Propuesta: resumen de operaciones ================== */
-const modalProp  = document.getElementById('modalPropuesta');
-const opsResumen = document.getElementById('opsResumen');
-const opsHidden  = document.getElementById('opsHidden');
-
-modalProp?.addEventListener('show.bs.modal', () => {
-  const ops = refreshSelection();
-
-  // Resumen visible
-  if (opsResumen) {
-    opsResumen.innerHTML = ops.length
-      ? ops.map(o => `<span class="badge rounded-pill text-bg-light border me-1">${o}</span>`).join('')
-      : '<span class="text-secondary">Ninguna</span>';
-  }
-
-  // Hidden inputs
-  if (opsHidden) {
-    opsHidden.innerHTML = '';
-    ops.forEach(op => {
-      const i = document.createElement('input');
-      i.type = 'hidden';
-      i.name = 'operaciones[]';
-      i.value = String(op);
-      opsHidden.appendChild(i);
-    });
-  }
-
-  // Disparar recálculo (para capital seleccionado / balón estimado)
-  document.getElementById('cvTotal')?.dispatchEvent(new Event('input'));
-});
-
-/* ================== Bloques por tipo (Propuesta) ================== */
-const tipo = document.getElementById('tipoPropuesta');
-const fCon = document.getElementById('formConvenio');
-const fCan = document.getElementById('formCancelacion');
-
-function setEnabled(container, enabled){
-  if (!container) return;
-  container.querySelectorAll('input,select,textarea,button').forEach(el => {
-    if (enabled) el.removeAttribute('disabled');
-    else el.setAttribute('disabled','disabled');
-  });
-  // Limpia valores del bloque oculto para no mandar basura
-  if (!enabled){
-    container.querySelectorAll('input:not([type="hidden"]),textarea').forEach(el => { el.value=''; });
-  }
-}
-function req(el, on){
-  if (!el) return;
-  if (on) el.setAttribute('required','required'); else el.removeAttribute('required');
-}
-function toggleTipo(){
-  const t = tipo?.value;
-  if (!t) return;
-  // Mostrar/ocultar
-  fCon?.classList.toggle('d-none', t !== 'convenio');
-  fCan?.classList.toggle('d-none', t !== 'cancelacion');
-  // Habilitar/deshabilitar
-  setEnabled(fCon, t === 'convenio');
-  setEnabled(fCan, t === 'cancelacion');
-  // Requireds
-  const fields = {
-    convenio:    ['nro_cuotas','monto_convenio'],
-    cancelacion: ['fecha_pago_cancel','monto_cancel']
-  };
-  [...fields.convenio, ...fields.cancelacion]
-    .forEach(n => req(document.querySelector(`[name="${n}"]`), false));
-  (fields[t] || []).forEach(n => req(document.querySelector(`[name="${n}"]`), true));
-}
-tipo?.addEventListener('change', toggleTipo);
-toggleTipo();
-
-/* ================== Cronograma (solo si existe el formulario) ================== */
-(function(){
-  const nro   = document.getElementById('cvNro');
-  const total = document.getElementById('cvTotal');   // Monto convenio
-  const cuota = document.getElementById('cvCuota');   // sugerido (opcional)
-  const fIni  = document.getElementById('cvFechaIni');
-  const gen   = document.getElementById('cvGen');
-  const tblEl = document.getElementById('tblCrono');
-  const suma  = document.getElementById('cvSuma');
-  const hid   = document.getElementById('cvHidden');
-  const btnGuardar = document.querySelector('#formPropuesta button[type="submit"]');
-  const hintDia = document.getElementById('cvHintDia');
-
-  if (!tblEl || !nro || !total || !hid) return; // si no hay modal de propuesta, no hace nada
-
-  const tbl = tblEl.querySelector('tbody');
-  const to2 = n => String(n).padStart(2,'0');
-  const fmt = n => (Math.round((Number(n)||0)*100)/100).toFixed(2);
-  const num = v => Number(String(v ?? '').replace(',','.')) || 0;
-
-  const selectedOps = () =>
-    [...document.querySelectorAll('#opsHidden input[name="operaciones[]"]')].map(i => i.value);
-
-  const capitalSeleccionado = () =>
-    selectedOps().reduce((s, op) => s + (num(OP_SALDOS?.[op])||0), 0);
-
-  function renderRows(n){
-    tbl.innerHTML = '';
-    for (let i=1; i<=n; i++){
-      const tr = document.createElement('tr');
-      tr.innerHTML = `
-        <td class="text-center">${to2(i)}</td>
-        <td><input type="date" class="form-control form-control-sm cr-fecha"></td>
-        <td><input type="number" step="0.01" min="0.01" class="form-control form-control-sm cr-monto"></td>
-      `;
-      tbl.appendChild(tr);
-    }
-    recalc();
-  }
-
-  function recalc(){
-    // 1) totalizar cronograma
-    let s = 0;
-    const rows = [...tbl.querySelectorAll('tr')];
-    rows.forEach(tr => s += num(tr.querySelector('.cr-monto')?.value));
-    if (suma) suma.textContent = fmt(s);
-
-    // 2) sincronizar ocultos
-    hid.innerHTML = '';
-    rows.forEach(tr => {
-      const f = tr.querySelector('.cr-fecha')?.value || '';
-      const m = tr.querySelector('.cr-monto')?.value || '';
-      hid.insertAdjacentHTML('beforeend', `<input type="hidden" name="cron_fecha[]" value="${f}">`);
-      hid.insertAdjacentHTML('beforeend', `<input type="hidden" name="cron_monto[]" value="${m}">`);
-    });
-
-    // 3) resumenes: capital seleccionado y cuota balón estimada (capital − convenio)
-    const capSel = capitalSeleccionado();
-    const montoConvenio = num(total.value);
-    const balon = Math.max(0, +(capSel - montoConvenio).toFixed(2));
-    const capSelOut = document.getElementById('cvCapSel');
-    const balonOut  = document.getElementById('cvBalonEst');
-    if (capSelOut) capSelOut.textContent = fmt(capSel);
-    if (balonOut)  balonOut.textContent  = fmt(balon);
-
-    // 4) validación: suma cronograma == monto convenio
-    const ok = Math.abs(s - montoConvenio) <= 0.01;
-    if (btnGuardar) btnGuardar.disabled = !ok;
-    if (suma) suma.classList.toggle('text-danger', !ok);
-  }
-
-  function addMonthsNoOverflow(base, months){
-    const d = new Date(base);
-    const day = d.getDate();
-    d.setMonth(d.getMonth() + months);
-    if (d.getDate() !== day) d.setDate(0);
-    return d;
-  }
-  function genAuto(){
-    const n = Math.max(1, parseInt(nro.value || '0', 10));
-    if (!n) return;
-    if (tbl.children.length !== n) renderRows(n);
-
-    const start = fIni?.value ? new Date(fIni.value + 'T00:00:00') : null;
-    const m = num(cuota?.value) || (num(total.value) / n);
-
-    [...tbl.querySelectorAll('tr')].forEach((tr, idx) => {
-      const f = tr.querySelector('.cr-fecha');
-      const mm = tr.querySelector('.cr-monto');
-      if (start){
-        const d = addMonthsNoOverflow(start, idx);
-        f.valueAsDate = d;
+    (function(){
+      // ===== Map de saldos por operación (inyectado desde Blade)
+      // => { "6799186": 1400.23, ... }
+      const OP_SALDOS = @json($cuentas->pluck('saldo_capital','operacion'));
+    
+      // ===== Refs del cronograma
+      const nro   = document.getElementById('cvNro');
+      const total = document.getElementById('cvTotal');   // Monto convenio
+      const cuota = document.getElementById('cvCuota');   // sugerido (opcional)
+      const fIni  = document.getElementById('cvFechaIni');
+      const gen   = document.getElementById('cvGen');
+      const tblEl = document.getElementById('tblCrono');
+      const suma  = document.getElementById('cvSuma');
+      const hid   = document.getElementById('cvHidden');
+      const btnGuardar = document.querySelector('#formPropuesta button[type="submit"]');
+      const hintDia = document.getElementById('cvHintDia');
+    
+      // Resumenes extra
+      const capSelOut = document.getElementById('cvCapSel');   // span para capital seleccionado
+      const balonOut  = document.getElementById('cvBalonEst'); // span para cuota balón estimada
+    
+      if (!tblEl || !nro || !total || !hid) return;
+      const tbl = tblEl.querySelector('tbody');
+    
+      // ===== Utils
+      const to2 = n => String(n).padStart(2,'0');
+      const fmt = n => (Math.round((Number(n)||0)*100)/100).toFixed(2);
+      const num = v => Number(String(v ?? '').replace(',','.')) || 0;
+    
+      const selectedOps = () =>
+        [...document.querySelectorAll('#opsHidden input[name="operaciones[]"]')].map(i => i.value);
+    
+      const capitalSeleccionado = () =>
+        selectedOps().reduce((s, op) => s + (num(OP_SALDOS?.[op])||0), 0);
+    
+      // Ocultar la columna BALÓN (ya no se usa en convenio estándar)
+      (function hideBalonColumn(){
+        const ths = document.querySelectorAll('#tblCrono thead th');
+        if (ths.length >= 4) ths[3].style.display = 'none';
+      })();
+    
+      // ===== Render de filas del cronograma
+      function renderRows(n){
+        tbl.innerHTML = '';
+        for (let i=1; i<=n; i++){
+          const tr = document.createElement('tr');
+          tr.innerHTML = `
+            <td class="text-center">${to2(i)}</td>
+            <td><input type="date" class="form-control form-control-sm cr-fecha"></td>
+            <td><input type="number" step="0.01" min="0.01" class="form-control form-control-sm cr-monto"></td>
+            <td style="display:none"></td>
+          `;
+          tbl.appendChild(tr);
+        }
+        recalc();
       }
-      mm.value = fmt(m);
+    
+      // ===== Recalc + sincronización de inputs ocultos
+      function recalc(){
+        // 1) totalizar cronograma
+        let s = 0;
+        const rows = [...tbl.querySelectorAll('tr')];
+        rows.forEach(tr => s += num(tr.querySelector('.cr-monto')?.value));
+        if (suma) suma.textContent = fmt(s);
+    
+        // 2) sincronizar ocultos
+        hid.innerHTML = '';
+        rows.forEach(tr => {
+          const f = tr.querySelector('.cr-fecha')?.value || '';
+          const m = tr.querySelector('.cr-monto')?.value || '';
+          hid.insertAdjacentHTML('beforeend', `<input type="hidden" name="cron_fecha[]" value="${f}">`);
+          hid.insertAdjacentHTML('beforeend', `<input type="hidden" name="cron_monto[]" value="${m}">`);
+        });
+        // (no enviamos cron_balon)
+    
+        // 3) resumenes: capital seleccionado y cuota balón estimada
+        const capSel = capitalSeleccionado();
+        const montoConvenio = num(total.value);
+        const balon = Math.max(0, +(capSel - montoConvenio).toFixed(2));
+        if (capSelOut) capSelOut.textContent = fmt(capSel);
+        if (balonOut)  balonOut.textContent  = fmt(balon);
+    
+        // 4) validación: suma cronograma == monto convenio
+        const ok = Math.abs(s - montoConvenio) <= 0.01;
+        if (btnGuardar) btnGuardar.disabled = !ok;
+        if (suma) suma.classList.toggle('text-danger', !ok);
+      }
+    
+      // ===== Autogenerar cronograma
+      function addMonthsNoOverflow(base, months){
+        const d = new Date(base);
+        const day = d.getDate();
+        d.setMonth(d.getMonth() + months);
+        if (d.getDate() !== day) d.setDate(0);
+        return d;
+      }
+      function genAuto(){
+        const n = Math.max(1, parseInt(nro.value || '0', 10));
+        if (!n) return;
+        if (tbl.children.length !== n) renderRows(n);
+    
+        const start = fIni?.value ? new Date(fIni.value + 'T00:00:00') : null;
+        const m = num(cuota?.value) || (num(total.value) / n);
+    
+        [...tbl.querySelectorAll('tr')].forEach((tr, idx)=>{
+          const f = tr.querySelector('.cr-fecha');
+          const mm = tr.querySelector('.cr-monto');
+          if (start){
+            const d = addMonthsNoOverflow(start, idx);
+            f.valueAsDate = d;
+          }
+          mm.value = fmt(m);
+        });
+        recalc();
+      }
+    
+      // ===== Eventos cronograma
+      gen?.addEventListener('click', genAuto);
+      nro.addEventListener('change', ()=>{
+        const n = Math.max(1, parseInt(nro.value || '1', 10));
+        renderRows(n);
+      });
+      tbl.addEventListener('input', e=>{
+        if (e.target.matches('.cr-monto, .cr-fecha')) recalc();
+      });
+      fIni?.addEventListener('change', ()=>{
+        const v = fIni.value;
+        if (!hintDia) return;
+        if (!v){ hintDia.textContent = 'Día de pago: —'; return; }
+        const d = new Date(v + 'T00:00:00');
+        hintDia.textContent = `Día de pago: ${d.getDate()} de cada mes`;
+      });
+      total?.addEventListener('input', recalc);
+    
+      // Estado inicial
+      renderRows(Math.max(1, parseInt(nro.value || '1', 10)));
+    })();
+    
+    /* ================== Utilidades generales de la vista ================== */
+    
+    // Tooltips
+    document.querySelectorAll('[data-bs-toggle="tooltip"]').forEach(el=>{ new bootstrap.Tooltip(el); });
+    
+    // Copiar DNI
+    document.getElementById('btnCopyDni')?.addEventListener('click', async ()=>{
+      try{ await navigator.clipboard.writeText(String(@json($dni))); alert('DNI copiado.'); }catch(e){ alert('No se pudo copiar.'); }
     });
-    recalc();
-  }
+    
+    // Copiar tabla (sin CSV)
+    function copyTableToClipboard(tableId, cols){
+      const t = document.getElementById(tableId); if(!t) return;
+      const head = [...t.querySelectorAll('thead th')].map(th=>th.innerText.trim()).slice(0, cols ?? undefined);
+      const body = [...t.querySelectorAll('tbody tr')].map(tr=>{
+        const tds = tr.querySelectorAll('td'); const arr=[];
+        for(let i=0;i<(cols ?? tds.length);i++){ arr.push((tds[i]?.innerText ?? '').trim()); }
+        return arr.join('\t');
+      });
+      const txt = [head.join('\t'), ...body].join('\n');
+      return navigator.clipboard.writeText(txt);
+    }
+    document.getElementById('btnCopyCtas')?.addEventListener('click', async ()=>{
+      try{ await copyTableToClipboard('tblCuentas'); alert('Cuentas copiadas.'); }catch(e){ alert('No se pudo copiar.'); }
+    });
+    document.getElementById('btnCopyPag')?.addEventListener('click', async ()=>{
+      try{ await copyTableToClipboard('tblPagos'); alert('Pagos copiados.'); }catch(e){ alert('No se pudo copiar.'); }
+    });
+    
+    // Modal Nota — soporta data-nota y data-nota-json
+    (function(){
+      const modal = document.getElementById('modalNota');
+      if (!modal) return;
 
-  gen?.addEventListener('click', genAuto);
-  nro.addEventListener('change', () => {
-    const n = Math.max(1, parseInt(nro.value || '1', 10));
-    renderRows(n);
-  });
-  tbl.addEventListener('input', e => {
-    if (e.target.matches('.cr-monto, .cr-fecha')) recalc();
-  });
-  fIni?.addEventListener('change', () => {
-    const v = fIni.value;
-    if (!hintDia) return;
-    if (!v){ hintDia.textContent = 'Día de pago: —'; return; }
-    const d = new Date(v + 'T00:00:00');
-    hintDia.textContent = `Día de pago: ${d.getDate()} de cada mes`;
-  });
-  total?.addEventListener('input', recalc);
+      modal.addEventListener('show.bs.modal', (ev) => {
+        const btn = ev.relatedTarget; // botón que abrió el modal
+        let txt = '';
+        if (!btn) return;
 
-  // Estado inicial
-  renderRows(Math.max(1, parseInt(nro.value || '1', 10)));
-})();
+        if (btn.hasAttribute('data-nota-json')) {
+          try { txt = JSON.parse(btn.getAttribute('data-nota-json') || '""') || ''; }
+          catch { txt = ''; }
+        } else if (btn.hasAttribute('data-nota')) {
+          // viene ya como texto plano
+          txt = btn.getAttribute('data-nota') || '';
+        }
+
+        const tgt = modal.querySelector('#notaFull');
+        if (tgt) tgt.textContent = String(txt);
+      });
+    })();
+    
+    // ===== Selección de cuentas (para el modal de propuesta)
+    const chkAll   = document.getElementById('chkAll');
+    const chks     = Array.from(document.querySelectorAll('.chkOp'));
+    const btnProp  = document.getElementById('btnPropuesta');
+    const selCount = document.getElementById('selCount');
+    
+    function refreshSelection(){
+      const selected = chks.filter(c => c.checked && !c.disabled).map(c => c.value).filter(Boolean);
+      selCount.textContent = String(selected.length);
+      btnProp.disabled = selected.length === 0;
+      return selected;
+    }
+    chkAll?.addEventListener('change', () => {
+      chks.forEach(c => { if(!c.disabled) c.checked = chkAll.checked; });
+      refreshSelection();
+    });
+    chks.forEach(c => c.addEventListener('change', () => {
+      const enabled = chks.filter(x => !x.disabled).length;
+      const checked = chks.filter(x => x.checked && !x.disabled).length;
+      if (enabled) chkAll.checked = (checked === enabled);
+      refreshSelection();
+    }));
+    
+    // ===== Modal Propuesta: llenar operaciones y recalcular capital/balón
+    const modalProp = document.getElementById('modalPropuesta');
+    const opsResumen = document.getElementById('opsResumen');
+    const opsHidden  = document.getElementById('opsHidden');
+    
+    modalProp?.addEventListener('show.bs.modal', () => {
+      const ops = refreshSelection();
+    
+      // Resumen visible
+      opsResumen.innerHTML = ops.length
+        ? ops.map(o => `<span class="badge rounded-pill text-bg-light border me-1">${o}</span>`).join('')
+        : '<span class="text-secondary">Ninguna</span>';
+    
+      // Hidden inputs
+      opsHidden.innerHTML = '';
+      ops.forEach(op => {
+        const i = document.createElement('input');
+        i.type = 'hidden'; i.name = 'operaciones[]'; i.value = String(op);
+        opsHidden.appendChild(i);
+      });
+    
+      // Disparar recálculo (para capital seleccionado / balón estimado)
+      document.getElementById('cvTotal')?.dispatchEvent(new Event('input'));
+    });
+    
+    // ===== Alternar bloques por tipo (y DESHABILITAR el bloque oculto)
+    const tipo = document.getElementById('tipoPropuesta');
+    const fCon = document.getElementById('formConvenio');
+    const fCan = document.getElementById('formCancelacion');
+    
+    function setEnabled(container, enabled){
+      if (!container) return;
+      container.querySelectorAll('input,select,textarea,button').forEach(el=>{
+        if (enabled) el.removeAttribute('disabled');
+        else el.setAttribute('disabled','disabled');
+      });
+      // Limpia valores del bloque oculto para no mandar basura
+      if (!enabled){
+        container.querySelectorAll('input:not([type="hidden"]),textarea').forEach(el=>{ el.value=''; });
+      }
+    }
+    function req(el, on){
+      if (!el) return;
+      if (on) el.setAttribute('required','required'); else el.removeAttribute('required');
+    }
+    function toggleTipo(){
+      const t = tipo.value;
+      // Mostrar/ocultar
+      fCon.classList.toggle('d-none', t !== 'convenio');
+      fCan.classList.toggle('d-none', t !== 'cancelacion');
+      // Habilitar/deshabilitar
+      setEnabled(fCon, t === 'convenio');
+      setEnabled(fCan, t === 'cancelacion');
+      // Requireds
+      const fields = {
+        convenio: ['nro_cuotas','monto_convenio'],
+        cancelacion: ['fecha_pago_cancel','monto_cancel']
+      };
+      [...fields.convenio, ...fields.cancelacion]
+        .forEach(n => req(document.querySelector(`[name="${n}"]`), false));
+      (fields[t] || []).forEach(n => req(document.querySelector(`[name="${n}"]`), true));
+    }
+    tipo?.addEventListener('change', toggleTipo);
+    toggleTipo();
+    
+    // Hint opcional (si usas fecha inicial)
+    const fechaPagoConvenio = document.getElementById('fechaPagoConvenio') || document.querySelector('[name="fecha_pago"]');
+    const hintDiaMes = document.getElementById('hintDiaMes');
+    function actualizarHint(){
+      const v = fechaPagoConvenio?.value || '';
+      if (!hintDiaMes) return;
+      if (!v) { hintDiaMes.textContent = 'Día de pago: —'; return; }
+      const d = new Date(v + 'T00:00:00');
+      if (isNaN(d)) { hintDiaMes.textContent = 'Día de pago: —'; return; }
+      const dia = d.getDate();
+      hintDiaMes.textContent = `Día de pago: ${dia} de cada mes (si el mes no tiene ese día, se ajusta al último)`;
+    }
+    fechaPagoConvenio?.addEventListener('change', actualizarHint);
+    actualizarHint();
 </script>
 @endpush
