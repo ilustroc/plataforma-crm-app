@@ -5,6 +5,9 @@ namespace App\Http\Controllers;
 use App\Models\CnaSolicitud;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\Storage;
+use Barryvdh\DomPDF\Facade\Pdf;
+use PhpOffice\PhpWord\TemplateProcessor;
 
 class CnaController extends Controller
 {
@@ -64,23 +67,25 @@ class CnaController extends Controller
         return back()->with('ok', 'CNA rechazada por supervisor.');
     }
 
-    public function aprobar(CnaSolicitud $cna)
+    public function aprobar(Cna $cna)
     {
         $this->authorizeActionFor('administrador');
-        if ($cna->workflow_estado !== 'preaprobada') {
-            return back()->withErrors('Solo se puede aprobar una solicitud pre-aprobada.');
+
+        if (($cna->workflow_estado ?? '') !== 'preaprobada') {
+            return back()->withErrors('Solo se puede aprobar una CNA pre-aprobada.');
         }
+
+        // 1) Cambia estado
         $cna->update([
-            'workflow_estado'=>'aprobada',
-            'aprobado_por'=>Auth::id(),
-            'aprobado_at'=>now(),
-            'rechazado_por'=>null,'rechazado_at'=>null,'motivo_rechazo'=>null,
+            'workflow_estado' => 'aprobada',
+            'aprobado_por'    => auth()->id(),
+            'aprobado_at'     => now(),
         ]);
 
-        // Aquí luego generas y guardas el DOCX:
-        // $path = "docs/CNA {$cna->nro_carta} - {$cna->dni}.docx"; ... $cna->update(['docx_path'=>$path]);
+        // 2) Genera archivos
+        $this->makeOutputs($cna);
 
-        return back()->with('ok', 'CNA aprobada.');
+        return back()->with('ok', 'CNA aprobada y archivos generados.');
     }
 
     public function rechazarAdmin(Request $r, CnaSolicitud $cna)
@@ -97,12 +102,31 @@ class CnaController extends Controller
         ]);
         return back()->with('ok', 'CNA rechazada por administrador.');
     }
-
+    
     private function authorizeActionFor(string $role)
     {
-        $user = Auth::user();
+        $user = auth()->user();
         if (!in_array(strtolower($user->role), [$role, 'sistemas'])) {
             abort(403, 'No autorizado.');
         }
+    }
+
+    /** Entrega el PDF para descarga (o lo genera on-the-fly si falta) */
+    public function pdf(Cna $cna)
+    {
+        if (($cna->workflow_estado ?? '') !== 'aprobada') {
+            abort(403, 'Solo disponible para CNA aprobadas.');
+        }
+
+        $file = $cna->pdf_path ? storage_path('app/'.$cna->pdf_path) : null;
+        if ($file && is_file($file)) {
+            return response()->download($file, basename($file));
+        }
+
+        // Fallback: generar al vuelo y descargar
+        $fileName = "CNA {$cna->nro_carta} - {$cna->dni}.pdf";
+        return Pdf::loadView('cna.pdf', ['cna' => $cna])
+            ->setPaper('A4')
+            ->download($fileName);
     }
 }

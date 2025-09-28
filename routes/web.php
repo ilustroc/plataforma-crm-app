@@ -15,6 +15,7 @@ use App\Http\Controllers\AutorizacionController;
 use App\Http\Controllers\PromesaPdfController;
 use App\Http\Controllers\CnaController;
 
+
 /*
 |--------------------------------------------------------------------------
 | Invitados
@@ -151,6 +152,11 @@ Route::middleware('auth')->group(function () {
         Route::post('/cna/{cna}/rechazar-admin', [CnaController::class,'rechazarAdmin'])->name('cna.rechazar.admin');
     });
 
+    // PDF de CNA (solo para aprobadas)
+    Route::middleware(['auth','role:administrador,supervisor'])
+        ->get('/cna/{cna}/pdf', [CnaController::class,'pdf'])
+        ->name('cna.pdf');
+        
     /*
     |--------------------------------------------------------------------------
     | Admin / Soporte
