@@ -18,8 +18,8 @@ class AutorizacionController extends Controller
             $user   = Auth::user();
             $q      = trim((string)($req->q ?? ''));
             $status = $req->status;
-
-            // Base (sin paginación)
+    
+            // ===== PROMESAS (lista sin paginar, como ya lo tenías) =====
             $base = PromesaPago::query()
                 ->from('promesas_pago')
                 ->leftJoin('clientes_cuentas as cc', function($j){
@@ -38,19 +38,16 @@ class AutorizacionController extends Controller
                           ->orWhere('cc.titular','like',"%{$q}%");
                     });
                 });
-
-            // Bandeja por rol (regla de negocio)
+    
             if (in_array(strtolower($user->role), ['supervisor'])) {
                 $base->where('promesas_pago.workflow_estado','pendiente');
             } else {
                 $base->where('promesas_pago.workflow_estado','preaprobada');
             }
-
-            // Filtro manual por status (opcional)
             if (!empty($status)) {
                 $base->where('promesas_pago.workflow_estado', $status);
             }
-
+    
             $rows = $base->select([
                     'promesas_pago.*',
                     'cc.cartera','cc.titular','cc.entidad','cc.producto','cc.moneda',
@@ -66,24 +63,21 @@ class AutorizacionController extends Controller
                     'u.name as creador_nombre',
                 ])
                 ->orderByDesc('promesas_pago.fecha_promesa')
-                ->get(); // SIN paginación
-
-            // ====== CARGA DE CRONOGRAMAS (tabla real: promesa_cuotas) ======
+                ->get();
+    
+            // Cronogramas (si existe la tabla singular promesa_cuotas)
             $ids = $rows->pluck('id')->filter()->all();
             $cuotasById = collect();
-
-            if (!empty($ids) && Schema::hasTable('promesa_cuotas')) { // <— singular
-                $cuotasById = DB::table('promesa_cuotas')            // <— singular
+            if (!empty($ids) && Schema::hasTable('promesa_cuotas')) {
+                $cuotasById = DB::table('promesa_cuotas')
                     ->select('promesa_id','nro','fecha','monto','es_balon')
                     ->whereIn('promesa_id', $ids)
                     ->orderBy('promesa_id')->orderBy('nro')
                     ->get()
                     ->groupBy('promesa_id');
             }
-
             $rows = $rows->map(function($p) use ($cuotasById){
                 $list = $cuotasById[$p->id] ?? collect();
-
                 $p->cuotas      = $list;
                 $p->has_balon   = (int)$list->contains('es_balon', 1);
                 $p->cuotas_json = $list->map(function($c){
@@ -94,38 +88,61 @@ class AutorizacionController extends Controller
                         'es_balon' => (bool)($c->es_balon ?? false),
                     ];
                 })->values();
-
                 return $p;
             });
-
+    
+            // ===== CNA (pendientes para supervisor / preaprobadas para admin) =====
             $cnaBase = CnaSolicitud::query()
                 ->when($q !== '', function ($w) use ($q) {
                     $w->where(function($x) use ($q){
                         $x->where('dni','like',"%{$q}%")
-                        ->orWhere('nro_carta','like',"%{$q}%")
-                        ->orWhere('producto','like',"%{$q}%")
-                        ->orWhere('nota','like',"%{$q}%");
+                          ->orWhere('nro_carta','like',"%{$q}%")
+                          ->orWhere('producto','like',"%{$q}%")
+                          ->orWhere('nota','like',"%{$q}%");
                     });
                 });
-        
+    
             if (in_array(strtolower($user->role), ['supervisor'])) {
                 $cnaBase->where('workflow_estado','pendiente');
             } else {
                 $cnaBase->where('workflow_estado','preaprobada');
             }
-            if ($status) $cnaBase->where('workflow_estado',$status);
-            
+            if (!empty($status)) {
+                $cnaBase->where('workflow_estado', $status);
+            }
+    
+            // paginamos CNA por su propia página (?page_cna=)
             $cnaRows = $cnaBase->orderByDesc('created_at')
-            ->paginate(10, ['*'], 'page_cna')
-            ->withQueryString();
-
+                ->paginate(10, ['*'], 'page_cna')
+                ->withQueryString();
+    
+            // === MAPA Operación -> Producto (solo para las CNA de esta página) ===
+            $opsAll = collect($cnaRows->items())
+                ->flatMap(fn($c) => (array)($c->operaciones ?? []))
+                ->filter()
+                ->map(fn($op) => (string)$op)
+                ->unique()
+                ->values()
+                ->all();
+    
+            $prodByOp = [];
+            if (!empty($opsAll)) {
+                $prodByOp = DB::table('clientes_cuentas')
+                    ->select('operacion','producto')
+                    ->whereIn('operacion', $opsAll)
+                    ->get()
+                    ->mapWithKeys(fn($r) => [(string)$r->operacion => (string)($r->producto ?? '—')])
+                    ->all();
+            }
+    
             return view('autorizacion.index', [
                 'rows'         => $rows,
-                'cnaRows'      => $cnaRows,   // << pásalo a la vista
+                'cnaRows'      => $cnaRows,
+                'prodByOp'     => $prodByOp, // ← clave para la vista
                 'q'            => $q,
                 'isSupervisor' => in_array(strtolower($user->role), ['supervisor']),
             ]);
-
+    
         } catch (\Throwable $e) {
             \Log::error('Autorizacion.index ERROR', [
                 'msg'   => $e->getMessage(),
@@ -135,6 +152,7 @@ class AutorizacionController extends Controller
             return response('Error en Autorización: '.$e->getMessage(), 500);
         }
     }
+    
 
     // ===== SUPERVISOR =====
     public function preaprobar(Request $req, PromesaPago $promesa)
