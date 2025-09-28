@@ -164,14 +164,13 @@
             <th class="text-center" style="width:36px"><input type="checkbox" id="chkAll"></th>
             <th>Cartera</th>
             <th class="text-nowrap">Operación</th>
-            {{-- <th>Moneda</th>  --}} {{-- eliminado --}}
             <th>Entidad</th>
             <th>Producto</th>
             <th class="text-end text-nowrap">Saldo Capital</th>
             <th class="text-end text-nowrap">Deuda Total</th>
 
             {{-- NUEVA COLUMNA CNA --}}
-            <th class="text-nowrap">CNA</th>
+            <th class="text-nowrap">CNA(s)</th>
 
             {{-- COLUMNA CCD --}}
             <th class="text-nowrap">CCD</th>
@@ -183,164 +182,193 @@
           </tr>
         </thead>
         <tbody>
-          @foreach ($cuentas as $c)
-            @php
-              $cnt = (int)($c->pagos_count ?? 0);
-              $sum = (float)($c->pagos_sum ?? 0);
-              $hasList = isset($c->pagos_list) && (($c->pagos_list instanceof \Illuminate\Support\Collection && $c->pagos_list->count()) || (is_array($c->pagos_list) && count($c->pagos_list)));
-              $collapseId = 'pagos-'.$loop->index;
+        @foreach ($cuentas as $c)
+          @php
+            $cnt = (int)($c->pagos_count ?? 0);
+            $sum = (float)($c->pagos_sum ?? 0);
+            $hasList = isset($c->pagos_list) && (
+              ($c->pagos_list instanceof \Illuminate\Support\Collection && $c->pagos_list->count()) ||
+              (is_array($c->pagos_list) && count($c->pagos_list))
+            );
+            $collapseId = 'pagos-'.$loop->index;
 
-              // Docs CCD precargados
-              $docsCcd = ($ccdByCodigo[$c->operacion] ?? collect());
+            // CCDs precargados
+            $docsCcd = ($ccdByCodigo[$c->operacion] ?? collect());
 
-              // CNAs por operación (mapa enviado desde el controlador)
-              $cnas = collect($cnasByOperacion[$c->operacion] ?? []);
+            // CNAs por operación (MAPA que envía el controller del show)
+            $cnas = collect($cnasByOperacion[$c->operacion] ?? []);
 
-              $mkUrl = function($path){
-                $p = (string)($path ?? '');
-                if ($p === '') return null;
-                return \Illuminate\Support\Str::startsWith($p, ['http://','https://','/']) ? $p : url($p);
-                // Si tus PDFs están en storage/app/public, cambia a: return asset('storage/'.$p);
+            // helpers
+            $badgeFor = function($estado) {
+              $e = strtolower((string)$estado);
+              return match (true) {
+                str_contains($e,'aprob')       => 'success',
+                str_contains($e,'pre')         => 'primary',
+                str_contains($e,'rechaz')      => 'danger',
+                default                        => 'secondary',
               };
-
-              // helper status → badge
-              $badgeFor = function($estado){
-                $e = strtolower((string)$estado);
-                return match(true){
-                  str_contains($e,'aprob')      => 'success',
-                  str_contains($e,'pre')        => 'primary',
-                  str_contains($e,'rechaz')     => 'danger',
-                  default                       => 'secondary',
-                };
+            };
+            $estadoText = function($estado) {
+              $e = strtolower((string)$estado);
+              return match (true) {
+                str_contains($e,'aprob')       => 'Aprobada',
+                str_contains($e,'pre')         => 'Pre-aprobada',
+                str_contains($e,'rechaz_sup')  => 'Rechazada (Sup)',
+                str_contains($e,'rechaz')      => 'Rechazada',
+                default                        => 'Pendiente',
               };
-            @endphp
-            <tr>
-              <td class="text-center">
-                <input type="checkbox" class="chkOp" value="{{ $c->operacion }}" {{ empty($c->operacion) ? 'disabled' : '' }}>
-              </td>
-              <td class="text-nowrap">{{ $c->cartera ?? '—' }}</td>
-              <td class="text-nowrap">{{ $c->operacion ?? '—' }}</td>
-              {{-- <td>{{ $c->moneda ?? '—' }}</td> --}} {{-- eliminado --}}
-              <td>{{ $c->entidad ?? '—' }}</td>
-              <td>{{ $c->producto ?? '—' }}</td>
-              <td class="text-end text-nowrap">{{ number_format((float)($c->saldo_capital ?? 0), 2) }}</td>
-              <td class="text-end text-nowrap">{{ number_format((float)($c->deuda_total ?? 0), 2) }}</td>
+            };
+          @endphp
 
-              {{-- === CELDA CNA === --}}
-              <td class="text-nowrap">
-                @if($cnas->count() === 1)
-                  @php
-                    $x = $cnas->first();
-                    $estado = $x->estado ?? 'pendiente';
-                    $badge  = $badgeFor($estado);
-                  @endphp
-                  <div class="d-inline-flex align-items-center gap-2">
-                    <a href="{{ route('cna.pdf', $x->id) }}" target="_blank" class="btn btn-sm btn-outline-success" title="Descargar CNA">
-                      <i class="bi bi-filetype-pdf me-1"></i> CNA
+          <tr>
+            <td class="text-center">
+              <input type="checkbox" class="chkOp" value="{{ $c->operacion }}" {{ empty($c->operacion) ? 'disabled' : '' }}>
+            </td>
+            <td class="text-nowrap">{{ $c->cartera ?? '—' }}</td>
+            <td class="text-nowrap">{{ $c->operacion ?? '—' }}</td>
+            <td>{{ $c->entidad ?? '—' }}</td>
+            <td>{{ $c->producto ?? '—' }}</td>
+            <td class="text-end text-nowrap">{{ number_format((float)($c->saldo_capital ?? 0), 2) }}</td>
+            <td class="text-end text-nowrap">{{ number_format((float)($c->deuda_total ?? 0), 2) }}</td>
+
+            {{-- === CELDA CNA (CORREGIDA) === --}}
+            <td class="text-nowrap">
+              @if($cnas->isEmpty())
+                <span class="text-secondary">—</span>
+              @elseif($cnas->count() === 1)
+                @php
+                  $x      = $cnas->first();
+                  $estado = $estadoText($x->workflow_estado ?? 'pendiente');
+                  $badge  = $badgeFor($x->workflow_estado ?? 'pendiente');
+                  $nro    = $x->nro_carta ?? $x->id;
+                  $fecha  = optional($x->created_at)->format('Y-m-d');
+                @endphp
+
+                <div class="d-inline-flex align-items-center gap-2">
+                  <span class="badge text-bg-{{ $badge }}">{{ $estado }}</span>
+                  <span class="small text-secondary">#{{ $nro }} · {{ $fecha }}</span>
+
+                  @if(($x->workflow_estado ?? '') === 'aprobada')
+                    <a href="{{ route('cna.pdf', $x->id) }}" class="btn btn-sm btn-outline-success" target="_blank" title="Descargar CNA (PDF)">
+                      <i class="bi bi-filetype-pdf"></i>
                     </a>
-                    <span class="badge rounded-pill text-bg-{{ $badge }}">{{ ucfirst($estado) }}</span>
-                  </div>
-                @elseif($cnas->count() > 1)
-                  <div class="btn-group">
-                    <button class="btn btn-sm btn-outline-success dropdown-toggle" data-bs-toggle="dropdown">
-                      <i class="bi bi-filetype-pdf me-1"></i> CNA ({{ $cnas->count() }})
-                    </button>
-                    <ul class="dropdown-menu dropdown-menu-end">
-                      @foreach($cnas as $x)
-                        @php
-                          $estado = $x->estado ?? 'pendiente';
-                          $nro    = $x->nro_carta ?? $x->id;
-                          $fecha  = optional($x->created_at)->format('Y-m-d');
-                        @endphp
+                  @endif
+                </div>
+
+              @else
+                @php
+                  $label = 'CNA ('.$cnas->count().')';
+                @endphp
+                <div class="btn-group">
+                  <button class="btn btn-sm btn-outline-success dropdown-toggle" data-bs-toggle="dropdown">
+                    <i class="bi bi-file-earmark-text me-1"></i> {{ $label }}
+                  </button>
+                  <ul class="dropdown-menu dropdown-menu-end">
+                    @foreach($cnas as $x)
+                      @php
+                        $estado = $estadoText($x->workflow_estado ?? 'pendiente');
+                        $badge  = $badgeFor($x->workflow_estado ?? 'pendiente');
+                        $nro    = $x->nro_carta ?? $x->id;
+                        $fecha  = optional($x->created_at)->format('Y-m-d');
+                        $isOk   = (($x->workflow_estado ?? '') === 'aprobada');
+                      @endphp
+
+                      @if($isOk)
                         <li>
                           <a class="dropdown-item d-flex justify-content-between align-items-center"
                             href="{{ route('cna.pdf', $x->id) }}" target="_blank">
                             <span>#{{ $nro }} <small class="text-secondary ms-1">{{ $fecha }}</small></span>
-                            <span class="badge text-bg-{{ $badgeFor($estado) }}">{{ ucfirst($estado) }}</span>
+                            <span class="badge text-bg-{{ $badge }}">{{ $estado }}</span>
                           </a>
                         </li>
-                      @endforeach
-                    </ul>
-                  </div>
-                @else
-                  <span class="text-secondary">—</span>
-                @endif
-              </td>
-              {{-- === /CELDA CNA === --}}
-
-              {{-- === CELDA CCD === --}}
-              <td class="text-nowrap">
-                @if($docsCcd->count() === 1)
-                  @php
-                    $d    = $docsCcd->first();
-                    $path = $d->pdf ?? $d->archivo ?? $d->ruta ?? $d->url ?? null;
-                    $href = $mkUrl($path);
-                  @endphp
-                  @if($href)
-                    <a href="{{ $href }}" target="_blank" download
-                      class="btn btn-sm btn-outline-primary" title="Descargar CCD">
-                      <i class="bi bi-filetype-pdf me-1"></i> CCD
-                    </a>
-                  @else
-                    <span class="text-secondary">—</span>
-                  @endif
-                @elseif($docsCcd->count() > 1)
-                  <div class="btn-group">
-                    <button class="btn btn-sm btn-outline-primary dropdown-toggle" data-bs-toggle="dropdown">
-                      <i class="bi bi-filetype-pdf me-1"></i> CCD ({{ $docsCcd->count() }})
-                    </button>
-                    <ul class="dropdown-menu dropdown-menu-end">
-                      @foreach($docsCcd as $d)
-                        @php
-                          $path = $d->pdf ?? $d->archivo ?? $d->ruta ?? $d->url ?? null;
-                          $href = $mkUrl($path);
-                          $name = $d->nombre ?? $d->documento ?? $d->codigo ?? ('CCD '.$d->id);
-                        @endphp
-                        @if($href)
-                          <li><a class="dropdown-item" href="{{ $href }}" target="_blank" download>{{ $name }}</a></li>
-                        @endif
-                      @endforeach
-                    </ul>
-                  </div>
-                @else
-                  <span class="text-secondary">—</span>
-                @endif
-              </td>
-              {{-- === /CELDA CCD === --}}
-
-              <td class="text-nowrap">
-                <span class="badge rounded-pill text-bg-light border">{{ $cnt }} pago(s)</span>
-                @if($sum > 0)
-                  <small class="text-secondary ms-1">· S/ {{ number_format($sum, 2) }}</small>
-                @endif
-
-                @if($hasList)
-                  <button class="btn btn-sm btn-outline-secondary ms-2" type="button"
-                          data-bs-toggle="collapse" data-bs-target="#{{ $collapseId }}"
-                          aria-expanded="false" aria-controls="{{ $collapseId }}">
-                    Ver detalle
-                  </button>
-                  <div class="collapse mt-2" id="{{ $collapseId }}">
-                    <ul class="list-unstyled mb-0 small">
-                      @foreach($c->pagos_list as $p)
-                        @php
-                          $f = !empty($p->fecha) ? \Carbon\Carbon::parse($p->fecha)->format('d/m/Y') : '—';
-                          $m = number_format((float)($p->monto ?? 0), 2);
-                          $src = $p->fuente ?? '—';
-                        @endphp
-                        <li class="d-flex align-items-center gap-2">
-                          <i class="bi bi-dot"></i>
-                          <span class="text-nowrap">{{ $f }}</span>
-                          <span>· S/ {{ $m }}</span>
-                          <span class="text-secondary">· {{ $src }}</span>
+                      @else
+                        <li>
+                          <span class="dropdown-item-text d-flex justify-content-between align-items-center">
+                            <span>#{{ $nro }} <small class="text-secondary ms-1">{{ $fecha }}</small></span>
+                            <span class="badge text-bg-{{ $badge }}">{{ $estado }}</span>
+                          </span>
                         </li>
-                      @endforeach
-                    </ul>
-                  </div>
+                      @endif
+                    @endforeach
+                  </ul>
+                </div>
+              @endif
+            </td>
+            {{-- === /CELDA CNA === --}}
+
+            {{-- === CELDA CCD (sin cambios) === --}}
+            <td class="text-nowrap">
+              @if($docsCcd->count() === 1)
+                @php
+                  $d    = $docsCcd->first();
+                  $path = $d->pdf ?? $d->archivo ?? $d->ruta ?? $d->url ?? null;
+                  $href = \Illuminate\Support\Str::startsWith((string)$path, ['http://','https://','/']) ? $path : ($path ? url($path) : null);
+                @endphp
+                @if($href)
+                  <a href="{{ $href }}" target="_blank" download
+                    class="btn btn-sm btn-outline-primary" title="Descargar CCD">
+                    <i class="bi bi-filetype-pdf me-1"></i> CCD
+                  </a>
+                @else
+                  <span class="text-secondary">—</span>
                 @endif
-              </td>
-            </tr>
-          @endforeach
+              @elseif($docsCcd->count() > 1)
+                <div class="btn-group">
+                  <button class="btn btn-sm btn-outline-primary dropdown-toggle" data-bs-toggle="dropdown">
+                    <i class="bi bi-filetype-pdf me-1"></i> CCD ({{ $docsCcd->count() }})
+                  </button>
+                  <ul class="dropdown-menu dropdown-menu-end">
+                    @foreach($docsCcd as $d)
+                      @php
+                        $path = $d->pdf ?? $d->archivo ?? $d->ruta ?? $d->url ?? null;
+                        $href = \Illuminate\Support\Str::startsWith((string)$path, ['http://','https://','/']) ? $path : ($path ? url($path) : null);
+                        $name = $d->nombre ?? $d->documento ?? $d->codigo ?? ('CCD '.$d->id);
+                      @endphp
+                      @if($href)
+                        <li><a class="dropdown-item" href="{{ $href }}" target="_blank" download>{{ $name }}</a></li>
+                      @endif
+                    @endforeach
+                  </ul>
+                </div>
+              @else
+                <span class="text-secondary">—</span>
+              @endif
+            </td>
+            {{-- === /CELDA CCD === --}}
+
+            <td class="text-nowrap">
+              <span class="badge rounded-pill text-bg-light border">{{ $cnt }} pago(s)</span>
+              @if($sum > 0)
+                <small class="text-secondary ms-1">· S/ {{ number_format($sum, 2) }}</small>
+              @endif>
+
+              @if($hasList)
+                <button class="btn btn-sm btn-outline-secondary ms-2" type="button"
+                        data-bs-toggle="collapse" data-bs-target="#{{ $collapseId }}"
+                        aria-expanded="false" aria-controls="{{ $collapseId }}">
+                  Ver detalle
+                </button>
+                <div class="collapse mt-2" id="{{ $collapseId }}">
+                  <ul class="list-unstyled mb-0 small">
+                    @foreach($c->pagos_list as $p)
+                      @php
+                        $f = !empty($p->fecha) ? \Carbon\Carbon::parse($p->fecha)->format('d/m/Y') : '—';
+                        $m = number_format((float)($p->monto ?? 0), 2);
+                        $src = $p->fuente ?? '—';
+                      @endphp
+                      <li class="d-flex align-items-center gap-2">
+                        <i class="bi bi-dot"></i>
+                        <span class="text-nowrap">{{ $f }}</span>
+                        <span>· S/ {{ $m }}</span>
+                        <span class="text-secondary">· {{ $src }}</span>
+                      </li>
+                    @endforeach
+                  </ul>
+                </div>
+              @endif
+            </td>
+          </tr>
+        @endforeach
         </tbody>
       </table>
     </div>
