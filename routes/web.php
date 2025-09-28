@@ -153,8 +153,8 @@ Route::middleware('auth')->group(function () {
 
     // Descargas CNA (PDF / DOCX)
     Route::middleware('role:administrador,supervisor')->group(function () {
-        Route::get('/cna/{cna}/pdf',  [CnaController::class,'pdf'])->name('cna.pdf');
-        Route::get('/cna/{cna}/docx', [CnaController::class,'docx'])->name('cna.docx'); // opcional
+        Route::get('/cna/{cna}/pdf',  [CnaController::class, 'pdf'])->name('cna.pdf');
+        Route::get('/cna/{cna}/docx', [CnaController::class, 'docx'])->name('cna.docx');
     });
 
     /*
