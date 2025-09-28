@@ -150,31 +150,42 @@ class CnaController extends Controller
     // ====== Descargas ======
 
     /** Descarga el PDF; si falta, lo genera desde la plantilla y devuelve. */
-    public function pdf(CnaSolicitud $cna)
+    public function pdf($cna)
     {
+        $cna = CnaSolicitud::findOrFail($cna); // evita binding
         if ($cna->workflow_estado !== 'aprobada') {
             abort(403, 'Solo disponible para CNA aprobadas.');
         }
-
-        if (!$cna->pdf_path || !Storage::exists($cna->pdf_path)) {
-            $this->generateOutputsFromTemplate($cna);
+    
+        // Si no hay archivo guardado, lo generamos
+        if (!$cna->pdf_path || !\Storage::exists($cna->pdf_path)) {
+            $this->generateOutputs($cna);
+            $cna->refresh();
         }
-
-        if (!$cna->pdf_path || !Storage::exists($cna->pdf_path)) {
-            abort(404, 'No se pudo generar el PDF.');
+    
+        // Si existe, descargamos
+        if ($cna->pdf_path && Storage::exists($cna->pdf_path)) {
+            return \Storage::download($cna->pdf_path, basename($cna->pdf_path));
         }
-
-        return Storage::download($cna->pdf_path, basename($cna->pdf_path));
+    
+        // Fallback: generar al vuelo (por si algo falló al guardar)
+        $fileName = "CNA {$cna->nro_carta} - {$cna->dni}.pdf";
+        return Pdf::loadView('cna.pdf', ['cna' => $cna])
+            ->setPaper('A4')
+            ->download($fileName);
     }
 
     /** (Opcional) descarga del DOCX generado. */
-    public function docx(CnaSolicitud $cna)
+    public function docx($cna)
     {
+        $cna = CnaSolicitud::findOrFail($cna); // evita binding
         if ($cna->workflow_estado !== 'aprobada') {
             abort(403, 'Solo disponible para CNA aprobadas.');
         }
-        abort_unless($cna->docx_path && Storage::exists($cna->docx_path), 404, 'Archivo DOCX no encontrado.');
-        return Storage::download($cna->docx_path, basename($cna->docx_path));
+        if (!$cna->docx_path || !\Storage::exists($cna->docx_path)) {
+            abort(404, 'Archivo DOCX no encontrado.');
+        }
+        return \Storage::download($cna->docx_path, basename($cna->docx_path));
     }
 
     // ====== Helpers ======
