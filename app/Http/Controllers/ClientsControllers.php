@@ -154,37 +154,35 @@ class ClientsControllers extends Controller
             $cnasByOperacion = collect();
             if (Schema::hasTable('cna_solicitudes')) {
                 $colsCna = DB::getSchemaBuilder()->getColumnListing('cna_solicitudes');
-
-                // Solo selecciona columnas existentes (evita excepciones si falta alguna)
-                $selCnaBase = ['id','dni','nro_carta','operaciones','workflow_estado','created_at'];
-                $selCna = collect($selCnaBase)->filter(fn($c)=>in_array($c,$colsCna))->values()->all();
-
+            
+                // Trae estado y, si existen, rutas a archivos
+                $want = ['id','dni','nro_carta','operaciones','workflow_estado','created_at','pdf_path','docx_path'];
+                $selCna = collect($want)->filter(fn($c)=>in_array($c,$colsCna))->values()->all();
+            
                 $cnas = DB::table('cna_solicitudes')
                     ->select($selCna)
                     ->where('dni',$dni)
                     ->orderByDesc('created_at')
                     ->get();
-
+            
                 $map = [];
                 foreach ($cnas as $row) {
-                    // operaciones puede ser JSON o string; normalizamos a array
                     $opsRaw = $row->operaciones ?? '[]';
                     $opsArr = is_array($opsRaw) ? $opsRaw : (json_decode($opsRaw, true) ?: []);
-
-                    // fallback por si viniera "op1,op2"
                     if (!is_array($opsArr)) {
                         $opsArr = array_filter(array_map('trim', explode(',', (string)$opsRaw)));
                     }
-
+            
                     foreach ($opsArr as $op) {
                         if (!$op) continue;
                         $map[$op] = $map[$op] ?? collect();
                         $map[$op]->push((object)[
-                            'id'         => $row->id,
-                            'nro_carta'  => $row->nro_carta ?? $row->id,
-                            'estado'     => $row->workflow_estado ?? 'pendiente',
-                            'created_at' => $row->created_at,
-                            // No seleccionamos pdf_path/docx_path para no romper si no existe la columna
+                            'id'              => $row->id,
+                            'nro_carta'       => $row->nro_carta ?? $row->id,
+                            'workflow_estado' => $row->workflow_estado ?? 'pendiente',
+                            'created_at'      => $row->created_at,
+                            'pdf_path'        => $row->pdf_path   ?? null,
+                            'docx_path'       => $row->docx_path  ?? null,
                         ]);
                     }
                 }

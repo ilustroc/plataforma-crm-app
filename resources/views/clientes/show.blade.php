@@ -231,70 +231,65 @@
             <td class="text-end text-nowrap">{{ number_format((float)($c->saldo_capital ?? 0), 2) }}</td>
             <td class="text-end text-nowrap">{{ number_format((float)($c->deuda_total ?? 0), 2) }}</td>
 
-            {{-- === CELDA CNA (CORREGIDA) === --}}
+            {{-- === CELDA CNA === --}}
             <td class="text-nowrap">
-              @if($cnas->isEmpty())
-                <span class="text-secondary">—</span>
-              @elseif($cnas->count() === 1)
+              @php
+                $badgeFor = function($estado){
+                  $e = strtolower((string)$estado);
+                  return str_contains($e,'aprob') ? 'success'
+                      : (str_contains($e,'pre') ? 'primary'
+                      : (str_contains($e,'rechaz') ? 'danger' : 'secondary'));
+                };
+              @endphp
+
+              @if(($cnasByOperacion[$c->operacion] ?? collect())->count() === 1)
                 @php
-                  $x      = $cnas->first();
-                  $estado = $estadoText($x->workflow_estado ?? 'pendiente');
-                  $badge  = $badgeFor($x->workflow_estado ?? 'pendiente');
+                  $x = ($cnasByOperacion[$c->operacion])->first();
+                  // Acepta 'estado' o 'workflow_estado' según cómo venga del controlador
+                  $estado = strtolower($x->estado ?? $x->workflow_estado ?? 'pendiente');
+                  $badge  = $badgeFor($estado);
                   $nro    = $x->nro_carta ?? $x->id;
-                  $fecha  = optional($x->created_at)->format('Y-m-d');
                 @endphp
 
-                <div class="d-inline-flex align-items-center gap-2">
-                  <span class="badge text-bg-{{ $badge }}">{{ $estado }}</span>
-                  <span class="small text-secondary">#{{ $nro }} · {{ $fecha }}</span>
+                @if($estado === 'aprobada')
+                  <a href="{{ route('cna.pdf', $x->id) }}" class="btn btn-sm btn-outline-success" target="_blank">
+                    <i class="bi bi-filetype-pdf me-1"></i> PDF #{{ $nro }}
+                  </a>
+                @else
+                  <span class="badge rounded-pill text-bg-{{ $badge }}">{{ ucfirst($estado) }}</span>
+                  <small class="text-secondary ms-2">#{{ $nro }}</small>
+                @endif
 
-                  @if(($x->workflow_estado ?? '') === 'aprobada')
-                    <a href="{{ route('cna.pdf', $x->id) }}" class="btn btn-sm btn-outline-success" target="_blank" title="Descargar CNA (PDF)">
-                      <i class="bi bi-filetype-pdf"></i>
-                    </a>
-                  @endif
-                </div>
-
-              @else
-                @php
-                  $label = 'CNA ('.$cnas->count().')';
-                @endphp
+              @elseif(($cnasByOperacion[$c->operacion] ?? collect())->count() > 1)
                 <div class="btn-group">
                   <button class="btn btn-sm btn-outline-success dropdown-toggle" data-bs-toggle="dropdown">
-                    <i class="bi bi-file-earmark-text me-1"></i> {{ $label }}
+                    CNA ({{ ($cnasByOperacion[$c->operacion])->count() }})
                   </button>
                   <ul class="dropdown-menu dropdown-menu-end">
-                    @foreach($cnas as $x)
+                    @foreach($cnasByOperacion[$c->operacion] as $x)
                       @php
-                        $estado = $estadoText($x->workflow_estado ?? 'pendiente');
-                        $badge  = $badgeFor($x->workflow_estado ?? 'pendiente');
+                        $estado = strtolower($x->estado ?? $x->workflow_estado ?? 'pendiente');
+                        $badge  = $badgeFor($estado);
                         $nro    = $x->nro_carta ?? $x->id;
                         $fecha  = optional($x->created_at)->format('Y-m-d');
-                        $isOk   = (($x->workflow_estado ?? '') === 'aprobada');
                       @endphp
-
-                      @if($isOk)
-                        <li>
-                          <a class="dropdown-item d-flex justify-content-between align-items-center"
-                            href="{{ route('cna.pdf', $x->id) }}" target="_blank">
-                            <span>#{{ $nro }} <small class="text-secondary ms-1">{{ $fecha }}</small></span>
-                            <span class="badge text-bg-{{ $badge }}">{{ $estado }}</span>
-                          </a>
-                        </li>
-                      @else
-                        <li>
-                          <span class="dropdown-item-text d-flex justify-content-between align-items-center">
-                            <span>#{{ $nro }} <small class="text-secondary ms-1">{{ $fecha }}</small></span>
-                            <span class="badge text-bg-{{ $badge }}">{{ $estado }}</span>
-                          </span>
-                        </li>
-                      @endif
+                      <li class="d-flex align-items-center justify-content-between px-3 py-1">
+                        <span>#{{ $nro }} <small class="text-secondary">{{ $fecha }}</small></span>
+                        @if($estado === 'aprobada')
+                          <a href="{{ route('cna.pdf', $x->id) }}" class="btn btn-sm btn-link" target="_blank">PDF</a>
+                        @else
+                          <span class="badge text-bg-{{ $badge }}">{{ ucfirst($estado) }}</span>
+                        @endif
+                      </li>
                     @endforeach
                   </ul>
                 </div>
+              @else
+                <span class="text-secondary">—</span>
               @endif
             </td>
             {{-- === /CELDA CNA === --}}
+
 
             {{-- === CELDA CCD (sin cambios) === --}}
             <td class="text-nowrap">
