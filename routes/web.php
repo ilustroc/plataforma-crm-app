@@ -15,7 +15,6 @@ use App\Http\Controllers\AutorizacionController;
 use App\Http\Controllers\PromesaPdfController;
 use App\Http\Controllers\CnaController;
 
-
 /*
 |--------------------------------------------------------------------------
 | Invitados
@@ -79,16 +78,16 @@ Route::middleware('auth')->group(function () {
     |--------------------------------------------------------------------------
     */
     Route::prefix('clientes')->group(function () {
-        Route::get('/',        [ClientsControllers::class,'index'])->name('clientes.index');
-        Route::get('/{dni}',   [ClientsControllers::class,'show'])->name('clientes.show');
+        Route::get('/',      [ClientsControllers::class,'index'])->name('clientes.index');
+        Route::get('/{dni}', [ClientsControllers::class,'show'])->name('clientes.show');
 
         // Promesas de pago (crear desde la ficha del cliente)
         Route::post('/{dni}/promesas', [ClientsControllers::class,'storePromesa'])
             ->name('clientes.promesas.store');
 
         // CNA (crear solicitud desde la ficha del cliente)
-        Route::post('/{dni}/cna', [CnaController::class,'store'])
-            ->name('cna.store');
+        Route::post('/{dni}/cnas', [CnaController::class, 'store'])
+            ->name('clientes.cna.store');
     });
 
     /*
@@ -152,11 +151,12 @@ Route::middleware('auth')->group(function () {
         Route::post('/cna/{cna}/rechazar-admin', [CnaController::class,'rechazarAdmin'])->name('cna.rechazar.admin');
     });
 
-    // PDF de CNA (solo para aprobadas)
-    Route::middleware(['auth','role:administrador,supervisor'])
-        ->get('/cna/{cna}/pdf', [CnaController::class,'pdf'])
-        ->name('cna.pdf');
-        
+    // Descargas CNA (PDF / DOCX)
+    Route::middleware('role:administrador,supervisor')->group(function () {
+        Route::get('/cna/{cna}/pdf',  [CnaController::class,'pdf'])->name('cna.pdf');
+        Route::get('/cna/{cna}/docx', [CnaController::class,'docx'])->name('cna.docx'); // opcional
+    });
+
     /*
     |--------------------------------------------------------------------------
     | Admin / Soporte
@@ -174,9 +174,9 @@ Route::middleware('auth')->group(function () {
             ->name('integracion.data.clientes.import');
 
         // Integración ▸ Pagos
-        Route::get('/integracion/pagos',                  [PlaceholdersPagosController::class, 'index'])->name('integracion.pagos');
-        Route::post('/integracion/pagos/import',          [PlaceholdersPagosController::class, 'import'])->name('integracion.pagos.import');
-        Route::get('/integracion/pagos/template',         [PlaceholdersPagosController::class, 'template'])->name('integracion.pagos.template');
+        Route::get('/integracion/pagos',          [PlaceholdersPagosController::class, 'index'])->name('integracion.pagos');
+        Route::post('/integracion/pagos/import',  [PlaceholdersPagosController::class, 'import'])->name('integracion.pagos.import');
+        Route::get('/integracion/pagos/template', [PlaceholdersPagosController::class, 'template'])->name('integracion.pagos.template');
 
         // Caja Cusco ▸ Castigada
         Route::post('/integracion/pagos/import/cusco-castigada',  [PlaceholdersPagosController::class, 'importCajaCuscoCastigada'])->name('integracion.pagos.import.cusco');
@@ -187,10 +187,10 @@ Route::middleware('auth')->group(function () {
         Route::post('/integracion/pagos/import/cusco-extrajudicial',  [PlaceholdersPagosController::class, 'importCajaCuscoExtrajudicial'])->name('integracion.pagos.import.cusco_extrajudicial');
 
         // Administración de usuarios
-        Route::get('/administracion',                                     [AdminUsersController::class, 'index'])->name('administracion');
-        Route::post('/administracion/supervisores',                       [AdminUsersController::class, 'storeSupervisor'])->name('administracion.supervisores.store');
-        Route::post('/administracion/asesores',                           [AdminUsersController::class, 'storeAsesor'])->name('administracion.asesores.store');
-        Route::patch('/administracion/asesores/{id}/reasignar',           [AdminUsersController::class, 'reassignAsesor'])->name('administracion.asesores.reassign');
+        Route::get('/administracion',                           [AdminUsersController::class, 'index'])->name('administracion');
+        Route::post('/administracion/supervisores',             [AdminUsersController::class, 'storeSupervisor'])->name('administracion.supervisores.store');
+        Route::post('/administracion/asesores',                 [AdminUsersController::class, 'storeAsesor'])->name('administracion.asesores.store');
+        Route::patch('/administracion/asesores/{id}/reasignar', [AdminUsersController::class, 'reassignAsesor'])->name('administracion.asesores.reassign');
     });
 
     // Zonas por rol (opcional)

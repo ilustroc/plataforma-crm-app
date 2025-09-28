@@ -147,8 +147,9 @@
         </button>
 
         {{-- NUEVO: Solicitar CNA --}}
-        <button class="btn btn-success btn-sm" id="btnCna" type="button" data-bs-toggle="modal" data-bs-target="#modalCna" disabled>
-          <i class="bi bi-file-earmark-word"></i> Solicitar CNA
+        <button class="btn btn-success btn-sm" id="btnSolicitarCna" type="button" data-bs-toggle="modal" data-bs-target="#modalCna" disabled>
+          <i class="bi bi-file-earmark-text"></i> Solicitar CNA
+          <span class="ms-1 badge rounded-pill text-bg-light align-middle" id="cnaSelCount">0</span>
         </button>
       </div>
     </div>
@@ -630,42 +631,64 @@
     </div>
   </div>
 
-  {{-- ===== Modal CNA ===== --}}
-  <div class="modal fade" id="modalCna" tabindex="-1" aria-hidden="true" data-bs-backdrop="static" data-bs-keyboard="false">
-    <div class="modal-dialog">
-      <form class="modal-content" method="POST" action="{{ route('cna.store', $dni) }}">
+  {{-- ===== Modal: Solicitar Carta de No Adeudo (CNA) ===== --}}
+  <div class="modal fade" id="modalCna" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered">
+      <form class="modal-content" method="POST"
+            action="{{ route('clientes.cna.store', $dni) }}">
         @csrf
         <div class="modal-header">
           <h6 class="modal-title d-flex align-items-center gap-2">
-            <i class="bi bi-file-earmark-text"></i> Solicitar Carta de No Adeudo (CNA)
+            <i class="bi bi-file-earmark-text"></i>
+            Solicitar Carta de No Adeudo (CNA)
           </h6>
           <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Cerrar"></button>
         </div>
+
         <div class="modal-body">
-          <div class="mb-2">
-            <label class="form-label">Nro. de carta (correlativo interno)</label>
-            <input type="text" name="nro_carta" class="form-control" placeholder="Ej: 000123" required>
-          </div>
-          <div class="mb-2">
-            <label class="form-label">Producto</label>
-            <input type="text" name="producto" class="form-control" placeholder="Crédito personal / TC / ...">
-            <div class="form-text">Opcional; puedes dejarlo en blanco si la información está en las cuentas.</div>
-          </div>
-          <div class="mb-2">
-            <label class="form-label">Observación (opcional)</label>
-            <textarea name="nota" class="form-control" rows="3" maxlength="500"></textarea>
+          {{-- Nro de carta: se asigna automáticamente en el servidor --}}
+          <div class="mb-3">
+            <label class="form-label">N.º de carta</label>
+            <input class="form-control" value="Se asignará automáticamente" disabled>
+            <div class="form-text">El sistema otorgará el correlativo al guardar.</div>
           </div>
 
-          {{-- Se llenan automáticamente con las cuentas seleccionadas --}}
+          <div class="mb-3">
+            <label class="form-label">Producto</label>
+            <input type="text" name="producto" class="form-control" placeholder="Crédito personal / TC / …">
+            <div class="form-text">Opcional; si queda vacío se usa la info de las cuentas.</div>
+          </div>
+
+          <div class="row g-2">
+            <div class="col-md-6">
+              <label class="form-label">Fecha de pago realizado <span class="text-danger">*</span></label>
+              <input type="date" name="fecha_pago_realizado" class="form-control" required>
+            </div>
+            <div class="col-md-6">
+              <label class="form-label">Monto pagado (S/.) <span class="text-danger">*</span></label>
+              <input type="number" name="monto_pagado" step="0.01" min="0.01" class="form-control" required>
+            </div>
+          </div>
+
+          <div class="mb-3">
+            <label class="form-label">Observación (opcional)</label>
+            <textarea name="observacion" class="form-control" rows="3"
+                      placeholder="Algún comentario contextual"></textarea>
+          </div>
+
+          {{-- Hidden con operaciones seleccionadas --}}
           <div id="cnaOpsHidden"></div>
 
-          <div class="alert alert-info py-2">
-            Se adjuntarán las operaciones seleccionadas para esta CNA.
+          <div class="alert alert-info small mb-0">
+            Se adjuntarán las <b>operaciones seleccionadas</b> para esta CNA.
           </div>
         </div>
+
         <div class="modal-footer">
           <button class="btn btn-outline-secondary" type="button" data-bs-dismiss="modal">Cancelar</button>
-          <button class="btn btn-success" type="submit"><i class="bi bi-send"></i> Enviar solicitud</button>
+          <button class="btn btn-success" type="submit">
+            <i class="bi bi-send me-1"></i> Enviar solicitud
+          </button>
         </div>
       </form>
     </div>
@@ -1025,27 +1048,40 @@
     fechaPagoConvenio?.addEventListener('change', actualizarHint);
     actualizarHint();
 
-    // cna Modal CNA: llenar operaciones seleccionadas
-    const btnCna      = document.getElementById('btnCna');
-    const cnaOpsHidden= document.getElementById('cnaOpsHidden');
+  // ====== Selección de operaciones (reutiliza tus .chkOp) ======
+  const cnaBtn      = document.getElementById('btnSolicitarCna');
+  const cnaSelCount = document.getElementById('cnaSelCount');
+  const cnaOpsHidden= document.getElementById('cnaOpsHidden');
 
-    function refreshSelection(){
-      const selected = chks.filter(c => c.checked && !c.disabled).map(c => c.value).filter(Boolean);
-      selCount.textContent = String(selected.length);
-      btnPropuesta.disabled = selected.length === 0;
-      if (btnCna) btnCna.disabled = selected.length === 0; // habilita CNA
-      return selected;
-    }
+  const chkOps = Array.from(document.querySelectorAll('.chkOp'));
 
-    // Al abrir el modal CNA llenamos los inputs ocultos
-    document.getElementById('modalCna')?.addEventListener('show.bs.modal', () => {
-      const ops = refreshSelection();
-      cnaOpsHidden.innerHTML = '';
-      ops.forEach(op => {
-        const i = document.createElement('input');
-        i.type = 'hidden'; i.name = 'operaciones[]'; i.value = String(op);
-        cnaOpsHidden.appendChild(i);
-      });
+  function getOpsSeleccionadas() {
+    return chkOps.filter(c => c.checked && !c.disabled)
+                 .map(c => String(c.value))
+                 .filter(Boolean);
+  }
+
+  function refreshUI() {
+    const ops = getOpsSeleccionadas();
+    if (cnaSelCount) cnaSelCount.textContent = String(ops.length);
+    if (cnaBtn)      cnaBtn.disabled = (ops.length === 0);
+  }
+
+  chkOps.forEach(c => c.addEventListener('change', refreshUI));
+  document.getElementById('chkAll')?.addEventListener('change', refreshUI);
+  refreshUI();
+
+  // Al abrir el modal, ponemos los hidden de operaciones[]
+  document.getElementById('modalCna')?.addEventListener('show.bs.modal', () => {
+    const ops = getOpsSeleccionadas();
+    cnaOpsHidden.innerHTML = '';
+    ops.forEach(op => {
+      const i = document.createElement('input');
+      i.type = 'hidden';
+      i.name = 'operaciones[]';
+      i.value = op;
+      cnaOpsHidden.appendChild(i);
     });
+  });
 </script>
 @endpush
