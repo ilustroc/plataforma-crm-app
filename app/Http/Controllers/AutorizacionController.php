@@ -4,6 +4,7 @@ namespace App\Http\Controllers;
 
 use Carbon\Carbon;
 use App\Models\PromesaPago;
+use App\Models\CnaSolicitud;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
@@ -97,8 +98,30 @@ class AutorizacionController extends Controller
                 return $p;
             });
 
+            $cnaBase = CnaSolicitud::query()
+                ->when($q !== '', function ($w) use ($q) {
+                    $w->where(function($x) use ($q){
+                        $x->where('dni','like',"%{$q}%")
+                        ->orWhere('nro_carta','like',"%{$q}%")
+                        ->orWhere('producto','like',"%{$q}%")
+                        ->orWhere('nota','like',"%{$q}%");
+                    });
+                });
+        
+            if (in_array(strtolower($user->role), ['supervisor'])) {
+                $cnaBase->where('workflow_estado','pendiente');
+            } else {
+                $cnaBase->where('workflow_estado','preaprobada');
+            }
+            if ($status) $cnaBase->where('workflow_estado',$status);
+            
+            $cnaRows = $cnaBase->orderByDesc('created_at')
+            ->paginate(10, ['*'], 'page_cna')
+            ->withQueryString();
+
             return view('autorizacion.index', [
-                'rows'         => $rows, // colección simple
+                'rows'         => $rows,
+                'cnaRows'      => $cnaRows,   // << pásalo a la vista
                 'q'            => $q,
                 'isSupervisor' => in_array(strtolower($user->role), ['supervisor']),
             ]);
