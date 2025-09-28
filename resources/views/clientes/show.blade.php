@@ -130,10 +130,13 @@
     </div>
   </div>
 
-  {{-- CUENTAS --}} 
+  {{-- CUENTAS --}}
   <div class="card pad mb-3">
     <div class="d-flex justify-content-between align-items-center mb-2">
-      <h2 class="h6 mb-0 d-flex align-items-center gap-2"><i class="bi bi-wallet2"></i><span>Cuentas</span></h2>
+      <h2 class="h6 mb-0 d-flex align-items-center gap-2">
+        <i class="bi bi-wallet2"></i><span>Cuentas</span>
+      </h2>
+
       {{-- Botones (arriba de la tabla) --}}
       <div class="d-flex align-items-center gap-2">
         <button class="btn btn-outline-secondary btn-sm" id="btnCopyCtas" type="button" title="Copiar cuentas" data-bs-toggle="tooltip">
@@ -146,7 +149,7 @@
           <span class="ms-1 badge rounded-pill text-bg-light align-middle" id="selCount">0</span>
         </button>
 
-        {{-- NUEVO: Solicitar CNA --}}
+        {{-- Solicitar CNA --}}
         <button class="btn btn-success btn-sm" id="btnSolicitarCna" type="button" data-bs-toggle="modal" data-bs-target="#modalCna" disabled>
           <i class="bi bi-file-earmark-text"></i> Solicitar CNA
           <span class="ms-1 badge rounded-pill text-bg-light align-middle" id="cnaSelCount">0</span>
@@ -156,26 +159,29 @@
 
     <div class="table-responsive max-h-320">
       <table class="table table-sm table-striped table-hover align-middle tbl-compact mb-0" id="tblCuentas">
-      <thead>
-        <tr>
-          <th class="text-center" style="width:36px"><input type="checkbox" id="chkAll"></th>
-          <th>Cartera</th>
-          <th class="text-nowrap">Operación</th>
-          <th>Moneda</th>
-          <th>Entidad</th>
-          <th>Producto</th>
-          <th class="text-end text-nowrap">Saldo Capital</th>
-          <th class="text-end text-nowrap">Deuda Total</th>
+        <thead>
+          <tr>
+            <th class="text-center" style="width:36px"><input type="checkbox" id="chkAll"></th>
+            <th>Cartera</th>
+            <th class="text-nowrap">Operación</th>
+            {{-- <th>Moneda</th>  --}} {{-- eliminado --}}
+            <th>Entidad</th>
+            <th>Producto</th>
+            <th class="text-end text-nowrap">Saldo Capital</th>
+            <th class="text-end text-nowrap">Deuda Total</th>
 
-          {{-- NUEVA COLUMNA CCD --}}
-          <th class="text-nowrap">CCD</th>
+            {{-- NUEVA COLUMNA CNA --}}
+            <th class="text-nowrap">CNA</th>
 
-          <th class="text-nowrap">
-            Pagos
-            <i class="bi bi-info-circle ms-1" data-bs-toggle="tooltip" title="Conteo y total de pagos aplicados a esta operación."></i>
-          </th>
-        </tr>
-      </thead>
+            {{-- COLUMNA CCD --}}
+            <th class="text-nowrap">CCD</th>
+
+            <th class="text-nowrap">
+              Pagos
+              <i class="bi bi-info-circle ms-1" data-bs-toggle="tooltip" title="Conteo y total de pagos aplicados a esta operación."></i>
+            </th>
+          </tr>
+        </thead>
         <tbody>
           @foreach ($cuentas as $c)
             @php
@@ -184,13 +190,28 @@
               $hasList = isset($c->pagos_list) && (($c->pagos_list instanceof \Illuminate\Support\Collection && $c->pagos_list->count()) || (is_array($c->pagos_list) && count($c->pagos_list)));
               $collapseId = 'pagos-'.$loop->index;
 
-              // Docs por código (operación) ya precargados desde el controller
+              // Docs CCD precargados
               $docsCcd = ($ccdByCodigo[$c->operacion] ?? collect());
+
+              // CNAs por operación (mapa enviado desde el controlador)
+              $cnas = collect($cnasByOperacion[$c->operacion] ?? []);
+
               $mkUrl = function($path){
-                  $p = (string)($path ?? '');
-                  if ($p === '') return null;
-                  return \Illuminate\Support\Str::startsWith($p, ['http://','https://','/']) ? $p : url($p);
-                  // Si tus PDFs están en storage/app/public, cambia a: return asset('storage/'.$p);
+                $p = (string)($path ?? '');
+                if ($p === '') return null;
+                return \Illuminate\Support\Str::startsWith($p, ['http://','https://','/']) ? $p : url($p);
+                // Si tus PDFs están en storage/app/public, cambia a: return asset('storage/'.$p);
+              };
+
+              // helper status → badge
+              $badgeFor = function($estado){
+                $e = strtolower((string)$estado);
+                return match(true){
+                  str_contains($e,'aprob')      => 'success',
+                  str_contains($e,'pre')        => 'primary',
+                  str_contains($e,'rechaz')     => 'danger',
+                  default                       => 'secondary',
+                };
               };
             @endphp
             <tr>
@@ -199,11 +220,53 @@
               </td>
               <td class="text-nowrap">{{ $c->cartera ?? '—' }}</td>
               <td class="text-nowrap">{{ $c->operacion ?? '—' }}</td>
-              <td>{{ $c->moneda ?? '—' }}</td>
+              {{-- <td>{{ $c->moneda ?? '—' }}</td> --}} {{-- eliminado --}}
               <td>{{ $c->entidad ?? '—' }}</td>
               <td>{{ $c->producto ?? '—' }}</td>
               <td class="text-end text-nowrap">{{ number_format((float)($c->saldo_capital ?? 0), 2) }}</td>
               <td class="text-end text-nowrap">{{ number_format((float)($c->deuda_total ?? 0), 2) }}</td>
+
+              {{-- === CELDA CNA === --}}
+              <td class="text-nowrap">
+                @if($cnas->count() === 1)
+                  @php
+                    $x = $cnas->first();
+                    $estado = $x->estado ?? 'pendiente';
+                    $badge  = $badgeFor($estado);
+                  @endphp
+                  <div class="d-inline-flex align-items-center gap-2">
+                    <a href="{{ route('cna.pdf', $x->id) }}" target="_blank" class="btn btn-sm btn-outline-success" title="Descargar CNA">
+                      <i class="bi bi-filetype-pdf me-1"></i> CNA
+                    </a>
+                    <span class="badge rounded-pill text-bg-{{ $badge }}">{{ ucfirst($estado) }}</span>
+                  </div>
+                @elseif($cnas->count() > 1)
+                  <div class="btn-group">
+                    <button class="btn btn-sm btn-outline-success dropdown-toggle" data-bs-toggle="dropdown">
+                      <i class="bi bi-filetype-pdf me-1"></i> CNA ({{ $cnas->count() }})
+                    </button>
+                    <ul class="dropdown-menu dropdown-menu-end">
+                      @foreach($cnas as $x)
+                        @php
+                          $estado = $x->estado ?? 'pendiente';
+                          $nro    = $x->nro_carta ?? $x->id;
+                          $fecha  = optional($x->created_at)->format('Y-m-d');
+                        @endphp
+                        <li>
+                          <a class="dropdown-item d-flex justify-content-between align-items-center"
+                            href="{{ route('cna.pdf', $x->id) }}" target="_blank">
+                            <span>#{{ $nro }} <small class="text-secondary ms-1">{{ $fecha }}</small></span>
+                            <span class="badge text-bg-{{ $badgeFor($estado) }}">{{ ucfirst($estado) }}</span>
+                          </a>
+                        </li>
+                      @endforeach
+                    </ul>
+                  </div>
+                @else
+                  <span class="text-secondary">—</span>
+                @endif
+              </td>
+              {{-- === /CELDA CNA === --}}
 
               {{-- === CELDA CCD === --}}
               <td class="text-nowrap">
@@ -221,7 +284,6 @@
                   @else
                     <span class="text-secondary">—</span>
                   @endif
-
                 @elseif($docsCcd->count() > 1)
                   <div class="btn-group">
                     <button class="btn btn-sm btn-outline-primary dropdown-toggle" data-bs-toggle="dropdown">
@@ -251,6 +313,7 @@
                 @if($sum > 0)
                   <small class="text-secondary ms-1">· S/ {{ number_format($sum, 2) }}</small>
                 @endif
+
                 @if($hasList)
                   <button class="btn btn-sm btn-outline-secondary ms-2" type="button"
                           data-bs-toggle="collapse" data-bs-target="#{{ $collapseId }}"
@@ -278,7 +341,6 @@
               </td>
             </tr>
           @endforeach
-
         </tbody>
       </table>
     </div>
