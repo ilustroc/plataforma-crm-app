@@ -69,7 +69,7 @@ class ClientsControllers extends Controller
         $pagos = $propia->get()->concat($cast->get())->concat($extra->get())
                 ->sortByDesc('fecha')->values();
 
-        // B) Promesas
+        // B) Promesas (con operaciones + refs de decisión)
         $promesas = PromesaPago::where('dni',$dni)
             ->withDecisionRefs()
             ->with('operaciones')
@@ -82,7 +82,7 @@ class ClientsControllers extends Controller
 
         if (Schema::hasTable('ccd_clientes')) {
             $cols = DB::getSchemaBuilder()->getColumnListing('ccd_clientes');
-            $sel  = collect(['id','dni','codigo','documento','nombre','pdf','archivo','ruta','url','created_at'])
+            $sel = collect(['id','dni','codigo','documento','nombre','pdf','archivo','ruta','url','created_at'])
                     ->filter(fn($c)=>in_array($c,$cols))->all();
 
             if ($sel) {
@@ -126,7 +126,6 @@ class ClientsControllers extends Controller
 
             $union = $q1->unionAll($q2)->unionAll($q3);
             $pagosFlat = DB::query()->fromSub($union,'p')->get();
-
             $pagosPorOperacion = $pagosFlat->groupBy('operacion');
 
             $cuentas = $cuentas->map(function ($c) use ($pagosPorOperacion) {
@@ -146,37 +145,43 @@ class ClientsControllers extends Controller
             });
         }
 
-        // E) MAPA: CNA por operación (para la columna "CNA(s)" de la tabla)
+        // E) **CNAs por operación** (← faltaba)
         $cnasByOperacion = collect();
         if (Schema::hasTable('cna_solicitudes')) {
-            $cnas = CnaSolicitud::where('dni',$dni)
-                ->select('id','nro_carta','workflow_estado','created_at','operaciones','dni')
+            $cnas = DB::table('cna_solicitudes')
+                ->select('id','dni','nro_carta','operaciones','workflow_estado','created_at','pdf_path')
+                ->where('dni',$dni)
                 ->orderByDesc('created_at')
                 ->get();
 
-            $cnasByOperacion = $cnas
-                ->flatMap(function ($cna) {
-                    // 'operaciones' viene casteado a array en el modelo; si no, decodifica.
-                    $ops = is_array($cna->operaciones)
-                        ? $cna->operaciones
-                        : (json_decode($cna->operaciones, true) ?: []);
-                    return collect($ops)->map(fn($op) => [
-                        'operacion' => (string)$op,
-                        'item'      => $cna,
+            $map = [];
+            foreach ($cnas as $row) {
+                $ops = is_array($row->operaciones)
+                    ? $row->operaciones
+                    : (json_decode($row->operaciones, true) ?: []);
+
+                foreach ($ops as $op) {
+                    if (!$op) continue;
+                    $map[$op] = $map[$op] ?? collect();
+                    $map[$op]->push((object)[
+                        'id'         => $row->id,
+                        'nro_carta'  => $row->nro_carta,
+                        'estado'     => $row->workflow_estado,
+                        'created_at' => $row->created_at,
+                        'pdf_path'   => $row->pdf_path,
                     ]);
-                })
-                ->groupBy('operacion')
-                ->map(fn($g) => $g->pluck('item')->unique('id')->values());
+                }
+            }
+            $cnasByOperacion = collect($map);
         }
 
         return view('clientes.show', compact(
             'dni','titular','cuentas','pagos','promesas','ccd','pagosPorOperacion'
         ) + [
-            'ccdByCodigo'     => $ccdByCodigo,
-            'cnasByOperacion' => $cnasByOperacion, // <— esto alimenta la columna CNA(s)
+            'ccdByCodigo'      => $ccdByCodigo,
+            'cnasByOperacion'  => $cnasByOperacion, // ← pásalo a la vista
         ]);
     }
-
 
     public function storePromesa(string $dni, Request $r)
     {
