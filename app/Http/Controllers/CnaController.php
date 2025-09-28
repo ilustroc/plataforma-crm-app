@@ -152,23 +152,16 @@ class CnaController extends Controller
     /** Descarga el PDF si existe (o lo regenera si falta). */
     public function pdf(CnaSolicitud $cna)
     {
-        if ($cna->workflow_estado !== 'aprobada') {
-            abort(403, 'Solo disponible para CNA aprobadas.');
+        abort_unless($cna->workflow_estado === 'aprobada', 403);
+    
+        $file = $cna->pdf_path;
+        if (!$file || !\Storage::exists($file)) {
+            $file = 'cna/pdfs/CNA '.$cna->nro_carta.' - '.$cna->dni.'.pdf';
+            $pdf  = Pdf::loadView('cna.pdf', ['cna' => $cna])->setPaper('A4');
+            \Storage::put($file, $pdf->output());
+            $cna->update(['pdf_path' => $file]);
         }
-
-        if (!$cna->pdf_path || !Storage::exists($cna->pdf_path)) {
-            // Reintenta generar (por si no existe)
-            $this->generateOutputs($cna);
-        }
-
-        if ($cna->pdf_path && Storage::exists($cna->pdf_path)) {
-            return Storage::download($cna->pdf_path, basename($cna->pdf_path));
-        }
-
-        // ÚLTIMO BACKUP: render simple desde Blade (si no hay plantilla)
-        $fileName = "CNA {$cna->nro_carta} - {$cna->dni}.pdf";
-        $pdf = Pdf::loadView('cna.pdf', ['cna' => $cna])->setPaper('A4');
-        return $pdf->download($fileName);
+        return \Storage::download($file, basename($file));
     }
 
     /** Descarga el DOCX si existe. */
@@ -184,7 +177,6 @@ class CnaController extends Controller
     }
 
     // ======== Helpers ========
-
     private function authorizeRole(string $role)
     {
         $user = Auth::user();
