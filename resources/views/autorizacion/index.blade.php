@@ -121,67 +121,33 @@
   </div>
   {{-- ====== /Promesas ====== --}}
 
-{{-- ====== Solicitudes de CNA ====== --}}
-<div class="card mt-4">
-  <div class="card-header fw-bold">Solicitudes de CNA</div>
-  <div class="card-body p-0">
-    <div class="table-responsive">
-      <table class="table table-sm align-middle mb-0">
-        <thead class="table-light">
-          <tr>
-            <th class="text-center">DNI</th>
-            <th class="text-center">Nro. Carta</th>
-            <th>Producto</th>
-            <th class="text-center">Operación</th>
-            <th class="text-center">Fecha</th>
-            <th>Nota</th>
-            <th class="text-end">Acciones</th>
-          </tr>
-        </thead>
-        <tbody>
-        @forelse($cnas as $cna)
-          @php
-            $ops = array_values(array_filter((array)($cna->operaciones ?? [])));
-          @endphp
-
-          @if(empty($ops))
+  {{-- ====== Solicitudes de CNA ====== --}}
+  <div class="card mt-4">
+    <div class="card-header fw-bold">Solicitudes de CNA</div>
+    <div class="card-body p-0">
+      <div class="table-responsive">
+        <table class="table table-sm align-middle mb-0">
+          <thead class="table-light">
             <tr>
-              <td class="text-center text-nowrap">{{ $cna->dni }}</td>
-              <td class="text-center text-nowrap">{{ $cna->nro_carta }}</td>
-              <td>—</td>
-              <td class="text-center">—</td>
-              <td class="text-center text-nowrap">{{ optional($cna->created_at)->format('Y-m-d') }}</td>
-              <td class="text-truncate" style="max-width:420px" title="{{ $cna->nota }}">{{ $cna->nota }}</td>
-              <td class="text-end">
-                @if($isSupervisor)
-                  <form class="d-inline" method="POST" action="{{ route('cna.preaprobar',$cna) }}">@csrf
-                    <button class="btn btn-primary btn-sm">Pre-aprobar</button>
-                  </form>
-                  <form class="d-inline" method="POST" action="{{ route('cna.rechazar.sup',$cna) }}">@csrf
-                    <button class="btn btn-outline-danger btn-sm">Rechazar</button>
-                  </form>
-                @else
-                  <form class="d-inline" method="POST" action="{{ route('cna.aprobar',$cna) }}">@csrf
-                    <button class="btn btn-primary btn-sm">Aprobar</button>
-                  </form>
-                  <form class="d-inline" method="POST" action="{{ route('cna.rechazar.admin',$cna) }}">@csrf
-                    <button class="btn btn-outline-danger btn-sm">Rechazar</button>
-                  </form>
-                @endif
-              </td>
+              <th class="text-center">DNI</th>
+              <th class="text-center">No. Carta</th>
+              <th>Producto</th>
+              <th class="text-center">Operación</th>
+              <th class="text-center">Fecha</th>
+              <th>Nota</th>
+              <th class="text-end">Acciones</th>
             </tr>
-          @else
-            @foreach($ops as $op)
-              @php
-                $prod = $prodByOp[(string)$op] ?? '—';
-              @endphp
+          </thead>
+          <tbody>
+          @forelse($cnaRows as $cna)
+            @php $ops = array_values(array_filter((array)($cna->operaciones ?? []))); @endphp
+
+            @if(empty($ops))
               <tr>
                 <td class="text-center text-nowrap">{{ $cna->dni }}</td>
                 <td class="text-center text-nowrap">{{ $cna->nro_carta }}</td>
-                <td class="text-nowrap">{{ $prod ?: '—' }}</td>
-                <td class="text-center text-nowrap">
-                  <span class="badge rounded-pill text-bg-light border">{{ $op }}</span>
-                </td>
+                <td>—</td>
+                <td class="text-center">—</td>
                 <td class="text-center text-nowrap">{{ optional($cna->created_at)->format('Y-m-d') }}</td>
                 <td class="text-truncate" style="max-width:420px" title="{{ $cna->nota }}">{{ $cna->nota }}</td>
                 <td class="text-end">
@@ -202,115 +168,151 @@
                   @endif
                 </td>
               </tr>
-            @endforeach
-          @endif
-        @empty
-          <tr><td colspan="7" class="text-center text-muted py-4">Sin solicitudes de CNA.</td></tr>
-        @endforelse
-        </tbody>
-      </table>
-    </div>
-  </div>
-</div>
-{{-- ====== /Solicitudes de CNA ====== --}}
+            @else
+              @foreach($ops as $op)
+                @php $prod = $prodByOp[(string)$op] ?? '—'; @endphp
+                <tr>
+                  <td class="text-center text-nowrap">{{ $cna->dni }}</td>
+                  <td class="text-center text-nowrap">{{ $cna->nro_carta }}</td>
+                  <td class="text-nowrap">{{ $prod ?: '—' }}</td>
+                  <td class="text-center text-nowrap">
+                    <span class="badge rounded-pill text-bg-light border">{{ $op }}</span>
+                  </td>
+                  <td class="text-center text-nowrap">{{ optional($cna->created_at)->format('Y-m-d') }}</td>
+                  <td class="text-truncate" style="max-width:420px" title="{{ $cna->nota }}">{{ $cna->nota }}</td>
+                  <td class="text-end">
+                    @if($isSupervisor)
+                      <form class="d-inline" method="POST" action="{{ route('cna.preaprobar',$cna) }}">@csrf
+                        <button class="btn btn-primary btn-sm">Pre-aprobar</button>
+                      </form>
+                      <form class="d-inline" method="POST" action="{{ route('cna.rechazar.sup',$cna) }}">@csrf
+                        <button class="btn btn-outline-danger btn-sm">Rechazar</button>
+                      </form>
+                    @else
+                      <form class="d-inline" method="POST" action="{{ route('cna.aprobar',$cna) }}">@csrf
+                        <button class="btn btn-primary btn-sm">Aprobar</button>
+                      </form>
+                      <form class="d-inline" method="POST" action="{{ route('cna.rechazar.admin',$cna) }}">@csrf
+                        <button class="btn btn-outline-danger btn-sm">Rechazar</button>
+                      </form>
+                    @endif
+                  </td>
+                </tr>
+              @endforeach
+            @endif
 
-</div>
-
-{{-- Rechazo --}}
-<div class="modal fade" id="modalRechazo" tabindex="-1" aria-hidden="true">
-  <div class="modal-dialog">
-    <form class="modal-content" id="formRechazo" method="POST" action="#">
-      @csrf
-      <div class="modal-header"><h6 class="modal-title">Motivo / Nota de rechazo</h6>
-        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Cerrar"></button>
-      </div>
-      <div class="modal-body">
-        <textarea name="nota_estado" id="motivoTxt" class="form-control" rows="5" maxlength="500" required></textarea>
-      </div>
-      <div class="modal-footer">
-        <button class="btn btn-outline-secondary" type="button" data-bs-dismiss="modal">Cancelar</button>
-        <button class="btn btn-danger" type="submit">Rechazar</button>
-      </div>
-    </form>
-  </div>
-</div>
-
-{{-- Ficha --}}
-<div class="modal fade" id="modalFicha" tabindex="-1" aria-hidden="true">
-  <div class="modal-dialog modal-lg modal-dialog-scrollable">
-    <div class="modal-content">
-      <div class="modal-header">
-        <h6 class="modal-title">Detalle de Propuesta</h6>
-        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Cerrar"></button>
-      </div>
-      <div class="modal-body">
-        <div class="mb-2">
-          <strong>DNI:</strong> <span id="f_dni">—</span> &nbsp;&nbsp;
-          <strong>Operación:</strong> <span id="f_op">—</span> &nbsp;&nbsp;
-          <strong>Fecha:</strong> <span id="t_fecha">—</span>
-        </div>
-
-        <table class="table table-sm">
-          <tbody>
-            <tr><th style="width:220px">Tipo</th><td id="t_tipo">—</td></tr>
-            <tr><th>Cartera</th><td id="t_cartera">—</td></tr>
-            <tr><th>Equipo</th><td id="t_asesor">—</td></tr>
-            <tr><th>Asesor (quien creó)</th><td id="t_agente">—</td></tr>
-            <tr><th>Entidad</th><td id="t_entidad">—</td></tr>
-            <tr><th>Cliente</th><td id="t_titular">—</td></tr>
-            <tr><th>Año Castigo</th><td id="t_anio">—</td></tr>
-            <tr><th>Propiedades</th><td id="t_prop">—</td></tr>
-            <tr><th>Trabajo</th><td id="t_trab">—</td></tr>
-            <tr><th>Calificación SBS</th><td id="t_clasificacion">—</td></tr>
-            <tr><th>Deuda Total</th><td id="t_deuda">—</td></tr>
-            <tr><th>Capital</th><td id="t_capital">—</td></tr>
-            <tr><th>Monto Campaña</th><td id="t_camp">—</td></tr>
-            <tr><th>% Descuento</th><td id="t_desc">—</td></tr>
-            <tr><th>Monto Negociado</th><td id="t_neg">—</td></tr>
+          @empty
+            <tr><td colspan="7" class="text-center text-muted py-4">Sin solicitudes de CNA.</td></tr>
+          @endforelse
           </tbody>
         </table>
-
-        <div class="mb-2">
-          <strong>Detalle / Nota</strong>
-          <div class="form-control-plaintext" id="t_detalle"></div>
-        </div>
-
-        {{-- Cronograma (si aplica) --}}
-        <div id="crono_wrap" class="d-none">
-          <h6 class="mt-3 mb-2" id="crono_titulo">Cronograma de cuotas</h6>
-          <div class="table-responsive">
-            <table class="table table-sm align-middle">
-              <thead class="table-light">
-                <tr>
-                  <th style="width:60px" class="text-center">#</th>
-                  <th style="width:160px" class="text-center">Fecha</th>
-                  <th class="text-end">Importe (S/)</th>
-                </tr>
-              </thead>
-              <tbody id="crono_body"></tbody>
-              <tfoot>
-                <tr>
-                  <th colspan="2" class="text-end">TOTAL CONVENIO</th>
-                  <th class="text-end" id="crono_total">0.00</th>
-                  <th></th>
-                </tr>
-                <tr id="fila_balon" class="d-none">
-                  <th colspan="2" class="text-end">Cuota balón (Capital – Convenio)</th>
-                  <th class="text-end" id="crono_balon">0.00</th>
-                  <th></th>
-                </tr>
-              </tfoot>
-            </table>
-          </div>
-        </div>
-        {{-- /Cronograma --}}
       </div>
-      <div class="modal-footer">
-        <button class="btn btn-outline-secondary" type="button" data-bs-dismiss="modal">Cerrar</button>
+      {{-- paginación de CNA (propia) --}}
+      <div class="p-2">
+        {{ $cnaRows->withQueryString()->onEachSide(1)->links('pagination::bootstrap-5') }}
       </div>
     </div>
   </div>
+  {{-- ====== /Solicitudes de CNA ====== --}}
+
+
 </div>
+
+  {{-- Rechazo --}}
+  <div class="modal fade" id="modalRechazo" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog">
+      <form class="modal-content" id="formRechazo" method="POST" action="#">
+        @csrf
+        <div class="modal-header"><h6 class="modal-title">Motivo / Nota de rechazo</h6>
+          <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Cerrar"></button>
+        </div>
+        <div class="modal-body">
+          <textarea name="nota_estado" id="motivoTxt" class="form-control" rows="5" maxlength="500" required></textarea>
+        </div>
+        <div class="modal-footer">
+          <button class="btn btn-outline-secondary" type="button" data-bs-dismiss="modal">Cancelar</button>
+          <button class="btn btn-danger" type="submit">Rechazar</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  {{-- Ficha --}}
+  <div class="modal fade" id="modalFicha" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-lg modal-dialog-scrollable">
+      <div class="modal-content">
+        <div class="modal-header">
+          <h6 class="modal-title">Detalle de Propuesta</h6>
+          <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Cerrar"></button>
+        </div>
+        <div class="modal-body">
+          <div class="mb-2">
+            <strong>DNI:</strong> <span id="f_dni">—</span> &nbsp;&nbsp;
+            <strong>Operación:</strong> <span id="f_op">—</span> &nbsp;&nbsp;
+            <strong>Fecha:</strong> <span id="t_fecha">—</span>
+          </div>
+
+          <table class="table table-sm">
+            <tbody>
+              <tr><th style="width:220px">Tipo</th><td id="t_tipo">—</td></tr>
+              <tr><th>Cartera</th><td id="t_cartera">—</td></tr>
+              <tr><th>Equipo</th><td id="t_asesor">—</td></tr>
+              <tr><th>Asesor (quien creó)</th><td id="t_agente">—</td></tr>
+              <tr><th>Entidad</th><td id="t_entidad">—</td></tr>
+              <tr><th>Cliente</th><td id="t_titular">—</td></tr>
+              <tr><th>Año Castigo</th><td id="t_anio">—</td></tr>
+              <tr><th>Propiedades</th><td id="t_prop">—</td></tr>
+              <tr><th>Trabajo</th><td id="t_trab">—</td></tr>
+              <tr><th>Calificación SBS</th><td id="t_clasificacion">—</td></tr>
+              <tr><th>Deuda Total</th><td id="t_deuda">—</td></tr>
+              <tr><th>Capital</th><td id="t_capital">—</td></tr>
+              <tr><th>Monto Campaña</th><td id="t_camp">—</td></tr>
+              <tr><th>% Descuento</th><td id="t_desc">—</td></tr>
+              <tr><th>Monto Negociado</th><td id="t_neg">—</td></tr>
+            </tbody>
+          </table>
+
+          <div class="mb-2">
+            <strong>Detalle / Nota</strong>
+            <div class="form-control-plaintext" id="t_detalle"></div>
+          </div>
+
+          {{-- Cronograma (si aplica) --}}
+          <div id="crono_wrap" class="d-none">
+            <h6 class="mt-3 mb-2" id="crono_titulo">Cronograma de cuotas</h6>
+            <div class="table-responsive">
+              <table class="table table-sm align-middle">
+                <thead class="table-light">
+                  <tr>
+                    <th style="width:60px" class="text-center">#</th>
+                    <th style="width:160px" class="text-center">Fecha</th>
+                    <th class="text-end">Importe (S/)</th>
+                  </tr>
+                </thead>
+                <tbody id="crono_body"></tbody>
+                <tfoot>
+                  <tr>
+                    <th colspan="2" class="text-end">TOTAL CONVENIO</th>
+                    <th class="text-end" id="crono_total">0.00</th>
+                    <th></th>
+                  </tr>
+                  <tr id="fila_balon" class="d-none">
+                    <th colspan="2" class="text-end">Cuota balón (Capital – Convenio)</th>
+                    <th class="text-end" id="crono_balon">0.00</th>
+                    <th></th>
+                  </tr>
+                </tfoot>
+              </table>
+            </div>
+          </div>
+          {{-- /Cronograma --}}
+        </div>
+        <div class="modal-footer">
+          <button class="btn btn-outline-secondary" type="button" data-bs-dismiss="modal">Cerrar</button>
+        </div>
+      </div>
+    </div>
+  </div>
 @endsection
 
 @push('scripts')
