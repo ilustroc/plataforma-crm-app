@@ -39,148 +39,179 @@ class ClientsControllers extends Controller
 
     public function show(string $dni)
     {
-        $cuentas = ClienteCuenta::where('dni',$dni)
-            ->orderByDesc('updated_at')
-            ->get();
-
-        abort_if($cuentas->isEmpty(), 404);
-        $titular = $cuentas->first()->titular;
-
-        // A) Consolidado de pagos
-        $propia = PagoPropia::where('dni',$dni)->select(
-            'fecha_de_pago as fecha',
-            DB::raw('pagado_en_soles as monto'),
-            'operacion as referencia',
-            DB::raw("'PROPIA' as fuente")
-        );
-        $cast = PagoCajaCuscoCastigada::where('dni',$dni)->select(
-            'fecha_de_pago as fecha',
-            DB::raw('pagado_en_soles as monto'),
-            'pagare as referencia',
-            DB::raw("'CUSCO CASTIGADA' as fuente")
-        );
-        $extra = PagoCajaCuscoExtrajudicial::where('dni',$dni)->select(
-            'fecha_de_pago as fecha',
-            DB::raw('pagado_en_soles as monto'),
-            'pagare as referencia',
-            DB::raw("'CUSCO EXTRAJUDICIAL' as fuente")
-        );
-
-        $pagos = $propia->get()->concat($cast->get())->concat($extra->get())
-                ->sortByDesc('fecha')->values();
-
-        // B) Promesas (con operaciones + refs de decisión)
-        $promesas = PromesaPago::where('dni',$dni)
-            ->withDecisionRefs()
-            ->with('operaciones')
-            ->orderByDesc('fecha_promesa')
-            ->get();
-
-        // C) CCD opcional (por DNI) + mapa por código (operación)
-        $ccd        = collect();
-        $ccdByCodigo= collect();
-
-        if (Schema::hasTable('ccd_clientes')) {
-            $cols = DB::getSchemaBuilder()->getColumnListing('ccd_clientes');
-            $sel = collect(['id','dni','codigo','documento','nombre','pdf','archivo','ruta','url','created_at'])
-                    ->filter(fn($c)=>in_array($c,$cols))->all();
-
-            if ($sel) {
-                $ccd = DB::table('ccd_clientes')
-                    ->select($sel)
-                    ->where('dni', $dni)
-                    ->orderByDesc('id')
-                    ->get();
-
-                if (in_array('codigo', $cols)) {
-                    $ccdByCodigo = $ccd->groupBy('codigo');
-                }
-            }
-        }
-
-        // D) Métricas por operación
-        $ops = $cuentas->pluck('operacion')->filter()->unique()->values();
-
-        $pagosPorOperacion = collect();
-        if ($ops->isNotEmpty()) {
-            $q1 = DB::table('pagos_propia')->select([
-                'operacion',
-                DB::raw('fecha_de_pago as fecha'),
-                DB::raw('pagado_en_soles as monto'),
-                DB::raw("'PROPIA' as fuente")
-            ])->where('dni',$dni)->whereIn('operacion',$ops);
-
-            $q2 = DB::table('pagos_caja_cusco_castigada')->select([
-                DB::raw('pagare as operacion'),
-                DB::raw('fecha_de_pago as fecha'),
-                DB::raw('pagado_en_soles as monto'),
-                DB::raw("'CUSCO CASTIGADA' as fuente")
-            ])->where('dni',$dni)->whereIn('pagare',$ops);
-
-            $q3 = DB::table('pagos_caja_cusco_extrajudicial')->select([
-                DB::raw('pagare as operacion'),
-                DB::raw('fecha_de_pago as fecha'),
-                DB::raw('pagado_en_soles as monto'),
-                DB::raw("'CUSCO EXTRAJUDICIAL' as fuente")
-            ])->where('dni',$dni)->whereIn('pagare',$ops);
-
-            $union = $q1->unionAll($q2)->unionAll($q3);
-            $pagosFlat = DB::query()->fromSub($union,'p')->get();
-            $pagosPorOperacion = $pagosFlat->groupBy('operacion');
-
-            $cuentas = $cuentas->map(function ($c) use ($pagosPorOperacion) {
-                $opsKey = $c->operacion;
-                $grupo = $opsKey ? ($pagosPorOperacion[$opsKey] ?? collect()) : collect();
-                $c->pagos_count = $grupo->count();
-                $c->pagos_sum   = (float)$grupo->sum('monto');
-                $c->pagos_list  = $grupo->sortByDesc('fecha')->values();
-                return $c;
-            });
-        } else {
-            $cuentas = $cuentas->map(function ($c) {
-                $c->pagos_count = 0;
-                $c->pagos_sum   = 0.0;
-                $c->pagos_list  = collect();
-                return $c;
-            });
-        }
-
-        // E) **CNAs por operación** (← faltaba)
-        $cnasByOperacion = collect();
-        if (Schema::hasTable('cna_solicitudes')) {
-            $cnas = DB::table('cna_solicitudes')
-                ->select('id','dni','nro_carta','operaciones','workflow_estado','created_at','pdf_path')
-                ->where('dni',$dni)
-                ->orderByDesc('created_at')
+        try {
+            // ===== Cuentas del cliente
+            $cuentas = ClienteCuenta::where('dni',$dni)
+                ->orderByDesc('updated_at')
                 ->get();
 
-            $map = [];
-            foreach ($cnas as $row) {
-                $ops = is_array($row->operaciones)
-                    ? $row->operaciones
-                    : (json_decode($row->operaciones, true) ?: []);
+            abort_if($cuentas->isEmpty(), 404);
+            $titular = $cuentas->first()->titular;
 
-                foreach ($ops as $op) {
-                    if (!$op) continue;
-                    $map[$op] = $map[$op] ?? collect();
-                    $map[$op]->push((object)[
-                        'id'         => $row->id,
-                        'nro_carta'  => $row->nro_carta,
-                        'estado'     => $row->workflow_estado,
-                        'created_at' => $row->created_at,
-                        'pdf_path'   => $row->pdf_path,
-                    ]);
+            // ===== A) Consolidado de pagos (3 fuentes)
+            $propia = PagoPropia::where('dni',$dni)->select(
+                'fecha_de_pago as fecha',
+                DB::raw('pagado_en_soles as monto'),
+                'operacion as referencia',
+                DB::raw("'PROPIA' as fuente")
+            );
+            $cast = PagoCajaCuscoCastigada::where('dni',$dni)->select(
+                'fecha_de_pago as fecha',
+                DB::raw('pagado_en_soles as monto'),
+                'pagare as referencia',
+                DB::raw("'CUSCO CASTIGADA' as fuente")
+            );
+            $extra = PagoCajaCuscoExtrajudicial::where('dni',$dni)->select(
+                'fecha_de_pago as fecha',
+                DB::raw('pagado_en_soles as monto'),
+                'pagare as referencia',
+                DB::raw("'CUSCO EXTRAJUDICIAL' as fuente")
+            );
+
+            $pagos = $propia->get()
+                ->concat($cast->get())
+                ->concat($extra->get())
+                ->sortByDesc('fecha')
+                ->values();
+
+            // ===== B) Promesas (si tienes los scopes/relaciones)
+            $promesas = PromesaPago::where('dni',$dni)
+                ->when(method_exists(PromesaPago::class,'scopeWithDecisionRefs'), fn($q)=>$q->withDecisionRefs())
+                ->with('operaciones')
+                ->orderByDesc('fecha_promesa')
+                ->get();
+
+            // ===== C) CCD (opcional) – solo si existe la tabla
+            $ccd        = collect();
+            $ccdByCodigo= collect();
+
+            if (Schema::hasTable('ccd_clientes')) {
+                $cols = DB::getSchemaBuilder()->getColumnListing('ccd_clientes');
+                $sel  = collect(['id','dni','codigo','documento','nombre','pdf','archivo','ruta','url','created_at'])
+                        ->filter(fn($c)=>in_array($c,$cols))->all();
+
+                if (!empty($sel)) {
+                    $ccd = DB::table('ccd_clientes')
+                        ->select($sel)
+                        ->where('dni', $dni)
+                        ->orderByDesc('id')
+                        ->get();
+
+                    if (in_array('codigo', $cols)) {
+                        $ccdByCodigo = $ccd->groupBy('codigo');
+                    }
                 }
             }
-            $cnasByOperacion = collect($map);
-        }
 
-        return view('clientes.show', compact(
-            'dni','titular','cuentas','pagos','promesas','ccd','pagosPorOperacion'
-        ) + [
-            'ccdByCodigo'      => $ccdByCodigo,
-            'cnasByOperacion'  => $cnasByOperacion, // ← pásalo a la vista
-        ]);
+            // ===== D) Métricas por operación (pagos_count/sum/list para cada cuenta)
+            $ops = $cuentas->pluck('operacion')->filter()->unique()->values();
+
+            $pagosPorOperacion = collect();
+            if ($ops->isNotEmpty()) {
+                $q1 = DB::table('pagos_propia')->select([
+                    'operacion',
+                    DB::raw('fecha_de_pago as fecha'),
+                    DB::raw('pagado_en_soles as monto'),
+                    DB::raw("'PROPIA' as fuente"),
+                ])->where('dni',$dni)->whereIn('operacion',$ops);
+
+                $q2 = DB::table('pagos_caja_cusco_castigada')->select([
+                    DB::raw('pagare as operacion'),
+                    DB::raw('fecha_de_pago as fecha'),
+                    DB::raw('pagado_en_soles as monto'),
+                    DB::raw("'CUSCO CASTIGADA' as fuente"),
+                ])->where('dni',$dni)->whereIn('pagare',$ops);
+
+                $q3 = DB::table('pagos_caja_cusco_extrajudicial')->select([
+                    DB::raw('pagare as operacion'),
+                    DB::raw('fecha_de_pago as fecha'),
+                    DB::raw('pagado_en_soles as monto'),
+                    DB::raw("'CUSCO EXTRAJUDICIAL' as fuente"),
+                ])->where('dni',$dni)->whereIn('pagare',$ops);
+
+                $union = $q1->unionAll($q2)->unionAll($q3);
+                $pagosFlat = DB::query()->fromSub($union,'p')->get();
+                $pagosPorOperacion = $pagosFlat->groupBy('operacion');
+
+                $cuentas = $cuentas->map(function ($c) use ($pagosPorOperacion) {
+                    $opsKey = $c->operacion;
+                    $grupo = $opsKey ? ($pagosPorOperacion[$opsKey] ?? collect()) : collect();
+                    $c->pagos_count = $grupo->count();
+                    $c->pagos_sum   = (float)$grupo->sum('monto');
+                    $c->pagos_list  = $grupo->sortByDesc('fecha')->values();
+                    return $c;
+                });
+            } else {
+                $cuentas = $cuentas->map(function ($c) {
+                    $c->pagos_count = 0;
+                    $c->pagos_sum   = 0.0;
+                    $c->pagos_list  = collect();
+                    return $c;
+                });
+            }
+
+            // ===== E) CNAs por operación (100% defensivo)
+            $cnasByOperacion = collect();
+            if (Schema::hasTable('cna_solicitudes')) {
+                $colsCna = DB::getSchemaBuilder()->getColumnListing('cna_solicitudes');
+
+                // Solo selecciona columnas existentes (evita excepciones si falta alguna)
+                $selCnaBase = ['id','dni','nro_carta','operaciones','workflow_estado','created_at'];
+                $selCna = collect($selCnaBase)->filter(fn($c)=>in_array($c,$colsCna))->values()->all();
+
+                $cnas = DB::table('cna_solicitudes')
+                    ->select($selCna)
+                    ->where('dni',$dni)
+                    ->orderByDesc('created_at')
+                    ->get();
+
+                $map = [];
+                foreach ($cnas as $row) {
+                    // operaciones puede ser JSON o string; normalizamos a array
+                    $opsRaw = $row->operaciones ?? '[]';
+                    $opsArr = is_array($opsRaw) ? $opsRaw : (json_decode($opsRaw, true) ?: []);
+
+                    // fallback por si viniera "op1,op2"
+                    if (!is_array($opsArr)) {
+                        $opsArr = array_filter(array_map('trim', explode(',', (string)$opsRaw)));
+                    }
+
+                    foreach ($opsArr as $op) {
+                        if (!$op) continue;
+                        $map[$op] = $map[$op] ?? collect();
+                        $map[$op]->push((object)[
+                            'id'         => $row->id,
+                            'nro_carta'  => $row->nro_carta ?? $row->id,
+                            'estado'     => $row->workflow_estado ?? 'pendiente',
+                            'created_at' => $row->created_at,
+                            // No seleccionamos pdf_path/docx_path para no romper si no existe la columna
+                        ]);
+                    }
+                }
+                $cnasByOperacion = collect($map);
+            }
+
+            return view('clientes.show', compact(
+                'dni','titular','cuentas','pagos','promesas','ccd','pagosPorOperacion'
+            ) + [
+                'ccdByCodigo'     => $ccdByCodigo,
+                'cnasByOperacion' => $cnasByOperacion,
+            ]);
+
+        } catch (\Throwable $e) {
+            // Log y respuesta controlada para evitar 500 blancos
+            \Log::error('Clientes.show ERROR', [
+                'dni'  => $dni,
+                'msg'  => $e->getMessage(),
+                'file' => $e->getFile(),
+                'line' => $e->getLine(),
+            ]);
+            // Si prefieres ver el error (temporalmente):
+            // return response('Error en Clientes.show: '.$e->getMessage(), 500);
+
+            // O redirige con mensaje
+            return back()->withErrors('Ocurrió un error cargando el cliente. Revisa los logs.');
+        }
     }
 
     public function storePromesa(string $dni, Request $r)
