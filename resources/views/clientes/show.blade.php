@@ -134,12 +134,21 @@
   <div class="card pad mb-3">
     <div class="d-flex justify-content-between align-items-center mb-2">
       <h2 class="h6 mb-0 d-flex align-items-center gap-2"><i class="bi bi-wallet2"></i><span>Cuentas</span></h2>
+      {{-- Botones (arriba de la tabla) --}}
       <div class="d-flex align-items-center gap-2">
-        <button class="btn btn-outline-secondary btn-sm" id="btnCopyCtas" type="button" title="Copiar cuentas" data-bs-toggle="tooltip"><i class="bi bi-clipboard"></i> Copiar</button>
-        {{-- Generar propuesta (habilita con selección) --}}
+        <button class="btn btn-outline-secondary btn-sm" id="btnCopyCtas" type="button" title="Copiar cuentas" data-bs-toggle="tooltip">
+          <i class="bi bi-clipboard"></i> Copiar
+        </button>
+
+        {{-- Generar propuesta --}}
         <button class="btn btn-primary btn-sm" id="btnPropuesta" type="button" data-bs-toggle="modal" data-bs-target="#modalPropuesta" disabled>
           <i class="bi bi-flag"></i> Generar propuesta
           <span class="ms-1 badge rounded-pill text-bg-light align-middle" id="selCount">0</span>
+        </button>
+
+        {{-- NUEVO: Solicitar CNA --}}
+        <button class="btn btn-success btn-sm" id="btnCna" type="button" data-bs-toggle="modal" data-bs-target="#modalCna" disabled>
+          <i class="bi bi-file-earmark-word"></i> Solicitar CNA
         </button>
       </div>
     </div>
@@ -621,6 +630,47 @@
     </div>
   </div>
 
+  {{-- ===== Modal CNA ===== --}}
+  <div class="modal fade" id="modalCna" tabindex="-1" aria-hidden="true" data-bs-backdrop="static" data-bs-keyboard="false">
+    <div class="modal-dialog">
+      <form class="modal-content" method="POST" action="{{ route('cna.store', $dni) }}">
+        @csrf
+        <div class="modal-header">
+          <h6 class="modal-title d-flex align-items-center gap-2">
+            <i class="bi bi-file-earmark-text"></i> Solicitar Carta de No Adeudo (CNA)
+          </h6>
+          <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Cerrar"></button>
+        </div>
+        <div class="modal-body">
+          <div class="mb-2">
+            <label class="form-label">Nro. de carta (correlativo interno)</label>
+            <input type="text" name="nro_carta" class="form-control" placeholder="Ej: 000123" required>
+          </div>
+          <div class="mb-2">
+            <label class="form-label">Producto</label>
+            <input type="text" name="producto" class="form-control" placeholder="Crédito personal / TC / ...">
+            <div class="form-text">Opcional; puedes dejarlo en blanco si la información está en las cuentas.</div>
+          </div>
+          <div class="mb-2">
+            <label class="form-label">Observación (opcional)</label>
+            <textarea name="nota" class="form-control" rows="3" maxlength="500"></textarea>
+          </div>
+
+          {{-- Se llenan automáticamente con las cuentas seleccionadas --}}
+          <div id="cnaOpsHidden"></div>
+
+          <div class="alert alert-info py-2">
+            Se adjuntarán las operaciones seleccionadas para esta CNA.
+          </div>
+        </div>
+        <div class="modal-footer">
+          <button class="btn btn-outline-secondary" type="button" data-bs-dismiss="modal">Cancelar</button>
+          <button class="btn btn-success" type="submit"><i class="bi bi-send"></i> Enviar solicitud</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
   {{-- GESTIONES --}}
   <div class="card pad mt-3">
     <h2 class="h6 mb-2 d-flex align-items-center gap-2"><i class="bi bi-chat-dots"></i> Gestiones</h2>
@@ -974,5 +1024,28 @@
     }
     fechaPagoConvenio?.addEventListener('change', actualizarHint);
     actualizarHint();
+
+    // cna Modal CNA: llenar operaciones seleccionadas
+    const btnCna      = document.getElementById('btnCna');
+    const cnaOpsHidden= document.getElementById('cnaOpsHidden');
+
+    function refreshSelection(){
+      const selected = chks.filter(c => c.checked && !c.disabled).map(c => c.value).filter(Boolean);
+      selCount.textContent = String(selected.length);
+      btnPropuesta.disabled = selected.length === 0;
+      if (btnCna) btnCna.disabled = selected.length === 0; // habilita CNA
+      return selected;
+    }
+
+    // Al abrir el modal CNA llenamos los inputs ocultos
+    document.getElementById('modalCna')?.addEventListener('show.bs.modal', () => {
+      const ops = refreshSelection();
+      cnaOpsHidden.innerHTML = '';
+      ops.forEach(op => {
+        const i = document.createElement('input');
+        i.type = 'hidden'; i.name = 'operaciones[]'; i.value = String(op);
+        cnaOpsHidden.appendChild(i);
+      });
+    });
 </script>
 @endpush
