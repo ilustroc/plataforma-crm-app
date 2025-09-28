@@ -13,6 +13,8 @@ use App\Models\PagoPropia;
 use App\Models\PagoCajaCuscoCastigada;
 use App\Models\PagoCajaCuscoExtrajudicial;
 use App\Models\ClienteCuenta;
+use App\Models\CnaSolicitud;
+
 
 class ClientsControllers extends Controller
 {
@@ -67,22 +69,20 @@ class ClientsControllers extends Controller
         $pagos = $propia->get()->concat($cast->get())->concat($extra->get())
                 ->sortByDesc('fecha')->values();
 
-        // B) Promesas (con operaciones + refs de decisión para evitar N+1)
+        // B) Promesas
         $promesas = PromesaPago::where('dni',$dni)
-            ->withDecisionRefs()        // supervisor, administrador, revisor (id,name)
-            ->with('operaciones')       // operaciones asociadas
+            ->withDecisionRefs()
+            ->with('operaciones')
             ->orderByDesc('fecha_promesa')
             ->get();
 
         // C) CCD opcional (por DNI) + mapa por código (operación)
-        $ccd        = collect();   // lista completa (para la tabla de abajo)
-        $ccdByCodigo= collect();   // mapa: codigo → [docs]
+        $ccd        = collect();
+        $ccdByCodigo= collect();
 
         if (Schema::hasTable('ccd_clientes')) {
             $cols = DB::getSchemaBuilder()->getColumnListing('ccd_clientes');
-
-            // Selección flexible según columnas disponibles
-            $sel = collect(['id','dni','codigo','documento','nombre','pdf','archivo','ruta','url','created_at'])
+            $sel  = collect(['id','dni','codigo','documento','nombre','pdf','archivo','ruta','url','created_at'])
                     ->filter(fn($c)=>in_array($c,$cols))->all();
 
             if ($sel) {
@@ -92,9 +92,8 @@ class ClientsControllers extends Controller
                     ->orderByDesc('id')
                     ->get();
 
-                // Si existe la columna 'codigo', armamos el mapa por código
                 if (in_array('codigo', $cols)) {
-                    $ccdByCodigo = $ccd->groupBy('codigo'); // p.ej. '6799186', '07213726-1', etc.
+                    $ccdByCodigo = $ccd->groupBy('codigo');
                 }
             }
         }
@@ -147,12 +146,37 @@ class ClientsControllers extends Controller
             });
         }
 
+        // E) MAPA: CNA por operación (para la columna "CNA(s)" de la tabla)
+        $cnasByOperacion = collect();
+        if (Schema::hasTable('cna_solicitudes')) {
+            $cnas = CnaSolicitud::where('dni',$dni)
+                ->select('id','nro_carta','workflow_estado','created_at','operaciones','dni')
+                ->orderByDesc('created_at')
+                ->get();
+
+            $cnasByOperacion = $cnas
+                ->flatMap(function ($cna) {
+                    // 'operaciones' viene casteado a array en el modelo; si no, decodifica.
+                    $ops = is_array($cna->operaciones)
+                        ? $cna->operaciones
+                        : (json_decode($cna->operaciones, true) ?: []);
+                    return collect($ops)->map(fn($op) => [
+                        'operacion' => (string)$op,
+                        'item'      => $cna,
+                    ]);
+                })
+                ->groupBy('operacion')
+                ->map(fn($g) => $g->pluck('item')->unique('id')->values());
+        }
+
         return view('clientes.show', compact(
             'dni','titular','cuentas','pagos','promesas','ccd','pagosPorOperacion'
         ) + [
-            'ccdByCodigo' => $ccdByCodigo,
+            'ccdByCodigo'     => $ccdByCodigo,
+            'cnasByOperacion' => $cnasByOperacion, // <— esto alimenta la columna CNA(s)
         ]);
     }
+
 
     public function storePromesa(string $dni, Request $r)
     {
