@@ -231,9 +231,10 @@
             <td class="text-end text-nowrap">{{ number_format((float)($c->saldo_capital ?? 0), 2) }}</td>
             <td class="text-end text-nowrap">{{ number_format((float)($c->deuda_total ?? 0), 2) }}</td>
 
-            {{-- === CELDA CNA === --}}
+            {{-- === CELDA CNA (solo muestra "PDF") === --}}
             <td class="text-nowrap">
               @php
+                $items = collect($cnasByOperacion[$c->operacion] ?? []);
                 $badgeFor = function($estado){
                   $e = strtolower((string)$estado);
                   return str_contains($e,'aprob') ? 'success'
@@ -242,43 +243,35 @@
                 };
               @endphp
 
-              @if(($cnasByOperacion[$c->operacion] ?? collect())->count() === 1)
+              @if($items->count() === 1)
                 @php
-                  $x = ($cnasByOperacion[$c->operacion])->first();
-                  // Acepta 'estado' o 'workflow_estado' según cómo venga del controlador
+                  $x      = $items->first();
                   $estado = strtolower($x->estado ?? $x->workflow_estado ?? 'pendiente');
-                  $badge  = $badgeFor($estado);
-                  $nro    = $x->nro_carta ?? $x->id;
                 @endphp
 
                 @if($estado === 'aprobada')
                   <a href="{{ route('cna.pdf', $x->id) }}" class="btn btn-sm btn-outline-success" target="_blank">
-                    <i class="bi bi-filetype-pdf me-1"></i> PDF #{{ $nro }}
+                    <i class="bi bi-filetype-pdf me-1"></i> PDF
                   </a>
                 @else
-                  <span class="badge rounded-pill text-bg-{{ $badge }}">{{ ucfirst($estado) }}</span>
-                  <small class="text-secondary ms-2">#{{ $nro }}</small>
+                  <span class="badge rounded-pill text-bg-{{ $badgeFor($estado) }}">{{ ucfirst($estado) }}</span>
                 @endif
 
-              @elseif(($cnasByOperacion[$c->operacion] ?? collect())->count() > 1)
+              @elseif($items->count() > 1)
                 <div class="btn-group">
                   <button class="btn btn-sm btn-outline-success dropdown-toggle" data-bs-toggle="dropdown">
-                    CNA ({{ ($cnasByOperacion[$c->operacion])->count() }})
+                    CNA ({{ $items->count() }})
                   </button>
                   <ul class="dropdown-menu dropdown-menu-end">
-                    @foreach($cnasByOperacion[$c->operacion] as $x)
+                    @foreach($items as $x)
                       @php
                         $estado = strtolower($x->estado ?? $x->workflow_estado ?? 'pendiente');
-                        $badge  = $badgeFor($estado);
-                        $nro    = $x->nro_carta ?? $x->id;
-                        $fecha  = optional($x->created_at)->format('Y-m-d');
                       @endphp
-                      <li class="d-flex align-items-center justify-content-between px-3 py-1">
-                        <span>#{{ $nro }} <small class="text-secondary">{{ $fecha }}</small></span>
+                      <li class="px-3 py-1 d-flex align-items-center justify-content-between">
                         @if($estado === 'aprobada')
                           <a href="{{ route('cna.pdf', $x->id) }}" class="btn btn-sm btn-link" target="_blank">PDF</a>
                         @else
-                          <span class="badge text-bg-{{ $badge }}">{{ ucfirst($estado) }}</span>
+                          <span class="badge text-bg-{{ $badgeFor($estado) }}">{{ ucfirst($estado) }}</span>
                         @endif
                       </li>
                     @endforeach
@@ -289,7 +282,6 @@
               @endif
             </td>
             {{-- === /CELDA CNA === --}}
-
 
             {{-- === CELDA CCD (sin cambios) === --}}
             <td class="text-nowrap">

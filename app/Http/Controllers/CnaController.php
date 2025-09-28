@@ -8,6 +8,9 @@ use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Storage;
 use Barryvdh\DomPDF\Facade\Pdf;
+use PhpOffice\PhpWord\TemplateProcessor;
+use PhpOffice\PhpWord\IOFactory;
+use PhpOffice\PhpWord\Settings;
 
 class CnaController extends Controller
 {
@@ -50,10 +53,10 @@ class CnaController extends Controller
                 'correlativo'          => $next,
                 'nro_carta'            => $nro,
                 'dni'                  => $dni,
-                'titular'              => $data['titular']    ?? null,
-                'producto'             => $data['producto']   ?? null,
+                'titular'              => $data['titular']     ?? null,
+                'producto'             => $data['producto']    ?? null,
                 'operaciones'          => $ops,
-                'nota'                 => $data['nota']       ?? null,
+                'nota'                 => $data['nota']        ?? null,
                 'observacion'          => $data['observacion'] ?? null,
                 'fecha_pago_realizado' => $data['fecha_pago_realizado'],
                 'monto_pagado'         => $data['monto_pagado'],
@@ -65,7 +68,7 @@ class CnaController extends Controller
         return back()->with('ok', "Solicitud de CNA enviada. N.º {$solicitud->nro_carta}");
     }
 
-    // ======== Flujo de autorización (igual que promesas) ========
+    // ======== Flujo de autorización ========
 
     public function preaprobar(CnaSolicitud $cna)
     {
@@ -76,12 +79,12 @@ class CnaController extends Controller
         }
 
         $cna->update([
-            'workflow_estado' => 'preaprobada',
-            'pre_aprobado_por'=> Auth::id(),
-            'pre_aprobado_at' => now(),
-            'rechazado_por'   => null,
-            'rechazado_at'    => null,
-            'motivo_rechazo'  => null,
+            'workflow_estado'  => 'preaprobada',
+            'pre_aprobado_por' => Auth::id(),
+            'pre_aprobado_at'  => now(),
+            'rechazado_por'    => null,
+            'rechazado_at'     => null,
+            'motivo_rechazo'   => null,
         ]);
 
         return back()->with('ok', 'CNA pre-aprobada.');
@@ -120,7 +123,7 @@ class CnaController extends Controller
             'aprobado_at'     => now(),
         ]);
 
-        // Genera archivos (PDF, y DOCX si hay plantilla)
+        // Genera archivos (DOCX desde plantilla + PDF)
         $this->generateOutputs($cna);
 
         return back()->with('ok', 'CNA aprobada y archivos generados.');
@@ -146,25 +149,29 @@ class CnaController extends Controller
 
     // ======== Descargas ========
 
-    /** Descarga el PDF si existe (genera al vuelo si falta). */
+    /** Descarga el PDF si existe (o lo regenera si falta). */
     public function pdf(CnaSolicitud $cna)
     {
         if ($cna->workflow_estado !== 'aprobada') {
             abort(403, 'Solo disponible para CNA aprobadas.');
         }
 
-        // Si está guardado en disco, servir
+        if (!$cna->pdf_path || !Storage::exists($cna->pdf_path)) {
+            // Reintenta generar (por si no existe)
+            $this->generateOutputs($cna);
+        }
+
         if ($cna->pdf_path && Storage::exists($cna->pdf_path)) {
             return Storage::download($cna->pdf_path, basename($cna->pdf_path));
         }
 
-        // Generar on-the-fly
+        // ÚLTIMO BACKUP: render simple desde Blade (si no hay plantilla)
         $fileName = "CNA {$cna->nro_carta} - {$cna->dni}.pdf";
         $pdf = Pdf::loadView('cna.pdf', ['cna' => $cna])->setPaper('A4');
         return $pdf->download($fileName);
     }
 
-    /** Descarga el DOCX si existe. (Opcional) */
+    /** Descarga el DOCX si existe. */
     public function docx(CnaSolicitud $cna)
     {
         if ($cna->workflow_estado !== 'aprobada') {
@@ -188,53 +195,96 @@ class CnaController extends Controller
 
     /**
      * Genera y guarda archivos para la CNA:
-     * - PDF en storage/app/cna/pdfs/
-     * - DOCX (si hay plantilla) en storage/app/cna/docx/
-     * Guarda las rutas relativas en la DB.
+     * - DOCX desde storage/app/templates/cna_template.docx (clonando una fila por operación)
+     * - PDF (vía PHPWord→DomPDF). Si falla, genera PDF con Blade como respaldo.
      */
     private function generateOutputs(CnaSolicitud $cna): void
     {
-        // Directorios
-        $pdfDir  = 'cna/pdfs';
-        $docxDir = 'cna/docx';
-        $tplDir  = 'cna/templates';
+        // Filas por operación (Producto – Operación – Entidad)
+        $ops = (array)($cna->operaciones ?? []);
+        $rows = DB::table('clientes_cuentas')
+            ->select('operacion','producto','entidad')
+            ->where('dni', $cna->dni)
+            ->whereIn('operacion', $ops)
+            ->orderBy('operacion')
+            ->get()
+            ->map(fn($r) => [
+                'PRODUCTO'  => (string)($r->producto ?: '—'),
+                'OPERACION' => (string)($r->operacion ?: '—'),
+                'ENTIDAD'   => (string)($r->entidad  ?: '—'),
+            ])
+            ->values()
+            ->all();
 
-        Storage::makeDirectory($pdfDir);
-        Storage::makeDirectory($docxDir);
-        Storage::makeDirectory($tplDir); // por si quieres subir tu plantilla aquí
-
-        // ==== PDF (Blade) ====
-        $pdfName = "CNA {$cna->nro_carta} - {$cna->dni}.pdf";
-        $pdfPath = "{$pdfDir}/{$pdfName}";
-        $pdf = Pdf::loadView('cna.pdf', ['cna' => $cna])->setPaper('A4');
-        Storage::put($pdfPath, $pdf->output());
-
-        // ==== DOCX (opcional, si hay plantilla y PhpWord instalado) ====
-        $docxPath = null;
-        $templateCandidate = storage_path('app/'.$tplDir.'/cna_template.docx');
-        if (class_exists(\PhpOffice\PhpWord\TemplateProcessor::class) && is_file($templateCandidate)) {
-            try {
-                $docxName = "CNA {$cna->nro_carta} - {$cna->dni}.docx";
-                $docxPath = "{$docxDir}/{$docxName}";
-
-                $tp = new \PhpOffice\PhpWord\TemplateProcessor($templateCandidate);
-                $tp->setValue('nro_carta', $cna->nro_carta);
-                $tp->setValue('dni', $cna->dni);
-                $tp->setValue('titular', (string)($cna->titular ?? ''));
-                $tp->setValue('producto', (string)($cna->producto ?? ''));
-                $tp->setValue('operacion', implode(', ', (array)$cna->operaciones));
-                $tp->setValue('fecha_hoy', now()->format('d/m/Y'));
-                $tp->saveAs(storage_path('app/'.$docxPath));
-            } catch (\Throwable $e) {
-                // Si algo falla con DOCX, no detenemos el flujo; solo no guardamos docx_path
-                $docxPath = null;
+        // Si por alguna razón no encontramos las cuentas, al menos mostramos las operaciones
+        if (empty($rows)) {
+            foreach ($ops as $op) {
+                $rows[] = ['PRODUCTO'=>'—','OPERACION'=>(string)$op,'ENTIDAD'=>'—'];
             }
         }
 
-        // Guardar paths
-        $cna->fill([
-            'pdf_path'  => $pdfPath,
-            'docx_path' => $docxPath,
-        ])->save();
+        $baseName = "CNA {$cna->nro_carta} - {$cna->dni}";
+        $docxRel  = "cna/{$baseName}.docx";
+        $pdfRel   = "cna/{$baseName}.pdf";
+
+        // Asegurar carpeta
+        if (!Storage::exists('cna')) {
+            Storage::makeDirectory('cna');
+        }
+
+        $template = storage_path('app/templates/cna_template.docx');
+
+        if (is_file($template)) {
+            try {
+                // Relleno de plantilla DOCX
+                $tp = new TemplateProcessor($template);
+
+                // Encabezado / datos generales
+                // (En el DOCX usa ${...}: ${nro_carta}, ${TITULAR}, ${DNI}, ${FECHA_REAL}, ${MONTO_PAGADO}, ${OBSERVACION})
+                $tp->setValue('nro_carta',   $cna->nro_carta);
+                $tp->setValue('TITULAR',     $cna->titular ?: '—');
+                $tp->setValue('DNI',         $cna->dni);
+                $tp->setValue('FECHA_REAL',  optional($cna->fecha_pago_realizado)->format('d/m/Y') ?: '—');
+                $tp->setValue('MONTO_PAGADO', number_format((float)$cna->monto_pagado,2));
+                $tp->setValue('OBSERVACION',  (string)($cna->observacion ?: '—'));
+
+                // Clonado de filas (la plantilla debe tener una fila con ${OPERACION}, ${PRODUCTO}, ${ENTIDAD})
+                $tp->cloneRow('OPERACION', count($rows));
+                foreach ($rows as $i => $r) {
+                    $idx = $i + 1;
+                    $tp->setValue("PRODUCTO#{$idx}",  $r['PRODUCTO']);
+                    $tp->setValue("OPERACION#{$idx}", $r['OPERACION']);
+                    $tp->setValue("ENTIDAD#{$idx}",   $r['ENTIDAD']);
+                }
+
+                // Guardar DOCX
+                $tp->saveAs(storage_path('app/'.$docxRel));
+                $cna->docx_path = $docxRel;
+
+                // Intentar convertir a PDF con PHPWord + DomPDF
+                Settings::setPdfRendererName(Settings::PDF_RENDERER_DOMPDF);
+                Settings::setPdfRendererPath(base_path('vendor/dompdf/dompdf'));
+
+                $phpWord = IOFactory::load(storage_path('app/'.$docxRel), 'Word2007');
+                $writer  = IOFactory::createWriter($phpWord, 'PDF');
+                $writer->save(storage_path('app/'.$pdfRel));
+                $cna->pdf_path = $pdfRel;
+
+                $cna->save();
+                return;
+
+            } catch (\Throwable $e) {
+                // Si falla la generación/convertido, continuamos a respaldo PDF (Blade)
+            }
+        }
+
+        // ===== Respaldo: PDF con Blade (no DOCX) =====
+        $pdf = Pdf::loadView('cna.pdf', [
+            'cna'  => $cna,
+            'rows' => $rows,
+        ])->setPaper('A4');
+
+        Storage::put($pdfRel, $pdf->output());
+        $cna->update(['pdf_path' => $pdfRel, 'docx_path' => $cna->docx_path ?? null]);
     }
 }
