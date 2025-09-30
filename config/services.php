@@ -32,7 +32,7 @@ return [
     ],
 
     'ilovepdf' => [
-        'public' => config('services.ilovepdf.public_key'),
-        'secret' => config('services.ilovepdf.secret_key'),
+        'public' => env('ILOVEPDF_PUBLIC_KEY'),
+        'secret' => env('ILOVEPDF_SECRET_KEY'),
     ],
 ];

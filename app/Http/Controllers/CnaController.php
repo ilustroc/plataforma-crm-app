@@ -9,7 +9,6 @@ use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Storage;
 use PhpOffice\PhpWord\TemplateProcessor;
-use Symfony\Component\Process\Process;
 use Ilovepdf\Ilovepdf;
 
 class CnaController extends Controller
@@ -33,8 +32,11 @@ class CnaController extends Controller
         ]);
 
         $ops = array_values(array_filter(array_map('strval', $data['operaciones'] ?? [])));
-        if (empty($ops)) return back()->withErrors('Selecciona al menos una operación para la CNA.');
+        if (empty($ops)) {
+            return back()->withErrors('Selecciona al menos una operación para la CNA.');
+        }
 
+        // Si no envían titular, lo inferimos de clientes_cuentas
         $titular = $data['titular'] ?? DB::table('clientes_cuentas')
             ->where('dni', $dni)->whereNotNull('titular')->value('titular');
 
@@ -66,8 +68,10 @@ class CnaController extends Controller
     public function preaprobar(CnaSolicitud $cna)
     {
         $this->authorizeRole('supervisor');
-        if ($cna->workflow_estado !== 'pendiente')
+
+        if ($cna->workflow_estado !== 'pendiente') {
             return back()->withErrors('Solo se puede pre-aprobar una solicitud pendiente.');
+        }
 
         $cna->update([
             'workflow_estado' => 'preaprobada',
@@ -84,8 +88,10 @@ class CnaController extends Controller
     public function rechazarSup(Request $request, CnaSolicitud $cna)
     {
         $this->authorizeRole('supervisor');
-        if ($cna->workflow_estado !== 'pendiente')
+
+        if ($cna->workflow_estado !== 'pendiente') {
             return back()->withErrors('Solo se puede rechazar una solicitud pendiente.');
+        }
 
         $cna->update([
             'workflow_estado' => 'rechazada_sup',
@@ -100,8 +106,10 @@ class CnaController extends Controller
     public function aprobar(CnaSolicitud $cna)
     {
         $this->authorizeRole('administrador');
-        if ($cna->workflow_estado !== 'preaprobada')
+
+        if ($cna->workflow_estado !== 'preaprobada') {
             return back()->withErrors('Solo se puede aprobar una CNA pre-aprobada.');
+        }
 
         $cna->update([
             'workflow_estado' => 'aprobada',
@@ -109,7 +117,7 @@ class CnaController extends Controller
             'aprobado_at'     => now(),
         ]);
 
-        // Genera DOCX desde plantilla y lo CONVIERTE a PDF (LibreOffice/unoconv)
+        // Genera DOCX con plantilla y lo convierte a PDF vía iLovePDF
         $this->generateOutputsFromTemplate($cna);
 
         return back()->with('ok', 'CNA aprobada y archivos generados.');
@@ -118,8 +126,10 @@ class CnaController extends Controller
     public function rechazarAdmin(Request $request, CnaSolicitud $cna)
     {
         $this->authorizeRole('administrador');
-        if ($cna->workflow_estado !== 'preaprobada')
+
+        if ($cna->workflow_estado !== 'preaprobada') {
             return back()->withErrors('Solo se puede rechazar una solicitud pre-aprobada.');
+        }
 
         $cna->update([
             'workflow_estado' => 'rechazada',
@@ -135,17 +145,26 @@ class CnaController extends Controller
     public function pdf($id)
     {
         $cna = CnaSolicitud::findOrFail($id);
-        if ($cna->workflow_estado !== 'aprobada') abort(403, 'Solo disponible para CNA aprobadas.');
+        if ($cna->workflow_estado !== 'aprobada') {
+            abort(403, 'Solo disponible para CNA aprobadas.');
+        }
 
-        // si falta el PDF, intentar convertir ahora desde el DOCX (sin re-plantilla)
-        if ((!$cna->pdf_path || !Storage::exists($cna->pdf_path)) && $cna->docx_path && Storage::exists($cna->docx_path)) {
-            $pdfDir  = 'cna/pdfs';
+        // Si falta el PDF pero existe el DOCX, intentar convertir on-demand
+        if ((!$cna->pdf_path || !Storage::exists($cna->pdf_path))
+            && $cna->docx_path && Storage::exists($cna->docx_path)) {
+
+            $pdfDir = 'cna/pdfs';
             Storage::makeDirectory($pdfDir);
-            $pdfRel  = $pdfDir.'/'.pathinfo($cna->docx_path, PATHINFO_FILENAME).'.pdf';
+            $pdfRel = $pdfDir.'/'.pathinfo($cna->docx_path, PATHINFO_FILENAME).'.pdf';
 
-            $ok = $this->convertDocxToPdf(Storage::path($cna->docx_path), Storage::path($pdfRel));
-            if ($ok) {
+            try {
+                $this->convertDocxToPdfViaIlovepdf(
+                    Storage::path($cna->docx_path),
+                    Storage::path($pdfRel)
+                );
                 $cna->update(['pdf_path' => $pdfRel]);
+            } catch (\Throwable $e) {
+                Log::error('CNA PDF on-demand failed: '.$e->getMessage(), ['cna_id' => $cna->id]);
             }
         }
 
@@ -153,7 +172,7 @@ class CnaController extends Controller
             return Storage::download($cna->pdf_path, basename($cna->pdf_path));
         }
 
-        // si no se pudo, ofrecer el DOCX
+        // Fallback: ofrecer el DOCX si el PDF no está
         if ($cna->docx_path && Storage::exists($cna->docx_path)) {
             return Storage::download($cna->docx_path, basename($cna->docx_path));
         }
@@ -164,8 +183,12 @@ class CnaController extends Controller
     public function docx($id)
     {
         $cna = CnaSolicitud::findOrFail($id);
-        if ($cna->workflow_estado !== 'aprobada') abort(403, 'Solo disponible para CNA aprobadas.');
-        if (!$cna->docx_path || !Storage::exists($cna->docx_path)) abort(404, 'Archivo DOCX no encontrado.');
+        if ($cna->workflow_estado !== 'aprobada') {
+            abort(403, 'Solo disponible para CNA aprobadas.');
+        }
+        if (!$cna->docx_path || !Storage::exists($cna->docx_path)) {
+            abort(404, 'Archivo DOCX no encontrado.');
+        }
         return Storage::download($cna->docx_path, basename($cna->docx_path));
     }
 
@@ -179,9 +202,9 @@ class CnaController extends Controller
     }
 
     /**
-     * Rellena storage/app/templates/cna_template.docx y crea:
+     * Llena storage/app/templates/cna_template.docx y crea:
      *  - DOCX en storage/app/cna/docx
-     *  - PDF en storage/app/cna/pdfs (conversión externa: soffice/unoconv)
+     *  - PDF en storage/app/cna/pdfs (con iLovePDF)
      */
     private function generateOutputsFromTemplate(CnaSolicitud $cna): void
     {
@@ -200,31 +223,30 @@ class CnaController extends Controller
         $docxRel  = $docxDir.'/'.$docxName;
         $pdfRel   = $pdfDir.'/'.$pdfName;
 
-        // ====== 1) Rellenar DOCX con TemplateProcessor ======
-        $tp = new \PhpOffice\PhpWord\TemplateProcessor($tplPath);
+        // 1) Rellenar DOCX
+        $tp = new TemplateProcessor($tplPath);
 
-        // Datos principales
-        $titular = $cna->titular ?? \DB::table('clientes_cuentas')->where('dni',$cna->dni)->value('titular');
+        $titular = $cna->titular ?? DB::table('clientes_cuentas')->where('dni',$cna->dni)->value('titular');
+
         foreach ([
-            'nro_carta' => $cna->nro_carta,
-            'NRO_CARTA' => $cna->nro_carta,
-            'dni'       => $cna->dni,
-            'DNI'       => $cna->dni,
-            'titular'   => (string)($titular ?? ''),
-            'TITULAR'   => (string)($titular ?? ''),
-            // Agrega otros placeholders si tu plantilla los usa:
-            'FECHA_PAGO' => optional($cna->fecha_pago_realizado)->format('d/m/Y'),
+            'nro_carta'    => $cna->nro_carta,
+            'NRO_CARTA'    => $cna->nro_carta,
+            'dni'          => $cna->dni,
+            'DNI'          => $cna->dni,
+            'titular'      => (string)($titular ?? ''),
+            'TITULAR'      => (string)($titular ?? ''),
+            'FECHA_PAGO'   => optional($cna->fecha_pago_realizado)->format('d/m/Y'),
             'MONTO_PAGADO' => number_format((float)$cna->monto_pagado, 2),
             'OBSERVACION'  => (string)($cna->observacion ?? ''),
         ] as $k => $v) {
             $tp->setValue($k, $v);
         }
 
-        // Filas Producto/Operación/Entidad (una por operación)
+        // Filas por operación (Producto / Operación / Entidad)
         $ops = array_values(array_filter(array_map('strval', (array)$cna->operaciones)));
         $byOp = collect();
         if ($ops) {
-            $byOp = \DB::table('clientes_cuentas')
+            $byOp = DB::table('clientes_cuentas')
                 ->select('operacion','producto','entidad')
                 ->whereIn('operacion', $ops)
                 ->get()
@@ -250,10 +272,10 @@ class CnaController extends Controller
             }
         }
 
-        // Guardar DOCX resultante
+        // Guardar DOCX
         $tp->saveAs(storage_path('app/'.$docxRel));
 
-        // ====== 2) Convertir DOCX→PDF vía iLovePDF ======
+        // 2) Convertir a PDF vía iLovePDF
         try {
             $this->convertDocxToPdfViaIlovepdf(
                 storage_path('app/'.$docxRel),
@@ -261,7 +283,7 @@ class CnaController extends Controller
             );
             $cna->pdf_path = $pdfRel;
         } catch (\Throwable $e) {
-            Log::error('Error iLovePDF DOCX→PDF: '.$e->getMessage(), ['cna_id'=>$cna->id]);
+            Log::error('Error iLovePDF DOCX→PDF: '.$e->getMessage(), ['cna_id' => $cna->id]);
             $cna->pdf_path = null; // dejamos al menos el DOCX
         }
 
@@ -271,20 +293,21 @@ class CnaController extends Controller
     }
 
     /**
-     * Convierte un DOCX en PDF usando:
-     * 1) soffice --headless (LibreOffice)
-     * 2) unoconv
+     * Convierte DOCX → PDF usando iLovePDF (task: officepdf).
+     * Requiere claves en config/services.php:
+     *   'ilovepdf' => ['public' => env('ILOVEPDF_PUBLIC_KEY'), 'secret' => env('ILOVEPDF_SECRET_KEY')]
      */
     private function convertDocxToPdfViaIlovepdf(string $docxAbs, string $pdfAbs): void
     {
         $public = config('services.ilovepdf.public');
         $secret = config('services.ilovepdf.secret');
+
         if (!$public || !$secret) {
             throw new \RuntimeException('Faltan claves de iLovePDF (config/services.ilovepdf).');
         }
 
-        $ilovepdf = new \Ilovepdf\Ilovepdf($public, $secret);
-        $task = $ilovepdf->newTask('officepdf'); // convierte Office → PDF
+        $ilovepdf = new Ilovepdf($public, $secret);
+        $task = $ilovepdf->newTask('officepdf');
         $task->addFile($docxAbs);
         $task->execute();
 
@@ -292,29 +315,28 @@ class CnaController extends Controller
         if (!is_dir($outDir)) {
             @mkdir($outDir, 0775, true);
         }
+
+        // Descarga usando el nombre original (*.pdf)
         $task->download($outDir);
 
-        // Renombrar al nombre final si hace falta
+        // Aseguramos el nombre final deseado
         $generated = $outDir.'/'.basename($docxAbs, '.docx').'.pdf';
         if (!is_file($generated)) {
             $latest = collect(glob($outDir.'/*.pdf'))
                 ->sortByDesc(fn($p) => filemtime($p))
                 ->first();
-            if ($latest) $generated = $latest;
+            if ($latest) {
+                $generated = $latest;
+            }
         }
+
         if (!is_file($generated)) {
             throw new \RuntimeException('No se pudo localizar el PDF descargado por iLovePDF.');
         }
+
         if ($generated !== $pdfAbs) {
             @unlink($pdfAbs);
             rename($generated, $pdfAbs);
         }
-    }
-
-    private function hasBinary(string $bin): bool
-    {
-        $proc = new Process(['bash','-lc',"command -v {$bin} || which {$bin}"]);
-        $proc->run();
-        return trim($proc->getOutput()) !== '';
     }
 }
