@@ -156,54 +156,53 @@ class CnaController extends Controller
      * ======================================================= */
 
     /** GET /cna/{cna}/pdf */
-    public function pdf(CnaSolicitud $cna)
+    public function pdf(int $id)
     {
+        $cna = CnaSolicitud::findOrFail($id);
         if ($cna->workflow_estado !== 'aprobada') {
             abort(403, 'Solo disponible para CNA aprobadas.');
         }
 
-        // Si falta el PDF y hay DOCX, convertir on-demand
-        if ((!$cna->pdf_path || !Storage::exists($cna->pdf_path))
-            && $cna->docx_path && Storage::exists($cna->docx_path)) {
+        // Construye SIEMPRE el nombre esperado
+        $base   = sprintf('CNA %s - %s', $cna->nro_carta, $cna->dni);
+        $pdfRel = 'cna/pdfs/'.$base.'.pdf';
 
-            $pdfDir = 'cna/pdfs';
-            Storage::makeDirectory($pdfDir);
-            $pdfRel = $pdfDir.'/'.pathinfo($cna->docx_path, PATHINFO_FILENAME).'.pdf';
-
-            try {
-                $this->convertDocxToPdfViaIlovepdf(
-                    Storage::path($cna->docx_path),
-                    Storage::path($pdfRel)
-                );
-                $cna->update(['pdf_path' => $pdfRel]);
-            } catch (\Throwable $e) {
-                Log::error('CNA PDF on-demand failed: '.$e->getMessage(), ['cna_id' => $cna->id]);
-            }
+        if (Storage::exists($pdfRel)) {
+            return Storage::download($pdfRel, $base.'.pdf');
         }
 
-        if ($cna->pdf_path && Storage::exists($cna->pdf_path)) {
-            return Storage::download($cna->pdf_path, basename($cna->pdf_path));
+        // Si no existe, intenta servir el DOCX como respaldo
+        $docxRel = 'cna/docx/'.$base.'.docx';
+        if (Storage::exists($docxRel)) {
+            return Storage::download($docxRel, $base.'.docx');
         }
 
-        // Fallback: ofrecer DOCX
-        if ($cna->docx_path && Storage::exists($cna->docx_path)) {
-            return Storage::download($cna->docx_path, basename($cna->docx_path));
-        }
-
-        abort(404, 'Archivo no encontrado.');
+        abort(404, 'Archivo no encontrado: '.$pdfRel);
     }
 
-    /** GET /cna/{cna}/docx */
-    public function docx(CnaSolicitud $cna)
+    public function docx(int $id)
     {
+        $cna = CnaSolicitud::findOrFail($id);
         if ($cna->workflow_estado !== 'aprobada') {
             abort(403, 'Solo disponible para CNA aprobadas.');
         }
-        if (!$cna->docx_path || !Storage::exists($cna->docx_path)) {
-            abort(404, 'Archivo DOCX no encontrado.');
+
+        $base   = sprintf('CNA %s - %s', $cna->nro_carta, $cna->dni);
+        $docxRel= 'cna/docx/'.$base.'.docx';
+
+        if (Storage::exists($docxRel)) {
+            return Storage::download($docxRel, $base.'.docx');
         }
-        return Storage::download($cna->docx_path, basename($cna->docx_path));
+
+        // Respaldo: si el PDF existe, al menos entrega eso
+        $pdfRel = 'cna/pdfs/'.$base.'.pdf';
+        if (Storage::exists($pdfRel)) {
+            return Storage::download($pdfRel, $base.'.pdf');
+        }
+
+        abort(404, 'Archivo no encontrado: '.$docxRel);
     }
+
 
     /* =========================================================
      * Helpers

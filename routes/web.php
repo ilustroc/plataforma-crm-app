@@ -151,10 +151,10 @@ Route::middleware('auth')->group(function () {
         Route::post('/cna/{cna}/rechazar-admin', [CnaController::class,'rechazarAdmin'])->name('cna.rechazar.admin');
     });
 
-    // Descargas
-    Route::middleware(['auth','role:administrador,supervisor'])->group(function () {
-        Route::get('/cna/{cna}/pdf',  [CnaController::class, 'pdf'])->name('cna.pdf');
-        Route::get('/cna/{cna}/docx', [CnaController::class, 'docx'])->name('cna.docx');
+    // routes/web.php (dentro del middleware auth + role)
+    Route::middleware('role:administrador,supervisor')->group(function () {
+        Route::get('/cna/{id}/pdf',  [CnaController::class, 'pdf'])->name('cna.pdf');
+        Route::get('/cna/{id}/docx', [CnaController::class, 'docx'])->name('cna.docx');
     });
 
     /*
