@@ -31,4 +31,8 @@ return [
         'region' => env('AWS_DEFAULT_REGION', 'us-east-1'),
     ],
 
+    'ilovepdf' => [
+        'public' => config('services.ilovepdf.public_key'),
+        'secret' => config('services.ilovepdf.secret_key'),
+    ],
 ];
