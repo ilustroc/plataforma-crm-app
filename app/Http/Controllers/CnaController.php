@@ -3,6 +3,7 @@
 namespace App\Http\Controllers;
 
 use App\Models\CnaSolicitud;
+use Carbon\Carbon;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
@@ -13,7 +14,9 @@ use Ilovepdf\Ilovepdf;
 
 class CnaController extends Controller
 {
-    // -------------------- CREAR SOLICITUD --------------------
+    /* =========================================================
+     * Crear solicitud desde /clientes/{dni}
+     * ======================================================= */
     public function store(Request $request, string $dni)
     {
         $data = $request->validate([
@@ -36,9 +39,11 @@ class CnaController extends Controller
             return back()->withErrors('Selecciona al menos una operación para la CNA.');
         }
 
-        // Si no envían titular, lo inferimos de clientes_cuentas
+        // Titular (si no llega desde el form)
         $titular = $data['titular'] ?? DB::table('clientes_cuentas')
-            ->where('dni', $dni)->whereNotNull('titular')->value('titular');
+            ->where('dni', $dni)
+            ->whereNotNull('titular')
+            ->value('titular');
 
         $solicitud = DB::transaction(function () use ($dni, $data, $ops, $titular) {
             $last = DB::table('cna_solicitudes')->lockForUpdate()->max('correlativo');
@@ -64,7 +69,11 @@ class CnaController extends Controller
         return back()->with('ok', "Solicitud de CNA enviada. N.º {$solicitud->nro_carta}");
     }
 
-    // -------------------- FLUJO APROBACIÓN --------------------
+    /* =========================================================
+     * Flujo de aprobación
+     * ======================================================= */
+
+    // ── Supervisor
     public function preaprobar(CnaSolicitud $cna)
     {
         $this->authorizeRole('supervisor');
@@ -103,6 +112,7 @@ class CnaController extends Controller
         return back()->with('ok', 'CNA rechazada por supervisor.');
     }
 
+    // ── Administrador
     public function aprobar(CnaSolicitud $cna)
     {
         $this->authorizeRole('administrador');
@@ -117,7 +127,7 @@ class CnaController extends Controller
             'aprobado_at'     => now(),
         ]);
 
-        // Genera DOCX con plantilla y lo convierte a PDF vía iLovePDF
+        // Generar DOCX + PDF desde plantilla
         $this->generateOutputsFromTemplate($cna);
 
         return back()->with('ok', 'CNA aprobada y archivos generados.');
@@ -141,15 +151,18 @@ class CnaController extends Controller
         return back()->with('ok', 'CNA rechazada por administrador.');
     }
 
-    // -------------------- DESCARGAS --------------------
-    public function pdf($id)
+    /* =========================================================
+     * Descargas
+     * ======================================================= */
+
+    /** GET /cna/{cna}/pdf */
+    public function pdf(CnaSolicitud $cna)
     {
-        $cna = CnaSolicitud::findOrFail($id);
         if ($cna->workflow_estado !== 'aprobada') {
             abort(403, 'Solo disponible para CNA aprobadas.');
         }
 
-        // Si falta el PDF pero existe el DOCX, intentar convertir on-demand
+        // Si falta el PDF y hay DOCX, convertir on-demand
         if ((!$cna->pdf_path || !Storage::exists($cna->pdf_path))
             && $cna->docx_path && Storage::exists($cna->docx_path)) {
 
@@ -172,7 +185,7 @@ class CnaController extends Controller
             return Storage::download($cna->pdf_path, basename($cna->pdf_path));
         }
 
-        // Fallback: ofrecer el DOCX si el PDF no está
+        // Fallback: ofrecer DOCX
         if ($cna->docx_path && Storage::exists($cna->docx_path)) {
             return Storage::download($cna->docx_path, basename($cna->docx_path));
         }
@@ -180,9 +193,9 @@ class CnaController extends Controller
         abort(404, 'Archivo no encontrado.');
     }
 
-    public function docx($id)
+    /** GET /cna/{cna}/docx */
+    public function docx(CnaSolicitud $cna)
     {
-        $cna = CnaSolicitud::findOrFail($id);
         if ($cna->workflow_estado !== 'aprobada') {
             abort(403, 'Solo disponible para CNA aprobadas.');
         }
@@ -192,7 +205,10 @@ class CnaController extends Controller
         return Storage::download($cna->docx_path, basename($cna->docx_path));
     }
 
-    // -------------------- HELPERS --------------------
+    /* =========================================================
+     * Helpers
+     * ======================================================= */
+
     private function authorizeRole(string $role)
     {
         $user = Auth::user();
@@ -204,7 +220,7 @@ class CnaController extends Controller
     /**
      * Llena storage/app/templates/cna_template.docx y crea:
      *  - DOCX en storage/app/cna/docx
-     *  - PDF en storage/app/cna/pdfs (con iLovePDF)
+     *  - PDF  en storage/app/cna/pdfs (vía iLovePDF)
      */
     private function generateOutputsFromTemplate(CnaSolicitud $cna): void
     {
@@ -223,10 +239,19 @@ class CnaController extends Controller
         $docxRel  = $docxDir.'/'.$docxName;
         $pdfRel   = $pdfDir.'/'.$pdfName;
 
-        // 1) Rellenar DOCX
+        // ---------- Rellenar DOCX ----------
         $tp = new TemplateProcessor($tplPath);
 
-        $titular = $cna->titular ?? DB::table('clientes_cuentas')->where('dni',$cna->dni)->value('titular');
+        $titular = $cna->titular ?? DB::table('clientes_cuentas')
+            ->where('dni', $cna->dni)->value('titular');
+
+        // Fecha robusta (por si viene como string)
+        $fechaPago = '';
+        if ($cna->fecha_pago_realizado) {
+            try {
+                $fechaPago = Carbon::parse($cna->fecha_pago_realizado)->format('d/m/Y');
+            } catch (\Throwable $e) { $fechaPago = (string)$cna->fecha_pago_realizado; }
+        }
 
         foreach ([
             'nro_carta'    => $cna->nro_carta,
@@ -235,15 +260,20 @@ class CnaController extends Controller
             'DNI'          => $cna->dni,
             'titular'      => (string)($titular ?? ''),
             'TITULAR'      => (string)($titular ?? ''),
-            'FECHA_PAGO'   => optional($cna->fecha_pago_realizado)->format('d/m/Y'),
+            'FECHA_PAGO'   => $fechaPago,
             'MONTO_PAGADO' => number_format((float)$cna->monto_pagado, 2),
             'OBSERVACION'  => (string)($cna->observacion ?? ''),
         ] as $k => $v) {
             $tp->setValue($k, $v);
         }
 
-        // Filas por operación (Producto / Operación / Entidad)
-        $ops = array_values(array_filter(array_map('strval', (array)$cna->operaciones)));
+        // Operaciones (decodifica si vienen como JSON)
+        $ops = is_array($cna->operaciones)
+            ? $cna->operaciones
+            : (json_decode($cna->operaciones ?? '[]', true) ?: []);
+
+        $ops = array_values(array_filter(array_map('strval', $ops)));
+
         $byOp = collect();
         if ($ops) {
             $byOp = DB::table('clientes_cuentas')
@@ -275,7 +305,7 @@ class CnaController extends Controller
         // Guardar DOCX
         $tp->saveAs(storage_path('app/'.$docxRel));
 
-        // 2) Convertir a PDF vía iLovePDF
+        // ---------- Convertir a PDF (iLovePDF) ----------
         try {
             $this->convertDocxToPdfViaIlovepdf(
                 storage_path('app/'.$docxRel),
@@ -293,21 +323,20 @@ class CnaController extends Controller
     }
 
     /**
-     * Convierte DOCX → PDF usando iLovePDF (task: officepdf).
+     * Convierte DOCX → PDF con iLovePDF (task: officepdf).
      * Requiere claves en config/services.php:
-     *   'ilovepdf' => ['public' => env('ILOVEPDF_PUBLIC_KEY'), 'secret' => env('ILOVEPDF_SECRET_KEY')]
+     * 'ilovepdf' => ['public' => env('ILOVEPDF_PUBLIC_KEY'), 'secret' => env('ILOVEPDF_SECRET_KEY')]
      */
     private function convertDocxToPdfViaIlovepdf(string $docxAbs, string $pdfAbs): void
     {
         $public = config('services.ilovepdf.public');
         $secret = config('services.ilovepdf.secret');
-
         if (!$public || !$secret) {
             throw new \RuntimeException('Faltan claves de iLovePDF (config/services.ilovepdf).');
         }
 
-        $ilovepdf = new Ilovepdf($public, $secret);
-        $task = $ilovepdf->newTask('officepdf');
+        $sdk  = new Ilovepdf($public, $secret);
+        $task = $sdk->newTask('officepdf'); // Office → PDF
         $task->addFile($docxAbs);
         $task->execute();
 
@@ -316,27 +345,25 @@ class CnaController extends Controller
             @mkdir($outDir, 0775, true);
         }
 
-        // Descarga usando el nombre original (*.pdf)
+        // Descarga; el SDK usa el nombre original (cambia a .pdf)
         $task->download($outDir);
 
-        // Aseguramos el nombre final deseado
-        $generated = $outDir.'/'.basename($docxAbs, '.docx').'.pdf';
-        if (!is_file($generated)) {
+        // Asegura nombre final exacto
+        $expected = $outDir.'/'.basename($docxAbs, '.docx').'.pdf';
+        if (!is_file($expected)) {
             $latest = collect(glob($outDir.'/*.pdf'))
                 ->sortByDesc(fn($p) => filemtime($p))
                 ->first();
             if ($latest) {
-                $generated = $latest;
+                $expected = $latest;
             }
         }
-
-        if (!is_file($generated)) {
+        if (!is_file($expected)) {
             throw new \RuntimeException('No se pudo localizar el PDF descargado por iLovePDF.');
         }
-
-        if ($generated !== $pdfAbs) {
+        if ($expected !== $pdfAbs) {
             @unlink($pdfAbs);
-            rename($generated, $pdfAbs);
+            rename($expected, $pdfAbs);
         }
     }
 }
