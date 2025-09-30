@@ -250,7 +250,7 @@
                 @endphp
 
                 @if($estado === 'aprobada')
-                  <a href="{{ route('cna.pdf', $x->id) }}" class="btn btn-sm btn-outline-success" target="_blank">
+                  <a href="{{ route('cna.pdf', $x->id) }}" target="_blank" class="btn btn-sm btn-outline-success">
                     <i class="bi bi-filetype-pdf me-1"></i> PDF
                   </a>
                 @else
