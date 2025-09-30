@@ -10,6 +10,7 @@ use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Storage;
 use PhpOffice\PhpWord\TemplateProcessor;
 use Symfony\Component\Process\Process;
+use Ilovepdf\Ilovepdf;
 
 class CnaController extends Controller
 {
@@ -194,26 +195,16 @@ class CnaController extends Controller
         Storage::makeDirectory($docxDir);
         Storage::makeDirectory($pdfDir);
 
-        $base    = "CNA {$cna->nro_carta} - {$cna->dni}";
-        $docxRel = $docxDir.'/'.$base.'.docx';
-        $pdfRel  = $pdfDir.'/'.$base.'.pdf';
+        $docxName = "CNA {$cna->nro_carta} - {$cna->dni}.docx";
+        $pdfName  = "CNA {$cna->nro_carta} - {$cna->dni}.pdf";
+        $docxRel  = $docxDir.'/'.$docxName;
+        $pdfRel   = $pdfDir.'/'.$pdfName;
 
-        // === Datos de las operaciones ===
-        $ops = array_values(array_filter(array_map('strval', (array)$cna->operaciones)));
-        $byOp = collect();
-        if ($ops) {
-            $byOp = DB::table('clientes_cuentas')
-                ->select('operacion','producto','entidad')
-                ->whereIn('operacion', $ops)
-                ->get()
-                ->keyBy('operacion');
-        }
+        // ====== 1) Rellenar DOCX con TemplateProcessor ======
+        $tp = new \PhpOffice\PhpWord\TemplateProcessor($tplPath);
 
-        // === Rellenar plantilla DOCX ===
-        $tp = new TemplateProcessor($tplPath);
-
-        $titular = $cna->titular ?? DB::table('clientes_cuentas')->where('dni',$cna->dni)->value('titular');
-
+        // Datos principales
+        $titular = $cna->titular ?? \DB::table('clientes_cuentas')->where('dni',$cna->dni)->value('titular');
         foreach ([
             'nro_carta' => $cna->nro_carta,
             'NRO_CARTA' => $cna->nro_carta,
@@ -221,7 +212,24 @@ class CnaController extends Controller
             'DNI'       => $cna->dni,
             'titular'   => (string)($titular ?? ''),
             'TITULAR'   => (string)($titular ?? ''),
-        ] as $k => $v) $tp->setValue($k, $v);
+            // Agrega otros placeholders si tu plantilla los usa:
+            'FECHA_PAGO' => optional($cna->fecha_pago_realizado)->format('d/m/Y'),
+            'MONTO_PAGADO' => number_format((float)$cna->monto_pagado, 2),
+            'OBSERVACION'  => (string)($cna->observacion ?? ''),
+        ] as $k => $v) {
+            $tp->setValue($k, $v);
+        }
+
+        // Filas Producto/Operación/Entidad (una por operación)
+        $ops = array_values(array_filter(array_map('strval', (array)$cna->operaciones)));
+        $byOp = collect();
+        if ($ops) {
+            $byOp = \DB::table('clientes_cuentas')
+                ->select('operacion','producto','entidad')
+                ->whereIn('operacion', $ops)
+                ->get()
+                ->keyBy('operacion');
+        }
 
         $rows = max(count($ops), 1);
         $tp->cloneRow('OPERACION', $rows);
@@ -242,14 +250,23 @@ class CnaController extends Controller
             }
         }
 
-        // Guardar DOCX
+        // Guardar DOCX resultante
         $tp->saveAs(storage_path('app/'.$docxRel));
+
+        // ====== 2) Convertir DOCX→PDF vía iLovePDF ======
+        try {
+            $this->convertDocxToPdfViaIlovepdf(
+                storage_path('app/'.$docxRel),
+                storage_path('app/'.$pdfRel)
+            );
+            $cna->pdf_path = $pdfRel;
+        } catch (\Throwable $e) {
+            Log::error('Error iLovePDF DOCX→PDF: '.$e->getMessage(), ['cna_id'=>$cna->id]);
+            $cna->pdf_path = null; // dejamos al menos el DOCX
+        }
+
+        // Persistir rutas
         $cna->docx_path = $docxRel;
-
-        // Convertir DOCX -> PDF con LibreOffice / unoconv
-        $ok = $this->convertDocxToPdf(Storage::path($docxRel), Storage::path($pdfRel));
-
-        $cna->pdf_path = $ok ? $pdfRel : null;
         $cna->save();
     }
 
@@ -258,44 +275,42 @@ class CnaController extends Controller
      * 1) soffice --headless (LibreOffice)
      * 2) unoconv
      */
-    private function convertDocxToPdf(string $docxAbs, string $pdfAbs, int $retries = 2): bool
+    private function convertDocxToPdfViaIlovepdf(string $docxAbs, string $pdfAbs): void
     {
-        try {
-            for ($i=0; $i<=$retries; $i++) {
-                // 1) LibreOffice
-                if ($this->hasBinary('soffice')) {
-                    $outDir = dirname($pdfAbs);
-                    @mkdir($outDir, 0775, true);
-                    $proc = new Process([
-                        'soffice','--headless','--nologo','--nofirststartwizard',
-                        '--convert-to','pdf','--outdir',$outDir,$docxAbs
-                    ]);
-                    $proc->setTimeout(90);
-                    $proc->run();
-                    if ($proc->isSuccessful()) {
-                        $gen = $outDir.'/'.pathinfo($docxAbs, PATHINFO_FILENAME).'.pdf';
-                        if ($gen !== $pdfAbs && is_file($gen)) @rename($gen, $pdfAbs);
-                        if (is_file($pdfAbs)) return true;
-                    }
-                    Log::warning('LibreOffice no logró convertir DOCX.', ['err'=>$proc->getErrorOutput()]);
-                }
-
-                // 2) unoconv
-                if ($this->hasBinary('unoconv')) {
-                    $proc = new Process(['unoconv','-f','pdf','-o',dirname($pdfAbs), $docxAbs]);
-                    $proc->setTimeout(90);
-                    $proc->run();
-                    if ($proc->isSuccessful() && is_file($pdfAbs)) return true;
-                    Log::warning('unoconv no logró convertir DOCX.', ['err'=>$proc->getErrorOutput()]);
-                }
-
-                // pequeño backoff y reintento
-                usleep(300000 * ($i+1));
-            }
-        } catch (\Throwable $e) {
-            Log::error('Error convirtiendo DOCX a PDF', ['msg'=>$e->getMessage()]);
+        $public = env('ILOVEPDF_PUBLIC_KEY');
+        $secret = env('ILOVEPDF_SECRET_KEY');
+        if (!$public || !$secret) {
+            throw new \RuntimeException('Faltan ILOVEPDF_PUBLIC_KEY/ILOVEPDF_SECRET_KEY en .env');
         }
-        return false;
+
+        $ilovepdf = new Ilovepdf($public, $secret);
+        $task = $ilovepdf->newTask('officepdf');     // convierte Office → PDF
+        $task->addFile($docxAbs);
+        $task->execute();
+
+        $outDir = dirname($pdfAbs);
+        if (!is_dir($outDir)) {
+            @mkdir($outDir, 0775, true);
+        }
+        // Descarga al directorio; el SDK usa el nombre original con .pdf
+        $task->download($outDir);
+
+        // Renombra al nombre exacto que queremos si difiere
+        $generated = $outDir.'/'.basename($docxAbs, '.docx').'.pdf';
+        if (!is_file($generated)) {
+            // A veces iLovePDF devuelve un nombre con sufijo; buscamos cualquier PDF nuevo en el dir
+            $latest = collect(glob($outDir.'/*.pdf'))
+                ->sortByDesc(fn($p)=>filemtime($p))
+                ->first();
+            if ($latest) $generated = $latest;
+        }
+        if (!is_file($generated)) {
+            throw new \RuntimeException('No se pudo localizar el PDF descargado.');
+        }
+        if ($generated !== $pdfAbs) {
+            @unlink($pdfAbs);
+            rename($generated, $pdfAbs);
+        }
     }
 
     private function hasBinary(string $bin): bool
