@@ -277,14 +277,14 @@ class CnaController extends Controller
      */
     private function convertDocxToPdfViaIlovepdf(string $docxAbs, string $pdfAbs): void
     {
-        $public = env('ILOVEPDF_PUBLIC_KEY');
-        $secret = env('ILOVEPDF_SECRET_KEY');
+        $public = config('services.ilovepdf.public');
+        $secret = config('services.ilovepdf.secret');
         if (!$public || !$secret) {
-            throw new \RuntimeException('Faltan ILOVEPDF_PUBLIC_KEY/ILOVEPDF_SECRET_KEY en .env');
+            throw new \RuntimeException('Faltan claves de iLovePDF (config/services.ilovepdf).');
         }
 
-        $ilovepdf = new Ilovepdf($public, $secret);
-        $task = $ilovepdf->newTask('officepdf');     // convierte Office → PDF
+        $ilovepdf = new \Ilovepdf\Ilovepdf($public, $secret);
+        $task = $ilovepdf->newTask('officepdf'); // convierte Office → PDF
         $task->addFile($docxAbs);
         $task->execute();
 
@@ -292,20 +292,18 @@ class CnaController extends Controller
         if (!is_dir($outDir)) {
             @mkdir($outDir, 0775, true);
         }
-        // Descarga al directorio; el SDK usa el nombre original con .pdf
         $task->download($outDir);
 
-        // Renombra al nombre exacto que queremos si difiere
+        // Renombrar al nombre final si hace falta
         $generated = $outDir.'/'.basename($docxAbs, '.docx').'.pdf';
         if (!is_file($generated)) {
-            // A veces iLovePDF devuelve un nombre con sufijo; buscamos cualquier PDF nuevo en el dir
             $latest = collect(glob($outDir.'/*.pdf'))
-                ->sortByDesc(fn($p)=>filemtime($p))
+                ->sortByDesc(fn($p) => filemtime($p))
                 ->first();
             if ($latest) $generated = $latest;
         }
         if (!is_file($generated)) {
-            throw new \RuntimeException('No se pudo localizar el PDF descargado.');
+            throw new \RuntimeException('No se pudo localizar el PDF descargado por iLovePDF.');
         }
         if ($generated !== $pdfAbs) {
             @unlink($pdfAbs);
