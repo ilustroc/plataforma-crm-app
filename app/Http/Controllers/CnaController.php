@@ -8,13 +8,12 @@ use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Storage;
-use Barryvdh\DomPDF\Facade\Pdf;
 use PhpOffice\PhpWord\TemplateProcessor;
 use Symfony\Component\Process\Process;
 
 class CnaController extends Controller
 {
-    // =====================  CREAR SOLICITUD  =====================
+    // -------------------- CREAR SOLICITUD --------------------
     public function store(Request $request, string $dni)
     {
         $data = $request->validate([
@@ -33,13 +32,10 @@ class CnaController extends Controller
         ]);
 
         $ops = array_values(array_filter(array_map('strval', $data['operaciones'] ?? [])));
-        if (empty($ops)) {
-            return back()->withErrors('Selecciona al menos una operación para la CNA.');
-        }
+        if (empty($ops)) return back()->withErrors('Selecciona al menos una operación para la CNA.');
 
-        // Si no envían titular, lo inferimos
         $titular = $data['titular'] ?? DB::table('clientes_cuentas')
-            ->where('dni',$dni)->whereNotNull('titular')->value('titular');
+            ->where('dni', $dni)->whereNotNull('titular')->value('titular');
 
         $solicitud = DB::transaction(function () use ($dni, $data, $ops, $titular) {
             $last = DB::table('cna_solicitudes')->lockForUpdate()->max('correlativo');
@@ -65,13 +61,13 @@ class CnaController extends Controller
         return back()->with('ok', "Solicitud de CNA enviada. N.º {$solicitud->nro_carta}");
     }
 
-    // =====================  FLUJO DE APROBACIÓN  =====================
+    // -------------------- FLUJO APROBACIÓN --------------------
     public function preaprobar(CnaSolicitud $cna)
     {
         $this->authorizeRole('supervisor');
-        if ($cna->workflow_estado !== 'pendiente') {
+        if ($cna->workflow_estado !== 'pendiente')
             return back()->withErrors('Solo se puede pre-aprobar una solicitud pendiente.');
-        }
+
         $cna->update([
             'workflow_estado' => 'preaprobada',
             'pre_aprobado_por'=> Auth::id(),
@@ -80,30 +76,31 @@ class CnaController extends Controller
             'rechazado_at'    => null,
             'motivo_rechazo'  => null,
         ]);
+
         return back()->with('ok', 'CNA pre-aprobada.');
     }
 
     public function rechazarSup(Request $request, CnaSolicitud $cna)
     {
         $this->authorizeRole('supervisor');
-        if ($cna->workflow_estado !== 'pendiente') {
+        if ($cna->workflow_estado !== 'pendiente')
             return back()->withErrors('Solo se puede rechazar una solicitud pendiente.');
-        }
+
         $cna->update([
             'workflow_estado' => 'rechazada_sup',
             'rechazado_por'   => Auth::id(),
             'rechazado_at'    => now(),
             'motivo_rechazo'  => substr((string)$request->input('nota_estado',''), 0, 500),
         ]);
+
         return back()->with('ok', 'CNA rechazada por supervisor.');
     }
 
     public function aprobar(CnaSolicitud $cna)
     {
         $this->authorizeRole('administrador');
-        if ($cna->workflow_estado !== 'preaprobada') {
+        if ($cna->workflow_estado !== 'preaprobada')
             return back()->withErrors('Solo se puede aprobar una CNA pre-aprobada.');
-        }
 
         $cna->update([
             'workflow_estado' => 'aprobada',
@@ -111,7 +108,7 @@ class CnaController extends Controller
             'aprobado_at'     => now(),
         ]);
 
-        // Genera DOCX + PDF (LibreOffice → PDF; fallback Blade/DomPDF)
+        // Genera DOCX desde plantilla y lo CONVIERTE a PDF (LibreOffice/unoconv)
         $this->generateOutputsFromTemplate($cna);
 
         return back()->with('ok', 'CNA aprobada y archivos generados.');
@@ -120,40 +117,47 @@ class CnaController extends Controller
     public function rechazarAdmin(Request $request, CnaSolicitud $cna)
     {
         $this->authorizeRole('administrador');
-        if ($cna->workflow_estado !== 'preaprobada') {
+        if ($cna->workflow_estado !== 'preaprobada')
             return back()->withErrors('Solo se puede rechazar una solicitud pre-aprobada.');
-        }
+
         $cna->update([
             'workflow_estado' => 'rechazada',
             'rechazado_por'   => Auth::id(),
             'rechazado_at'    => now(),
             'motivo_rechazo'  => substr((string)$request->input('nota_estado',''), 0, 500),
         ]);
+
         return back()->with('ok', 'CNA rechazada por administrador.');
     }
 
-    // =====================  DESCARGAS  =====================
+    // -------------------- DESCARGAS --------------------
     public function pdf($id)
     {
         $cna = CnaSolicitud::findOrFail($id);
-        if ($cna->workflow_estado !== 'aprobada') {
-            abort(403, 'Solo disponible para CNA aprobadas.');
-        }
+        if ($cna->workflow_estado !== 'aprobada') abort(403, 'Solo disponible para CNA aprobadas.');
 
-        // Si falta el PDF pero hay DOCX, intentamos convertir ahora
+        // si falta el PDF, intentar convertir ahora desde el DOCX (sin re-plantilla)
         if ((!$cna->pdf_path || !Storage::exists($cna->pdf_path)) && $cna->docx_path && Storage::exists($cna->docx_path)) {
-            $this->convertDocxToPdfPreferLibreOffice(storage_path('app/'.$cna->docx_path), $cna);
-            $cna->refresh();
+            $pdfDir  = 'cna/pdfs';
+            Storage::makeDirectory($pdfDir);
+            $pdfRel  = $pdfDir.'/'.pathinfo($cna->docx_path, PATHINFO_FILENAME).'.pdf';
+
+            $ok = $this->convertDocxToPdf(Storage::path($cna->docx_path), Storage::path($pdfRel));
+            if ($ok) {
+                $cna->update(['pdf_path' => $pdfRel]);
+            }
         }
 
         if ($cna->pdf_path && Storage::exists($cna->pdf_path)) {
             return Storage::download($cna->pdf_path, basename($cna->pdf_path));
         }
 
-        // Último recurso: genera PDF con Blade y devuélvelo al vuelo
-        $rows = $this->rowsByOperacion($cna);
-        $fileName = "CNA {$cna->nro_carta} - {$cna->dni}.pdf";
-        return Pdf::loadView('cna.pdf', ['cna'=>$cna, 'rows'=>$rows])->setPaper('A4')->download($fileName);
+        // si no se pudo, ofrecer el DOCX
+        if ($cna->docx_path && Storage::exists($cna->docx_path)) {
+            return Storage::download($cna->docx_path, basename($cna->docx_path));
+        }
+
+        abort(404, 'Archivo no encontrado.');
     }
 
     public function docx($id)
@@ -164,16 +168,19 @@ class CnaController extends Controller
         return Storage::download($cna->docx_path, basename($cna->docx_path));
     }
 
-    // =====================  HELPERS  =====================
+    // -------------------- HELPERS --------------------
     private function authorizeRole(string $role)
     {
         $user = Auth::user();
-        if (!$user || !in_array(strtolower($user->role), [$role, 'sistemas'])) abort(403, 'No autorizado.');
+        if (!$user || !in_array(strtolower($user->role), [$role, 'sistemas'])) {
+            abort(403, 'No autorizado.');
+        }
     }
 
     /**
-     * Rellena la plantilla DOCX y genera PDF con LibreOffice (si existe).
-     * Fallback: Blade/DomPDF.
+     * Rellena storage/app/templates/cna_template.docx y crea:
+     *  - DOCX en storage/app/cna/docx
+     *  - PDF en storage/app/cna/pdfs (conversión externa: soffice/unoconv)
      */
     private function generateOutputsFromTemplate(CnaSolicitud $cna): void
     {
@@ -187,26 +194,34 @@ class CnaController extends Controller
         Storage::makeDirectory($docxDir);
         Storage::makeDirectory($pdfDir);
 
-        $docxRel = $docxDir.'/'.sprintf('CNA %s - %s.docx', $cna->nro_carta, $cna->dni);
-        $pdfRel  = $pdfDir .'/'.sprintf('CNA %s - %s.pdf',  $cna->nro_carta, $cna->dni);
+        $base    = "CNA {$cna->nro_carta} - {$cna->dni}";
+        $docxRel = $docxDir.'/'.$base.'.docx';
+        $pdfRel  = $pdfDir.'/'.$base.'.pdf';
 
-        // ===== Relleno del DOCX =====
+        // === Datos de las operaciones ===
+        $ops = array_values(array_filter(array_map('strval', (array)$cna->operaciones)));
+        $byOp = collect();
+        if ($ops) {
+            $byOp = DB::table('clientes_cuentas')
+                ->select('operacion','producto','entidad')
+                ->whereIn('operacion', $ops)
+                ->get()
+                ->keyBy('operacion');
+        }
+
+        // === Rellenar plantilla DOCX ===
         $tp = new TemplateProcessor($tplPath);
 
-        // Campos simples
         $titular = $cna->titular ?? DB::table('clientes_cuentas')->where('dni',$cna->dni)->value('titular');
-        $tp->setValue('nro_carta', $cna->nro_carta);
-        $tp->setValue('NRO_CARTA', $cna->nro_carta);
-        $tp->setValue('dni',       $cna->dni);
-        $tp->setValue('DNI',       $cna->dni);
-        $tp->setValue('titular',   (string)($titular ?? ''));
-        $tp->setValue('TITULAR',   (string)($titular ?? ''));
 
-        // Filas por operación
-        $ops = array_values(array_filter(array_map('strval', (array)$cna->operaciones)));
-        $byOp = DB::table('clientes_cuentas')
-            ->select('operacion','producto','entidad')
-            ->whereIn('operacion', $ops)->get()->keyBy('operacion');
+        foreach ([
+            'nro_carta' => $cna->nro_carta,
+            'NRO_CARTA' => $cna->nro_carta,
+            'dni'       => $cna->dni,
+            'DNI'       => $cna->dni,
+            'titular'   => (string)($titular ?? ''),
+            'TITULAR'   => (string)($titular ?? ''),
+        ] as $k => $v) $tp->setValue($k, $v);
 
         $rows = max(count($ops), 1);
         $tp->cloneRow('OPERACION', $rows);
@@ -229,87 +244,64 @@ class CnaController extends Controller
 
         // Guardar DOCX
         $tp->saveAs(storage_path('app/'.$docxRel));
-
-        // ===== Convertir DOCX → PDF (preferir LibreOffice) =====
-        $ok = $this->convertDocxToPdfPreferLibreOffice(storage_path('app/'.$docxRel), $cna, $pdfRel);
-
-        // Si no se pudo con LibreOffice, intentamos con Blade/DomPDF (se ve mejor que PhpWord→PDF)
-        if (!$ok) {
-            try {
-                $rowsBlade = $this->rowsByOperacion($cna);
-                $pdf = Pdf::loadView('cna.pdf', ['cna'=>$cna, 'rows'=>$rowsBlade])->setPaper('A4');
-                Storage::put($pdfRel, $pdf->output());
-                $cna->pdf_path = $pdfRel;
-            } catch (\Throwable $e) {
-                Log::error('Fallback Blade PDF para CNA falló: '.$e->getMessage(), ['cna_id'=>$cna->id]);
-                $cna->pdf_path = null;
-            }
-        }
-
         $cna->docx_path = $docxRel;
+
+        // Convertir DOCX -> PDF con LibreOffice / unoconv
+        $ok = $this->convertDocxToPdf(Storage::path($docxRel), Storage::path($pdfRel));
+
+        $cna->pdf_path = $ok ? $pdfRel : null;
         $cna->save();
     }
 
     /**
-     * Intenta convertir el DOCX a PDF usando LibreOffice (soffice --headless).
-     * Devuelve true/false y setea $cna->pdf_path si salió bien.
+     * Convierte un DOCX en PDF usando:
+     * 1) soffice --headless (LibreOffice)
+     * 2) unoconv
      */
-    private function convertDocxToPdfPreferLibreOffice(string $docxAbs, CnaSolicitud $cna, ?string $pdfRel = null): bool
+    private function convertDocxToPdf(string $docxAbs, string $pdfAbs, int $retries = 2): bool
     {
         try {
-            $bin = trim((string) (env('LIBREOFFICE_BIN') ?: ''));
-            if ($bin === '' || !is_executable($bin)) {
-                // Probar rutas comunes
-                foreach (['/usr/bin/soffice','/usr/lib/libreoffice/program/soffice','/usr/local/bin/soffice'] as $p) {
-                    if (is_executable($p)) { $bin = $p; break; }
+            for ($i=0; $i<=$retries; $i++) {
+                // 1) LibreOffice
+                if ($this->hasBinary('soffice')) {
+                    $outDir = dirname($pdfAbs);
+                    @mkdir($outDir, 0775, true);
+                    $proc = new Process([
+                        'soffice','--headless','--nologo','--nofirststartwizard',
+                        '--convert-to','pdf','--outdir',$outDir,$docxAbs
+                    ]);
+                    $proc->setTimeout(90);
+                    $proc->run();
+                    if ($proc->isSuccessful()) {
+                        $gen = $outDir.'/'.pathinfo($docxAbs, PATHINFO_FILENAME).'.pdf';
+                        if ($gen !== $pdfAbs && is_file($gen)) @rename($gen, $pdfAbs);
+                        if (is_file($pdfAbs)) return true;
+                    }
+                    Log::warning('LibreOffice no logró convertir DOCX.', ['err'=>$proc->getErrorOutput()]);
                 }
-            }
-            if ($bin === '' || !is_executable($bin)) {
-                return false; // no hay libreoffice
-            }
 
-            $outDir = dirname($docxAbs); // genera a mismo directorio
-            $process = new Process([$bin, '--headless', '--norestore', '--convert-to', 'pdf:writer_pdf_Export', '--outdir', $outDir, $docxAbs]);
-            $process->setTimeout(60);
-            $process->run();
+                // 2) unoconv
+                if ($this->hasBinary('unoconv')) {
+                    $proc = new Process(['unoconv','-f','pdf','-o',dirname($pdfAbs), $docxAbs]);
+                    $proc->setTimeout(90);
+                    $proc->run();
+                    if ($proc->isSuccessful() && is_file($pdfAbs)) return true;
+                    Log::warning('unoconv no logró convertir DOCX.', ['err'=>$proc->getErrorOutput()]);
+                }
 
-            if (!$process->isSuccessful()) {
-                Log::error('LibreOffice conversión falló', ['cna_id'=>$cna->id, 'error'=>$process->getErrorOutput()]);
-                return false;
+                // pequeño backoff y reintento
+                usleep(300000 * ($i+1));
             }
-
-            // LibreOffice genera con mismo nombre .pdf
-            $generated = $outDir.'/'.preg_replace('/\.docx$/i', '.pdf', basename($docxAbs));
-            if (!is_file($generated)) {
-                return false;
-            }
-
-            // Mover a storage (si nos dieron destino)
-            if ($pdfRel) {
-                Storage::put($pdfRel, file_get_contents($generated));
-                @unlink($generated);
-                $cna->pdf_path = $pdfRel;
-            }
-            return true;
-
         } catch (\Throwable $e) {
-            Log::error('Error ejecutando LibreOffice: '.$e->getMessage(), ['cna_id'=>$cna->id]);
-            return false;
+            Log::error('Error convirtiendo DOCX a PDF', ['msg'=>$e->getMessage()]);
         }
+        return false;
     }
 
-    /** Arma filas [producto, operacion, entidad] para la vista Blade */
-    private function rowsByOperacion(CnaSolicitud $cna): array
+    private function hasBinary(string $bin): bool
     {
-        $ops = array_values(array_filter(array_map('strval', (array)$cna->operaciones)));
-        if (empty($ops)) return [];
-        $rows = DB::table('clientes_cuentas')
-            ->select('operacion','producto','entidad')
-            ->whereIn('operacion', $ops)->orderBy('operacion')->get();
-        return $rows->map(fn($r)=>[
-            'producto'  => (string)($r->producto ?? '—'),
-            'operacion' => (string)($r->operacion ?? '—'),
-            'entidad'   => (string)($r->entidad ?? '—'),
-        ])->all();
+        $proc = new Process(['bash','-lc',"command -v {$bin} || which {$bin}"]);
+        $proc->run();
+        return trim($proc->getOutput()) !== '';
     }
 }
