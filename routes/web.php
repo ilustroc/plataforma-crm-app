@@ -141,19 +141,19 @@ Route::middleware('auth')->group(function () {
     */
     // Supervisor
     Route::middleware('role:supervisor')->group(function () {
-        Route::post('/cna/{cna}/preaprobar',   [CnaController::class,'preaprobar'])->name('cna.preaprobar');
-        Route::post('/cna/{cna}/rechazar-sup', [CnaController::class,'rechazarSup'])->name('cna.rechazar.sup');
+        Route::post('/cna/{id}/preaprobar',   [CnaController::class,'preaprobar'])->name('cna.preaprobar')->whereNumber('id');
+        Route::post('/cna/{id}/rechazar-sup', [CnaController::class,'rechazarSup'])->name('cna.rechazar.sup')->whereNumber('id');
     });
 
     // Administrador
     Route::middleware('role:administrador')->group(function () {
-        Route::post('/cna/{cna}/aprobar',        [CnaController::class,'aprobar'])->name('cna.aprobar');
-        Route::post('/cna/{cna}/rechazar-admin', [CnaController::class,'rechazarAdmin'])->name('cna.rechazar.admin');
+        Route::post('/cna/{id}/aprobar',        [CnaController::class,'aprobar'])->name('cna.aprobar')->whereNumber('id');
+        Route::post('/cna/{id}/rechazar-admin', [CnaController::class,'rechazarAdmin'])->name('cna.rechazar.admin')->whereNumber('id');
     });
 
-    // Descargas CNA (PDF / DOCX)
-    Route::get('/cna/{cna}/pdf',  [CnaController::class, 'pdf'])->name('cna.pdf');
-    Route::get('/cna/{cna}/docx', [CnaController::class, 'docx'])->name('cna.docx');
+    // Descargas (PDF / DOCX)
+    Route::get('/cna/{id}/pdf',  [CnaController::class, 'pdf'])->name('cna.pdf')->whereNumber('id');
+    Route::get('/cna/{id}/docx', [CnaController::class, 'docx'])->name('cna.docx')->whereNumber('id');
 
     /*
     |--------------------------------------------------------------------------
