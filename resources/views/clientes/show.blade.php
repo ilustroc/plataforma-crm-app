@@ -366,33 +366,52 @@
     <div class="d-flex justify-content-between align-items-center">
       <h2 class="h6 mb-0 d-flex align-items-center gap-2">
         <i class="bi bi-receipt"></i><span>Pagos</span>
+        <span class="badge bg-light text-dark border ms-2">{{ ($pagos ?? collect())->count() }} pago(s)</span>
+        <span class="badge bg-success-subtle text-success border">Total S/ @money($totPagos)</span>
       </h2>
       <div class="d-flex align-items-center gap-2">
-        <button class="btn btn-outline-secondary btn-sm" id="btnCopyPag" type="button" title="Copiar pagos" data-bs-toggle="tooltip"><i class="bi bi-clipboard"></i> Copiar</button>
-        <button class="btn btn-outline-secondary btn-sm" type="button" data-bs-toggle="collapse" data-bs-target="#pagosCollapse">Ver/ocultar</button>
+        <button class="btn btn-outline-secondary btn-sm" id="btnCopyPag" type="button" title="Copiar pagos" data-bs-toggle="tooltip">
+          <i class="bi bi-clipboard"></i> Copiar
+        </button>
+        <button class="btn btn-outline-secondary btn-sm" type="button" data-bs-toggle="collapse" data-bs-target="#pagosCollapse">
+          Ver/ocultar
+        </button>
       </div>
     </div>
 
     <div id="pagosCollapse" class="collapse mt-2">
       <div class="table-responsive max-h-260">
         <table class="table table-sm align-middle tbl-compact" id="tblPagos">
-          <thead>
-            <tr><th>Fecha</th><th class="text-end">Monto (S/)</th><th>Operación/Pagaré</th><th>Fuente</th></tr>
+          <thead class="position-sticky top-0 bg-body">
+            <tr>
+              <th class="text-nowrap">Fecha</th>
+              <th class="text-end text-nowrap">Monto (S/)</th>
+              <th class="text-nowrap">Operación/Pagaré</th>
+              <th class="text-nowrap">Gestor</th>
+              <th class="text-nowrap">Estado</th>
+              <th class="text-nowrap">Fuente</th>
+            </tr>
           </thead>
           <tbody>
             @forelse($pagos as $p)
               <tr>
-                <td class="text-nowrap">{{ $p->fecha? \Carbon\Carbon::parse($p->fecha)->format('d/m/Y'):'' }}</td>
-                <td class="text-end">{{ number_format((float)$p->monto,2) }}</td>
-                <td class="text-nowrap">{{ $p->referencia }}</td>
-                <td><span class="badge-soft">{{ strtoupper($p->fuente ?? '-') }}</span></td>
+                <td class="text-nowrap">@dmy($p['fecha'])</td>
+                <td class="text-end text-nowrap">@money($p['monto'])</td>
+                <td class="text-nowrap">{{ $p['oper'] }}</td>
+                <td class="text-nowrap">{{ $p['gestor'] }}</td>
+                <td class="text-nowrap"><span class="badge {{ $p['estado_class'] }}">{{ $p['estado'] }}</span></td>
+                <td><span class="badge-soft">{{ $p['fuente'] }}</span></td>
               </tr>
             @empty
-              <tr><td colspan="4" class="text-secondary">Sin pagos</td></tr>
+              <tr><td colspan="6" class="text-secondary">Sin pagos</td></tr>
             @endforelse
           </tbody>
           <tfoot>
-            <tr><td class="text-end">Total</td><td class="text-end">S/ {{ number_format($totPagos,2) }}</td><td colspan="2"></td></tr>
+            <tr>
+              <td class="text-end fw-semibold">Total</td>
+              <td class="text-end fw-semibold">S/ @money($totPagos)</td>
+              <td colspan="4"></td>
+            </tr>
           </tfoot>
         </table>
       </div>

@@ -3,6 +3,8 @@
 namespace App\Providers;
 
 use Illuminate\Support\ServiceProvider;
+use Illuminate\Support\Facades\Blade;
+use Carbon\Carbon;
 
 class AppServiceProvider extends ServiceProvider
 {
@@ -19,5 +21,12 @@ class AppServiceProvider extends ServiceProvider
      */
     public function boot(): void
     {
+        Blade::directive('dmy', function ($exp) {
+            return "<?php echo ($exp) ? \\Carbon\\Carbon::parse($exp)->format('d/m/Y') : ''; ?>";
+        });
+
+        Blade::directive('money', function ($exp) {
+            return "<?php echo number_format((float)($exp), 2, '.', ','); ?>";
+        });
     }
 }
