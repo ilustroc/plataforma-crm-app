@@ -138,18 +138,54 @@
               <th class="text-end">Acciones</th>
             </tr>
           </thead>
-          <tbody>
-          @forelse($cnaRows as $cna)
-            @php $ops = array_values(array_filter((array)($cna->operaciones ?? []))); @endphp
+            <tbody>
+            @forelse($cnaRows as $cna)
+              @php
+                // Operaciones como array normalizado (string, sin vacíos)
+                $ops = collect((array)($cna->operaciones ?? []))
+                          ->map(fn($x)=>trim((string)$x))
+                          ->filter()
+                          ->values();
 
-            @if(empty($ops))
+                // Productos únicos según operación (si tienes $prodByOp)
+                $productos = $ops->map(fn($op) => $prodByOp[(string)$op] ?? null)
+                                ->filter()
+                                ->unique()
+                                ->values();
+
+                // Representación para la celda de Operaciones
+                // Opción A: badges
+                $opsBadges = $ops->map(fn($op) =>
+                  '<span class="badge rounded-pill text-bg-light border">'.$op.'</span>'
+                )->implode(' ');
+
+                // Opción B (si prefieres cadena simple): $opsCadena = $ops->implode(', ');
+              @endphp
+
               <tr>
                 <td class="text-center text-nowrap">{{ $cna->dni }}</td>
                 <td class="text-center text-nowrap">{{ $cna->nro_carta }}</td>
-                <td>—</td>
-                <td class="text-center">—</td>
+
+                {{-- Producto: uno o varios --}}
+                <td class="text-nowrap">
+                  @if($productos->isEmpty())
+                    —
+                  @elseif($productos->count() === 1)
+                    {{ $productos->first() }}
+                  @else
+                    {{ $productos->implode(' · ') }}
+                  @endif
+                </td>
+
+                {{-- Operaciones (todas en una sola celda) --}}
+                <td class="text-center text-nowrap">
+                  {!! $opsBadges ?: '—' !!}
+                  {{-- Si prefieres texto: {{ $ops->implode(', ') ?: '—' }} --}}
+                </td>
+
                 <td class="text-center text-nowrap">{{ optional($cna->created_at)->format('Y-m-d') }}</td>
                 <td class="text-truncate" style="max-width:420px" title="{{ $cna->nota }}">{{ $cna->nota }}</td>
+
                 <td class="text-end">
                   @if($isSupervisor)
                     <form class="d-inline" method="POST" action="{{ route('cna.preaprobar',$cna) }}">@csrf
@@ -168,43 +204,10 @@
                   @endif
                 </td>
               </tr>
-            @else
-              @foreach($ops as $op)
-                @php $prod = $prodByOp[(string)$op] ?? '—'; @endphp
-                <tr>
-                  <td class="text-center text-nowrap">{{ $cna->dni }}</td>
-                  <td class="text-center text-nowrap">{{ $cna->nro_carta }}</td>
-                  <td class="text-nowrap">{{ $prod ?: '—' }}</td>
-                  <td class="text-center text-nowrap">
-                    <span class="badge rounded-pill text-bg-light border">{{ $op }}</span>
-                  </td>
-                  <td class="text-center text-nowrap">{{ optional($cna->created_at)->format('Y-m-d') }}</td>
-                  <td class="text-truncate" style="max-width:420px" title="{{ $cna->nota }}">{{ $cna->nota }}</td>
-                  <td class="text-end">
-                    @if($isSupervisor)
-                      <form class="d-inline" method="POST" action="{{ route('cna.preaprobar',$cna) }}">@csrf
-                        <button class="btn btn-primary btn-sm">Pre-aprobar</button>
-                      </form>
-                      <form class="d-inline" method="POST" action="{{ route('cna.rechazar.sup',$cna) }}">@csrf
-                        <button class="btn btn-outline-danger btn-sm">Rechazar</button>
-                      </form>
-                    @else
-                      <form class="d-inline" method="POST" action="{{ route('cna.aprobar',$cna) }}">@csrf
-                        <button class="btn btn-primary btn-sm">Aprobar</button>
-                      </form>
-                      <form class="d-inline" method="POST" action="{{ route('cna.rechazar.admin',$cna) }}">@csrf
-                        <button class="btn btn-outline-danger btn-sm">Rechazar</button>
-                      </form>
-                    @endif
-                  </td>
-                </tr>
-              @endforeach
-            @endif
-
-          @empty
-            <tr><td colspan="7" class="text-center text-muted py-4">Sin solicitudes de CNA.</td></tr>
-          @endforelse
-          </tbody>
+            @empty
+              <tr><td colspan="7" class="text-center text-muted py-4">Sin solicitudes de CNA.</td></tr>
+            @endforelse
+            </tbody>
         </table>
       </div>
       {{-- paginación de CNA (propia) --}}
