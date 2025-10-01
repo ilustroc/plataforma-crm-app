@@ -327,7 +327,7 @@
               <span class="badge rounded-pill text-bg-light border">{{ $cnt }} pago(s)</span>
               @if($sum > 0)
                 <small class="text-secondary ms-1">· S/ {{ number_format($sum, 2) }}</small>
-              @endif>
+              @endif
 
               @if($hasList)
                 <button class="btn btn-sm btn-outline-secondary ms-2" type="button"
@@ -403,7 +403,7 @@
                 $cls = 'bg-secondary-subtle text-secondary border';
                 if (str_contains($st,'CANCEL')) $cls = 'bg-success-subtle text-success border';
                 elseif (str_contains($st,'PEND')) $cls = 'bg-warning-subtle text-warning border';
-                elseif (preg_match('/CUOTA|ABONO|PARCIAL/', $st)) $cls = 'bg-primary-subtle text-primary border';
+                elseif (preg_match('/CUOTA|ABONO|PARCIAL/', $st)) $cls = 'bg-danger-subtle text-danger border'; // <-- salmon
                 elseif (preg_match('/RECHAZ|ANUL/', $st)) $cls = 'bg-danger-subtle text-danger border';
               @endphp
               <tr>
