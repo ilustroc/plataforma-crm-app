@@ -50,7 +50,64 @@
 
   {{-- Tabla (parcial) --}}
   <div id="tablaPdp">
-    @include('reportes.promesas.propia', get_defined_vars())
+    <div id="pagMeta" data-page="{{ $rows->currentPage() }}" data-total="{{ $rows->total() }}"></div>
+
+    <style>
+      .rpt-pdp .table thead th{ position:sticky; top:0; z-index:1; background:color-mix(in oklab, var(--surface-2) 55%, transparent) }
+      .rpt-pdp .table tbody tr:nth-child(even){ background:color-mix(in oklab, var(--surface-2) 22%, transparent) }
+    </style>
+
+    <div class="rpt-pdp">
+      <div class="table-responsive">
+        <table class="table align-middle">
+          <thead>
+            <tr>
+              <th>DNI</th>
+              <th>Operaciones</th>
+              <th>Fecha promesa</th>
+              <th class="text-end">Monto prometido</th>
+              <th>Estado</th>
+              <th>Gestor</th>
+              <th>Acciones</th>
+            </tr>
+          </thead>
+          <tbody>
+          @forelse($rows as $p)
+            @php
+              $ops = method_exists($p,'operaciones') ? $p->operaciones->pluck('operacion')->implode(', ')
+                  : (is_array($p->operaciones ?? null) ? implode(', ', $p->operaciones) : '');
+              $monto = $p->monto_prometido ?? $p->monto_total ?? $p->importe ?? $p->monto ?? null;
+              $fecha = $p->{$fechaCol} ? (optional($p->{$fechaCol})->format('Y-m-d') ?: $p->{$fechaCol}) : null;
+            @endphp
+            <tr>
+              <td class="text-nowrap">{{ $p->dni }}</td>
+              <td class="text-nowrap">{{ $ops }}</td>
+              <td class="text-nowrap">{{ $fecha }}</td>
+              <td class="text-end">{{ $monto!==null ? number_format((float)$monto,2) : '—' }}</td>
+              <td class="text-nowrap">{{ $p->workflow_estado ?? $p->estado ?? '—' }}</td>
+              <td class="text-nowrap">{{ $p->gestor ?? ($p->user->name ?? '—') }}</td>
+              <td class="text-nowrap">
+                @if(Route::has('promesas.acuerdo'))
+                  <a href="{{ route('promesas.acuerdo', $p->id) }}" class="btn btn-sm btn-outline-secondary">
+                    <i class="bi bi-filetype-pdf"></i> PDF
+                  </a>
+                @endif
+              </td>
+            </tr>
+          @empty
+            <tr><td colspan="7" class="text-secondary">Sin resultados.</td></tr>
+          @endforelse
+          </tbody>
+        </table>
+      </div>
+
+      <div class="d-flex justify-content-between align-items-center mt-2">
+        <div class="small text-muted">
+          Mostrando {{ $rows->firstItem() ?? 0 }}–{{ $rows->lastItem() ?? 0 }} de {{ $rows->total() }}.
+        </div>
+        {{ $rows->onEachSide(1)->withQueryString()->links('pagination::bootstrap-5') }}
+      </div>
+    </div>
   </div>
 </div>
 @endsection
