@@ -48,53 +48,40 @@ class ClientsControllers extends Controller
             abort_if($cuentas->isEmpty(), 404);
             $titular = $cuentas->first()->titular;
 
-            // ===== A) Consolidado de pagos (3 fuentes) -> normalizado para la vista
-            $mapPago = function ($row, string $fuente) {
-                $get  = fn($r,$k) => is_array($r) ? ($r[$k] ?? null) : ($r->$k ?? null);
-                $first= function($r, array $keys) use ($get) {
-                    foreach ($keys as $k) { $v = $get($r,$k); if($v!==null && $v!=='') return $v; }
-                    return null;
-                };
+            // ===== A) Consolidado de pagos (3 fuentes) — versión simple
+            $propia = PagoPropia::where('dni',$dni)->select(
+                DB::raw('DATE(fecha_de_pago) as fecha'),
+                DB::raw('pagado_en_soles as monto'),
+                'operacion as oper',
+                DB::raw("UPPER(COALESCE(gestor, equipos, '-')) as gestor"),
+                DB::raw("UPPER(COALESCE(status, '-')) as estado"),
+                DB::raw("'PROPIA' as fuente")
+            );
 
-                // fecha: acepta Carbon|string y normaliza a YYYY-MM-DD
-                $fechaRaw = $first($row, ['fecha','fecha_de_pago']);
-                if ($fechaRaw instanceof \DateTimeInterface) {
-                    $fechaIso = $fechaRaw->format('Y-m-d');
-                } else {
-                    $fechaIso = $this->toIsoDate((string)$fechaRaw) ?? (string)$fechaRaw;
-                }
+            $cast = PagoCajaCuscoCastigada::where('dni',$dni)->select(
+                DB::raw('DATE(fecha_de_pago) as fecha'),
+                DB::raw('pagado_en_soles as monto'),
+                'pagare as oper',
+                DB::raw("'-' as gestor"),
+                DB::raw("'-' as estado"),
+                DB::raw("'CUSCO CASTIGADA' as fuente")
+            );
 
-                // monto: numérico fiable
-                $montoRaw = $first($row, ['monto','pagado_en_soles','monto_pagado']);
-                $montoNum = is_numeric($montoRaw) ? (float)$montoRaw : (float)($this->normalizeMoney((string)$montoRaw) ?? 0);
+            $extra = PagoCajaCuscoExtrajudicial::where('dni',$dni)->select(
+                DB::raw('DATE(fecha_de_pago) as fecha'),
+                DB::raw('pagado_en_soles as monto'),
+                'pagare as oper',
+                DB::raw("'-' as gestor"),
+                DB::raw("'-' as estado"),
+                DB::raw("'CUSCO EXTRAJUDICIAL' as fuente")
+            );
 
-                // otros campos (con tolerancia)
-                $oper   = $first($row, ['referencia','operacion','pagare']) ?? '-';
-                $gestor = $first($row, ['gestor','equipos','user_name','agente']) ?? '-';
-                $estado = strtoupper($first($row, ['status','estado']) ?? '-');
-
-                return [
-                    'fecha'  => $fechaIso,
-                    'monto'  => $montoNum,
-                    'oper'   => (string)$oper,
-                    'gestor' => strtoupper((string)$gestor),
-                    'estado' => $estado,
-                    'fuente' => strtoupper($fuente),
-                ];
-            };
-
-            $castRows = DB::table('pagos_caja_cusco_castigada')->where('dni',$dni)->get()
-                ->map(fn($r) => $mapPago($r, 'CUSCO CASTIGADA'));
-             $extraRows = DB::table('pagos_caja_cusco_extrajudicial')->where('dni',$dni)->get()
-                ->map(fn($r) => $mapPago($r, 'CUSCO EXTRAJUDICIAL'));
-
-            $pagos = $propiaRows->concat($castRows)->concat($extraRows)
+            $pagos = $propia->get()
+                ->concat($cast->get())
+                ->concat($extra->get())
                 ->sortByDesc('fecha')
                 ->values();
 
-            $totPagos = (float)$pagos->sum('monto');
-
-            // Total para el footer y badge del título
             $totPagos = (float) $pagos->sum('monto');
 
             // ===== B) Promesas (si tienes los scopes/relaciones)
@@ -213,10 +200,10 @@ class ClientsControllers extends Controller
             }
 
             return view('clientes.show', compact(
-                'dni','titular','cuentas','pagos','promesas','ccd','pagosPorOperacion','totPagos'
+            'dni','titular','cuentas','pagos','promesas','ccd','pagosPorOperacion','totPagos'
             ) + [
-                'ccdByCodigo'     => $ccdByCodigo,
-                'cnasByOperacion' => $cnasByOperacion,
+            'ccdByCodigo'     => $ccdByCodigo,
+            'cnasByOperacion' => $cnasByOperacion,
             ]);
         } catch (\Throwable $e) {
             // Log y respuesta controlada para evitar 500 blancos
