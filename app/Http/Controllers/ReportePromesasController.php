@@ -22,9 +22,7 @@ class ReportePromesasController extends Controller
 
         [$rows, $fechaCol] = $this->buildQuery($from, $to, $estado, $gestor, $q);
 
-        if ($r->ajax() || $r->boolean('partial')) {
-            return view('reportes.promesas.propia', compact('rows','from','to','estado','gestor','q','fechaCol'));
-        }
+        // 👇 Siempre la misma vista, sin ramas para "partial"
         return view('reportes.pdp', compact('rows','from','to','estado','gestor','q','fechaCol'));
     }
 

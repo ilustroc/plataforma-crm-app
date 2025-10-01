@@ -4,14 +4,32 @@
 
 @push('head')
 <style>
-  .skeleton{border:1px dashed var(--border);border-radius:var(--radius);padding:1rem;color:var(--muted);text-align:center}
+  .skeleton{
+    border:1px dashed var(--border);
+    border-radius:var(--radius);
+    padding:1rem;
+    color:var(--muted);
+    text-align:center
+  }
   .tiny{ font-size:.9rem; color:var(--muted) }
+
+  /* Tabla */
+  .rpt-pdp .table thead th{
+    position:sticky; top:0; z-index:1;
+    background:color-mix(in oklab, var(--surface-2) 55%, transparent)
+  }
+  [data-theme="dark"] .rpt-pdp .table thead th{
+    background:color-mix(in oklab, var(--surface-2) 40%, transparent)
+  }
+  .rpt-pdp .table tbody tr:nth-child(even){
+    background:color-mix(in oklab, var(--surface-2) 22%, transparent)
+  }
 </style>
 @endpush
 
 @section('content')
 <div class="card pad">
-  {{-- Filtros --}}
+  {{-- ===== Filtros ===== --}}
   <form id="filtros" class="row g-2 align-items-end">
     <div class="col-6 col-md-2">
       <label class="form-label">Desde</label>
@@ -48,14 +66,10 @@
 
   <hr class="my-3">
 
-  {{-- Tabla (parcial) --}}
+  {{-- ===== Tabla (contenido reemplazable por AJAX) ===== --}}
   <div id="tablaPdp">
+    {{-- Meta para summary/export --}}
     <div id="pagMeta" data-page="{{ $rows->currentPage() }}" data-total="{{ $rows->total() }}"></div>
-
-    <style>
-      .rpt-pdp .table thead th{ position:sticky; top:0; z-index:1; background:color-mix(in oklab, var(--surface-2) 55%, transparent) }
-      .rpt-pdp .table tbody tr:nth-child(even){ background:color-mix(in oklab, var(--surface-2) 22%, transparent) }
-    </style>
 
     <div class="rpt-pdp">
       <div class="table-responsive">
@@ -74,10 +88,16 @@
           <tbody>
           @forelse($rows as $p)
             @php
-              $ops = method_exists($p,'operaciones') ? $p->operaciones->pluck('operacion')->implode(', ')
+              $ops = method_exists($p,'operaciones')
+                  ? $p->operaciones->pluck('operacion')->implode(', ')
                   : (is_array($p->operaciones ?? null) ? implode(', ', $p->operaciones) : '');
+
               $monto = $p->monto_prometido ?? $p->monto_total ?? $p->importe ?? $p->monto ?? null;
-              $fecha = $p->{$fechaCol} ? (optional($p->{$fechaCol})->format('Y-m-d') ?: $p->{$fechaCol}) : null;
+
+              $rawFecha = $p->{$fechaCol} ?? null;
+              $fecha = $rawFecha
+                       ? (optional($rawFecha)->format('Y-m-d') ?: (is_string($rawFecha) ? $rawFecha : null))
+                       : null;
             @endphp
             <tr>
               <td class="text-nowrap">{{ $p->dni }}</td>
@@ -122,38 +142,64 @@
   const $btnExport = document.getElementById('btnExport');
   const $summary = document.getElementById('summary');
 
+  // Usa rutas por nombre (si existen) para mayor robustez
+  const baseUrl   = "{{ route('reportes.pdp') }}";
+  const exportUrl = "{{ route('reportes.pdp.export') }}";
+
   function buildQuery(extra={}) {
     const fd = new FormData($form), p = new URLSearchParams();
     for (const [k,v] of fd.entries()) if(v) p.set(k,v);
-    for (const k in extra) if(extra[k]!==undefined && extra[k]!==null) p.set(k,extra[k]);
+    for (const k in extra) if(Object.prototype.hasOwnProperty.call(extra,k) && extra[k]!==undefined && extra[k]!==null) p.set(k,extra[k]);
     return p.toString();
   }
 
   async function loadData(url=null){
     try{
-      if(!url){ url = '/reportes/pdp?' + buildQuery({partial:1}); }
-      else { const u = new URL(url, location.origin); u.searchParams.set('partial','1'); url = u.pathname + '?' + u.searchParams.toString(); }
+      if(!url){ url = baseUrl + '?' + buildQuery({partial:1}); }
+      else {
+        const u = new URL(url, location.origin);
+        u.searchParams.set('partial','1');
+        url = u.pathname + '?' + u.searchParams.toString();
+      }
+
       $tabla.innerHTML = '<div class="skeleton">Cargando…</div>';
-      const html = await fetch(url, {headers:{'X-Requested-With':'XMLHttpRequest'}}).then(r=>r.text());
-      $tabla.innerHTML = html;
+
+      const text = await fetch(url, {headers:{'X-Requested-With':'XMLHttpRequest'}}).then(r=>r.text());
+      const doc  = new DOMParser().parseFromString(text, 'text/html');
+      const frag = doc.querySelector('#tablaPdp');
+
+      // Reemplaza solo el contenido del contenedor de tabla
+      $tabla.innerHTML = frag ? frag.innerHTML : text;
+
       hookPagination(); updateExport(); updateSummary();
-      history.replaceState(null,'', '/reportes/pdp?'+buildQuery());
-    }catch{ $tabla.innerHTML = '<div class="text-danger p-3">Error al cargar.</div>'; }
+
+      // Actualiza URL navegable con los filtros actuales
+      history.replaceState(null,'', baseUrl + '?' + buildQuery());
+    }catch(e){
+      console.error(e);
+      $tabla.innerHTML = '<div class="text-danger p-3">Error al cargar.</div>';
+    }
   }
 
   function hookPagination(){
     $tabla.querySelectorAll('.pagination a').forEach(a=>{
-      a.addEventListener('click', e=>{ e.preventDefault(); loadData(a.href); });
+      a.addEventListener('click', e=>{
+        e.preventDefault();
+        loadData(a.href);
+      });
     });
   }
 
-  function updateExport(){ $btnExport.href = '/reportes/pdp/export?' + buildQuery(); }
+  function updateExport(){
+    $btnExport.href = exportUrl + '?' + buildQuery();
+  }
 
   function updateSummary(){
     const m = $tabla.querySelector('#pagMeta');
     $summary.textContent = m ? `Página ${m.dataset.page} · ${m.dataset.total} resultados` : '';
   }
 
+  // Eventos
   $btnBuscar.addEventListener('click', e=>{ e.preventDefault(); loadData(); });
   $btnLimpiar.addEventListener('click', ()=>{ $form.reset(); loadData(); });
   $form.querySelectorAll('input').forEach(el=>{
@@ -161,6 +207,7 @@
     el.addEventListener('change', ()=> updateExport());
   });
 
+  // Init
   updateExport(); updateSummary();
 })();
 </script>
