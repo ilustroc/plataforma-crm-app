@@ -14,6 +14,7 @@ use App\Http\Controllers\ClientesCargaController;
 use App\Http\Controllers\AutorizacionController;
 use App\Http\Controllers\PromesaPdfController;
 use App\Http\Controllers\CnaController;
+use App\Http\Controllers\ReportePromesasController;
 
 /*
 |--------------------------------------------------------------------------
@@ -105,8 +106,8 @@ Route::middleware('auth')->group(function () {
         Route::get('/pagos/export', [ReportePagosController::class, 'export'])->name('reportes.pagos.export');
 
         // Otros
-        Route::view('/pdp', 'reportes.pdp')->name('reportes.pdp');
-    });
+        Route::get('/pdp',         [ReportePromesasController::class, 'index'])->name('reportes.pdp');
+        Route::get('/pdp/export',  [ReportePromesasController::class, 'export'])->name('reportes.pdp.export');    });
 
     /*
     |--------------------------------------------------------------------------
