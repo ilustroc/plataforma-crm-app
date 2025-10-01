@@ -366,10 +366,6 @@
     <div class="d-flex justify-content-between align-items-center">
       <h2 class="h6 mb-0 d-flex align-items-center gap-2">
         <i class="bi bi-receipt"></i><span>Pagos</span>
-        <span class="badge bg-light text-dark border ms-2">{{ ($pagos ?? collect())->count() }} pago(s)</span>
-        <span class="badge bg-success-subtle text-success border">
-          Total S/ {{ number_format((float)($totPagos ?? 0), 2, '.', ',') }}
-        </span>
       </h2>
       <div class="d-flex align-items-center gap-2">
         <button class="btn btn-outline-secondary btn-sm" id="btnCopyPag" type="button" title="Copiar pagos" data-bs-toggle="tooltip">
@@ -384,42 +380,43 @@
     <div id="pagosCollapse" class="collapse mt-2 show">
       <div class="table-responsive max-h-260">
         <table class="table table-sm align-middle tbl-compact" id="tblPagos">
-        <thead>
-          <tr>
-            <th>Fecha</th>
-            <th class="text-end">Monto (S/)</th>
-            <th>Operación/Pagaré</th>
-            <th>Gestor</th>
-            <th>Estado</th>
-            <th>Fuente</th>
-          </tr>
-        </thead>
-        <tbody>
-          @forelse($pagos as $p)
+          <thead class="position-sticky top-0 bg-body">
             <tr>
-              <td class="text-nowrap">
-                {{ $p->fecha ? \Carbon\Carbon::parse($p->fecha)->format('d/m/Y') : '' }}
-              </td>
-              <td class="text-end">{{ number_format((float)$p->monto,2,'.',',') }}</td>
-              <td class="text-nowrap">{{ $p->oper }}</td>
-              <td class="text-nowrap">{{ $p->gestor }}</td>
-              <td class="text-nowrap">
-                @php $st = strtoupper($p->estado ?? '-'); @endphp
-                <span class="badge-soft">{{ $st }}</span>
-              </td>
-              <td><span class="badge-soft">{{ $p->fuente }}</span></td>
+              <th class="text-nowrap">Operación/Pagaré</th>
+              <th class="text-nowrap">Fecha</th>
+              <th class="text-end text-nowrap">Monto (S/)</th>
+              <th class="text-nowrap">Gestor</th>
+              <th class="text-nowrap">Estado</th>
             </tr>
-          @empty
-            <tr><td colspan="6" class="text-secondary">Sin pagos</td></tr>
-          @endforelse
-        </tbody>
-        <tfoot>
-          <tr>
-            <td class="text-end">Total</td>
-            <td class="text-end">S/ {{ number_format((float)$totPagos,2,'.',',') }}</td>
-            <td colspan="4"></td>
-          </tr>
-        </tfoot>
+          </thead>
+          <tbody>
+            @forelse($pagos as $p)
+              @php
+                // Tolerante a objeto o array
+                $oper = $p->oper ?? $p['oper'] ?? '-';
+                $fec  = $p->fecha ?? $p['fecha'] ?? null;
+                $mon  = $p->monto ?? $p['monto'] ?? 0;
+                $gest = $p->gestor ?? $p['gestor'] ?? '-';
+                $st   = strtoupper($p->estado ?? $p['estado'] ?? '-');
+
+                // Badge por estado
+                $cls = 'bg-secondary-subtle text-secondary border';
+                if (str_contains($st,'CANCEL')) $cls = 'bg-success-subtle text-success border';
+                elseif (str_contains($st,'PEND')) $cls = 'bg-warning-subtle text-warning border';
+                elseif (preg_match('/CUOTA|ABONO|PARCIAL/', $st)) $cls = 'bg-primary-subtle text-primary border';
+                elseif (preg_match('/RECHAZ|ANUL/', $st)) $cls = 'bg-danger-subtle text-danger border';
+              @endphp
+              <tr>
+                <td class="text-nowrap">{{ $oper }}</td>
+                <td class="text-nowrap">{{ $fec ? \Carbon\Carbon::parse($fec)->format('d/m/Y') : '' }}</td>
+                <td class="text-end text-nowrap">{{ number_format((float)$mon, 2, '.', ',') }}</td>
+                <td class="text-nowrap">{{ $gest }}</td>
+                <td class="text-nowrap"><span class="badge {{ $cls }}">{{ $st }}</span></td>
+              </tr>
+            @empty
+              <tr><td colspan="5" class="text-secondary">Sin pagos</td></tr>
+            @endforelse
+          </tbody>
         </table>
       </div>
     </div>
