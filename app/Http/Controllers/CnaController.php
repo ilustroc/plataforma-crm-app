@@ -156,20 +156,28 @@ class CnaController extends Controller
      * ======================================================= */
 
     /** GET /cna/{cna}/pdf */
-    public function aprobar(int $id)
+    public function pdf(int $id)
     {
         $cna = CnaSolicitud::findOrFail($id);
-
-        if (!in_array($cna->workflow_estado, ['pendiente','preaprobada'])) {
-            return back()->with('error','La CNA no puede aprobarse desde su estado actual.');
+        if ($cna->workflow_estado !== 'aprobada') {
+            abort(403, 'Solo disponible para CNA aprobadas.');
         }
 
-        $cna->workflow_estado = 'aprobada';
-        $cna->aprobado_por = auth()->id();
-        $cna->aprobado_at  = now();
-        $cna->save();
+        // Construye SIEMPRE el nombre esperado
+        $base   = sprintf('CNA %s - %s', $cna->nro_carta, $cna->dni);
+        $pdfRel = 'cna/pdfs/'.$base.'.pdf';
 
-        return back()->with('ok', "CNA {$cna->nro_carta} aprobada.");
+        if (Storage::exists($pdfRel)) {
+            return Storage::download($pdfRel, $base.'.pdf');
+        }
+
+        // Si no existe, intenta servir el DOCX como respaldo
+        $docxRel = 'cna/docx/'.$base.'.docx';
+        if (Storage::exists($docxRel)) {
+            return Storage::download($docxRel, $base.'.docx');
+        }
+
+        abort(404, 'Archivo no encontrado: '.$pdfRel);
     }
 
     public function docx(int $id)
