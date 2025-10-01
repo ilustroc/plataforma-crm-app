@@ -367,7 +367,9 @@
       <h2 class="h6 mb-0 d-flex align-items-center gap-2">
         <i class="bi bi-receipt"></i><span>Pagos</span>
         <span class="badge bg-light text-dark border ms-2">{{ ($pagos ?? collect())->count() }} pago(s)</span>
-        <span class="badge bg-success-subtle text-success border">Total S/ @money($totPagos)</span>
+        <span class="badge bg-success-subtle text-success border">
+          Total S/ {{ number_format((float)($totPagos ?? 0), 2, '.', ',') }}
+        </span>
       </h2>
       <div class="d-flex align-items-center gap-2">
         <button class="btn btn-outline-secondary btn-sm" id="btnCopyPag" type="button" title="Copiar pagos" data-bs-toggle="tooltip">
@@ -379,7 +381,7 @@
       </div>
     </div>
 
-    <div id="pagosCollapse" class="collapse mt-2">
+    <div id="pagosCollapse" class="collapse mt-2 show">
       <div class="table-responsive max-h-260">
         <table class="table table-sm align-middle tbl-compact" id="tblPagos">
           <thead class="position-sticky top-0 bg-body">
@@ -395,12 +397,26 @@
           <tbody>
             @forelse($pagos as $p)
               <tr>
-                <td class="text-nowrap">@dmy($p['fecha'])</td>
-                <td class="text-end text-nowrap">@money($p['monto'])</td>
-                <td class="text-nowrap">{{ $p['oper'] }}</td>
-                <td class="text-nowrap">{{ $p['gestor'] }}</td>
-                <td class="text-nowrap"><span class="badge {{ $p['estado_class'] }}">{{ $p['estado'] }}</span></td>
-                <td><span class="badge-soft">{{ $p['fuente'] }}</span></td>
+                <td class="text-nowrap">
+                  {{ ($p['fecha'] ?? null) ? \Carbon\Carbon::parse($p['fecha'])->format('d/m/Y') : '' }}
+                </td>
+                <td class="text-end text-nowrap">
+                  {{ number_format((float)($p['monto'] ?? 0), 2, '.', ',') }}
+                </td>
+                <td class="text-nowrap">{{ $p['oper'] ?? '-' }}</td>
+                <td class="text-nowrap">{{ $p['gestor'] ?? '-' }}</td>
+                <td class="text-nowrap">
+                  @php $st = strtoupper($p['estado'] ?? '-'); @endphp
+                  @php
+                    $cls = 'bg-secondary-subtle text-secondary border';
+                    if (str_contains($st,'CANCEL')) $cls = 'bg-success-subtle text-success border';
+                    elseif (str_contains($st,'PEND')) $cls = 'bg-warning-subtle text-warning border';
+                    elseif (preg_match('/CUOTA|ABONO|PARCIAL/', $st)) $cls = 'bg-primary-subtle text-primary border';
+                    elseif (preg_match('/RECHAZ|ANUL/', $st)) $cls = 'bg-danger-subtle text-danger border';
+                  @endphp
+                  <span class="badge {{ $cls }}">{{ $st }}</span>
+                </td>
+                <td><span class="badge-soft">{{ strtoupper($p['fuente'] ?? '-') }}</span></td>
               </tr>
             @empty
               <tr><td colspan="6" class="text-secondary">Sin pagos</td></tr>
@@ -409,7 +425,7 @@
           <tfoot>
             <tr>
               <td class="text-end fw-semibold">Total</td>
-              <td class="text-end fw-semibold">S/ @money($totPagos)</td>
+              <td class="text-end fw-semibold">S/ {{ number_format((float)($totPagos ?? 0), 2, '.', ',') }}</td>
               <td colspan="4"></td>
             </tr>
           </tfoot>

@@ -48,56 +48,51 @@ class ClientsControllers extends Controller
             abort_if($cuentas->isEmpty(), 404);
             $titular = $cuentas->first()->titular;
 
-            // ===== A) Consolidado de pagos (3 fuentes) -> normalizado
+            // ===== A) Consolidado de pagos (3 fuentes) -> normalizado para la vista
             $mapPago = function ($row, string $fuente) {
-                // helpers para leer de objeto/array
-                $get = function ($r, $k) {
-                    return is_array($r) ? ($r[$k] ?? null) : ($r->$k ?? null);
-                };
-                $first = function ($r, array $cands) use ($get) {
-                    foreach ($cands as $k) {
-                        $v = $get($r, $k);
-                        if ($v !== null && $v !== '') return $v;
-                    }
+                $get  = fn($r,$k) => is_array($r) ? ($r[$k] ?? null) : ($r->$k ?? null);
+                $first= function($r, array $keys) use ($get) {
+                    foreach ($keys as $k) { $v = $get($r,$k); if($v!==null && $v!=='') return $v; }
                     return null;
                 };
 
-                // campos candidatos por diferencias de tablas
-                $fechaRaw = $first($row, ['fecha', 'fecha_de_pago']);
-                $montoRaw = $first($row, ['monto', 'pagado_en_soles', 'monto_pagado']);
-                $oper     = $first($row, ['referencia', 'operacion', 'pagare']);
-                $gestor   = $first($row, ['gestor', 'equipos', 'user_name', 'agente']);
-                $estado   = $first($row, ['status', 'estado']);
+                // fecha: acepta Carbon|string y normaliza a YYYY-MM-DD
+                $fechaRaw = $first($row, ['fecha','fecha_de_pago']);
+                if ($fechaRaw instanceof \DateTimeInterface) {
+                    $fechaIso = $fechaRaw->format('Y-m-d');
+                } else {
+                    $fechaIso = $this->toIsoDate((string)$fechaRaw) ?? (string)$fechaRaw;
+                }
 
-                // fecha ISO (YYYY-MM-DD) para que el Blade @dmy formatee igual
-                $fechaIso = $this->toIsoDate((string)$fechaRaw) ?? (string)$fechaRaw;
-
-                // monto numérico estable
+                // monto: numérico fiable
+                $montoRaw = $first($row, ['monto','pagado_en_soles','monto_pagado']);
                 $montoNum = is_numeric($montoRaw) ? (float)$montoRaw : (float)($this->normalizeMoney((string)$montoRaw) ?? 0);
+
+                // otros campos (con tolerancia)
+                $oper   = $first($row, ['referencia','operacion','pagare']) ?? '-';
+                $gestor = $first($row, ['gestor','equipos','user_name','agente']) ?? '-';
+                $estado = strtoupper($first($row, ['status','estado']) ?? '-');
 
                 return [
                     'fecha'  => $fechaIso,
                     'monto'  => $montoNum,
-                    'oper'   => (string)($oper ?? '-'),
-                    'gestor' => strtoupper((string)($gestor ?? '-')),
-                    'estado' => strtoupper((string)($estado ?? '-')),
+                    'oper'   => (string)$oper,
+                    'gestor' => strtoupper((string)$gestor),
+                    'estado' => $estado,
                     'fuente' => strtoupper($fuente),
                 ];
             };
 
-            // Trae crudo y normaliza (sin romper si faltan columnas)
-            $propiaRows = PagoPropia::where('dni', $dni)->get()
-                ->map(fn($r) => $mapPago($r, 'PROPIA'));
-
-            $castRows = PagoCajaCuscoCastigada::where('dni', $dni)->get()
+            $castRows = DB::table('pagos_caja_cusco_castigada')->where('dni',$dni)->get()
                 ->map(fn($r) => $mapPago($r, 'CUSCO CASTIGADA'));
-
-            $extraRows = PagoCajaCuscoExtrajudicial::where('dni', $dni)->get()
+             $extraRows = DB::table('pagos_caja_cusco_extrajudicial')->where('dni',$dni)->get()
                 ->map(fn($r) => $mapPago($r, 'CUSCO EXTRAJUDICIAL'));
 
             $pagos = $propiaRows->concat($castRows)->concat($extraRows)
                 ->sortByDesc('fecha')
                 ->values();
+
+            $totPagos = (float)$pagos->sum('monto');
 
             // Total para el footer y badge del título
             $totPagos = (float) $pagos->sum('monto');
