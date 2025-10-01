@@ -14,6 +14,7 @@ class ReportePromesasController extends Controller
 {
     public function index(Request $r)
     {
+    try{
         $from   = $r->query('from');
         $to     = $r->query('to');
         $estado = $r->query('estado');
@@ -24,7 +25,13 @@ class ReportePromesasController extends Controller
 
         // 👇 Siempre la misma vista, sin ramas para "partial"
         return view('reportes.pdp', compact('rows','from','to','estado','gestor','q','fechaCol'));
+    }catch(\Throwable $e){
+        \Log::error('PDP index ERROR', [
+            'msg'=>$e->getMessage(), 'file'=>$e->getFile(), 'line'=>$e->getLine()
+        ]);
+        return redirect()->back()->withErrors('Ocurrió un error en el reporte. Revisa __last-error.');
     }
+}
 
     public function export(Request $r)
     {
