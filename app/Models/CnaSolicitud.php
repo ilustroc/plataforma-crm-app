@@ -9,26 +9,13 @@ class CnaSolicitud extends Model
     protected $table = 'cna_solicitudes';
 
     protected $fillable = [
-        'correlativo',
-        'nro_carta',
-        'dni',
-        'titular',
-        'producto',
-        'operaciones',
-        'nota',
-        'observacion',
-        'fecha_pago_realizado',
-        'monto_pagado',
-        'workflow_estado',
-        'user_id',
-        'pre_aprobado_por',
-        'pre_aprobado_at',
-        'aprobado_por',
-        'aprobado_at',
-        'rechazado_por',
-        'rechazado_at',
-        'motivo_rechazo',
-        'docx_path',
+    'correlativo','nro_carta','dni','titular','producto',
+    'operaciones','nota','observacion','fecha_pago_realizado','monto_pagado',
+    'workflow_estado','user_id',
+    'pre_aprobado_por','pre_aprobado_at',
+    'aprobado_por','aprobado_at',
+    'rechazado_por','rechazado_at','motivo_rechazo',
+    'docx_path','pdf_path',
     ];
 
     protected $casts = [
