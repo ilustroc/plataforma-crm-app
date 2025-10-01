@@ -156,29 +156,26 @@ class CnaController extends Controller
      * ======================================================= */
 
     /** GET /cna/{cna}/pdf */
-    public function pdf(int $id)
+    public function aprobar(int $id)
     {
         $cna = CnaSolicitud::findOrFail($id);
-        if ($cna->workflow_estado !== 'aprobada') {
-            abort(403, 'Solo disponible para CNA aprobadas.');
+
+        if (!in_array($cna->workflow_estado, ['pendiente','preaprobada'])) {
+            return back()->with('error','La CNA no puede aprobarse desde su estado actual.');
         }
 
-        // Construye SIEMPRE el nombre esperado
-        $base   = sprintf('CNA %s - %s', $cna->nro_carta, $cna->dni);
-        $pdfRel = 'cna/pdfs/'.$base.'.pdf';
+        $cna->workflow_estado = 'aprobada';
+        $cna->aprobado_por = auth()->id();
+        $cna->aprobado_at  = now();
+        $cna->save();
 
-        if (Storage::exists($pdfRel)) {
-            return Storage::download($pdfRel, $base.'.pdf');
-        }
-
-        // Si no existe, intenta servir el DOCX como respaldo
-        $docxRel = 'cna/docx/'.$base.'.docx';
-        if (Storage::exists($docxRel)) {
-            return Storage::download($docxRel, $base.'.docx');
-        }
-
-        abort(404, 'Archivo no encontrado: '.$pdfRel);
+        // ❌ NO: return redirect()->route('cna.aprobar', $id);  // esto causa el 405
+        // ✅ Opciones seguras (elige una):
+        return back()->with('ok', "CNA {$cna->nro_carta} aprobada.");
+        // return redirect()->route('autorizacion.index')->with('ok', "CNA {$cna->nro_carta} aprobada.");
+        // return redirect()->route('clientes.show', $cna->dni)->with('ok', "CNA {$cna->nro_carta} aprobada.");
     }
+
 
     public function docx(int $id)
     {
