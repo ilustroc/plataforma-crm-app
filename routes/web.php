@@ -16,6 +16,25 @@ use App\Http\Controllers\PromesaPdfController;
 use App\Http\Controllers\CnaController;
 use App\Http\Controllers\ReportePromesasController;
 
+Route::get('/__log_ping', function () {
+    try {
+        $ctx = [
+            'at'    => date('c'),
+            'ip'    => request()->ip(),
+            'ua'    => substr((string) request()->userAgent(), 0, 160),
+            'stack' => config('logging.default'),
+        ];
+        logger()->info('STACK PING', $ctx);
+        logger()->error('STACK PING ERROR', $ctx);
+        return 'ok';
+    } catch (\Throwable $e) {
+        // pase lo que pase, deja huella en el error_log del servidor
+        error_log('LOG_PING_FAIL: '.$e->getMessage());
+        return response('fail', 500);
+    }
+});
+
+
 /*
 |--------------------------------------------------------------------------
 | Invitados
