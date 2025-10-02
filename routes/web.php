@@ -1,6 +1,7 @@
 <?php
 
 use Illuminate\Support\Facades\Route;
+use Illuminate\Support\Str;
 
 use App\Http\Controllers\AuthController;
 use App\Http\Controllers\ClientsControllers;
@@ -40,6 +41,34 @@ Route::post('/logout', [AuthController::class, 'logout'])
 | Autenticados
 |--------------------------------------------------------------------------
 */
+
+Route::middleware('auth')->get('/debug/log-ping', function () {
+    $u = request()->user();
+
+    $ctx = [
+        'when'   => now()->toDateTimeString(),
+        'user'   => $u ? ['id' => $u->id ?? null, 'email' => $u->email ?? null, 'name' => $u->name ?? null] : null,
+        'ip'     => request()->ip(),
+        'agent'  => Str::limit(request()->userAgent() ?? '', 120),
+        'route'  => '/debug/log-ping',
+    ];
+
+    logger()->debug('PING DEBUG', $ctx);
+    logger()->info('PING INFO', $ctx);
+    logger()->warning('PING WARNING', $ctx);
+    logger()->error('PING ERROR', $ctx);
+
+    return response()->json([
+        'ok' => true,
+        'message' => 'Se escribieron 4 niveles en el canal por defecto (stack). Revisa los logs.',
+        'paths_sugeridos' => [
+            'archivo_daily' => storage_path('logs/laravel-YYYY-MM-DD.log'),
+            'archivo_single'=> storage_path('logs/laravel.log'),
+            'error_log_php' => ini_get('error_log') ?: '(ver panel del hosting)',
+        ],
+    ]);
+})->name('debug.log_ping');
+
 Route::middleware('auth')->group(function () {
 
     // Panel
