@@ -1,6 +1,7 @@
 <?php
 
 use Illuminate\Support\Facades\Route;
+use Illuminate\Support\Facades\Log;
 
 use App\Http\Controllers\AuthController;
 use App\Http\Controllers\ClientsControllers;
@@ -37,27 +38,57 @@ Route::post('/logout', [AuthController::class, 'logout'])
 
 /*
 |--------------------------------------------------------------------------
-| Utilidades (solo auth + role)
+| Utilidades (solo auth + role administrador)
 |--------------------------------------------------------------------------
 */
-Route::middleware(['auth','role:administrador,sistemas'])->get('/__last-error', function () {
-    $files = glob(storage_path('logs/laravel-*.log'));
-    rsort($files);
-    $file = $files[0] ?? storage_path('logs/laravel.log');
+Route::middleware(['auth','role:administrador'])->group(function () {
 
-    if (!is_file($file)) {
-        return response('<pre>Sin logs en storage/logs.</pre>', 200)
+    // Ver último log (diario o fallback)
+    Route::get('/__last-error', function () {
+        $files = glob(storage_path('logs/laravel-*.log'));
+        rsort($files);
+        $file = $files[0] ?? storage_path('logs/laravel.log');
+
+        if (!is_file($file)) {
+            return response('<pre>Sin logs en storage/logs.</pre>', 200)
+                ->header('Content-Type','text/html');
+        }
+
+        $n = (int) request('n', 300);
+        $n = max(50, min(2000, $n));
+        $lines = @file($file, FILE_IGNORE_NEW_LINES) ?: [];
+        $tail  = implode("\n", array_slice($lines, -$n));
+
+        return response('<pre style="white-space:pre-wrap">'.e($tail).'</pre>', 200)
             ->header('Content-Type','text/html');
-    }
+    })->name('__last_error');
 
-    $n = (int) request('n', 300);
-    $n = max(50, min(2000, $n));
-    $lines = @file($file, FILE_IGNORE_NEW_LINES) ?: [];
-    $tail  = implode("\n", array_slice($lines, -$n));
+    // A) ¿.env cargado?
+    Route::get('/debug/env-check', function () {
+        return response()->json([
+            'env(LOG_CHANNEL)'        => env('LOG_CHANNEL'),
+            'config(logging.default)' => config('logging.default'),
+            'env(APP_ENV)'            => env('APP_ENV'),
+            'config(app.env)'         => config('app.env'),
+            'config(app.debug)'       => config('app.debug'),
+            'storage_logs_dir'        => storage_path('logs'),
+        ]);
+    })->name('debug.env_check');
 
-    return response('<pre style="white-space:pre-wrap">'.e($tail).'</pre>', 200)
-        ->header('Content-Type','text/html');
-})->name('__last_error');
+    // B) Escribir en el log diario
+    Route::get('/debug/log-test', function () {
+        Log::debug('DEBUG ping', ['ts' => now()->toDateTimeString()]);
+        Log::info('INFO ping',   ['ip' => request()->ip()]);
+        Log::warning('WARN ping');
+        Log::error('ERROR ping');
+        return 'Log escrito. Revisa storage/logs/';
+    })->name('debug.log_test');
+
+    // C) Forzar excepción (debe aparecer en el log)
+    Route::get('/debug/boom', function () {
+        throw new \RuntimeException('BOOM test '.now());
+    })->name('debug.boom');
+});
 
 /*
 |--------------------------------------------------------------------------
@@ -106,8 +137,9 @@ Route::middleware('auth')->group(function () {
         Route::get('/pagos/export', [ReportePagosController::class, 'export'])->name('reportes.pagos.export');
 
         // Otros
-        Route::get('/pdp',         [ReportePromesasController::class, 'index'])->name('reportes.pdp');
-        Route::get('/pdp/export',  [ReportePromesasController::class, 'export'])->name('reportes.pdp.export');    });
+        Route::get('/pdp',        [ReportePromesasController::class, 'index'])->name('reportes.pdp');
+        Route::get('/pdp/export', [ReportePromesasController::class, 'export'])->name('reportes.pdp.export');
+    });
 
     /*
     |--------------------------------------------------------------------------
@@ -141,18 +173,18 @@ Route::middleware('auth')->group(function () {
     |--------------------------------------------------------------------------
     */
     // Supervisor
-    Route::middleware(['auth','role:supervisor'])->group(function () {
+    Route::middleware('role:supervisor')->group(function () {
         Route::post('/cna/{cna}/preaprobar',   [CnaController::class,'preaprobar'])->name('cna.preaprobar');
         Route::post('/cna/{cna}/rechazar-sup', [CnaController::class,'rechazarSup'])->name('cna.rechazar.sup');
     });
 
     // Administrador
-    Route::middleware(['auth','role:administrador'])->group(function () {
+    Route::middleware('role:administrador')->group(function () {
         Route::post('/cna/{cna}/aprobar',        [CnaController::class,'aprobar'])->name('cna.aprobar');
         Route::post('/cna/{cna}/rechazar-admin', [CnaController::class,'rechazarAdmin'])->name('cna.rechazar.admin');
     });
 
-    // routes/web.php (dentro del middleware auth + role)
+    // Descargar DOCX/PDF de CNA (sup/admin)
     Route::middleware('role:administrador,supervisor')->group(function () {
         Route::get('/cna/{id}/pdf',  [CnaController::class, 'pdf'])->name('cna.pdf');
         Route::get('/cna/{id}/docx', [CnaController::class, 'docx'])->name('cna.docx');
@@ -160,10 +192,10 @@ Route::middleware('auth')->group(function () {
 
     /*
     |--------------------------------------------------------------------------
-    | Admin / Soporte
+    | Admin
     |--------------------------------------------------------------------------
     */
-    Route::middleware('role:administrador,sistemas')->group(function () {
+    Route::middleware('role:administrador')->group(function () {
 
         // Integración ▸ Data
         Route::view('/integracion/data', 'placeholders.integracion-data')->name('integracion.data');
@@ -197,7 +229,7 @@ Route::middleware('auth')->group(function () {
     // Zonas por rol (opcional)
     Route::middleware('role:administrador')->get('/admin', fn () => 'Zona Admin');
     Route::middleware('role:supervisor')->get('/supervisor', fn () => 'Zona Supervisor');
-    Route::middleware('role:sistemas')->get('/sistemas', fn () => 'Zona Sistemas');
+    // OJO: se elimina la ruta '/sistemas' y cualquier uso del rol sistemas
 });
 
 /*
