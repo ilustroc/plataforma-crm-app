@@ -560,12 +560,16 @@
 
                 {{-- Acciones --}}
                 <td class="text-end">
-                  @if(($pp->workflow_estado ?? '') === 'aprobada' || ($pp->workflow_estado ?? '') === 'preaprobada')
+                  @php $estado = strtolower($pp->workflow_estado ?? ''); @endphp
+
+                  @if($estado === 'aprobada')
                     <a class="btn btn-outline-primary btn-sm"
-                       href="{{ route('promesas.acuerdo', $pp) }}"
-                       target="_blank" data-bs-toggle="tooltip" title="Descargar acuerdo en PDF">
+                      href="{{ route('promesas.acuerdo', $pp) }}"
+                      target="_blank" data-bs-toggle="tooltip" title="Descargar acuerdo en PDF">
                       <i class="bi bi-filetype-pdf me-1"></i> PDF
                     </a>
+                  @elseif($estado === 'preaprobada')
+                    <span class="text-secondary small" title="Disponible cuando se apruebe la promesa">—</span>
                   @else
                     <span class="text-secondary small">—</span>
                   @endif
