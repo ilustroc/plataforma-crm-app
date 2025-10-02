@@ -16,25 +16,6 @@ use App\Http\Controllers\PromesaPdfController;
 use App\Http\Controllers\CnaController;
 use App\Http\Controllers\ReportePromesasController;
 
-Route::get('/__log_ping', function () {
-    try {
-        $ctx = [
-            'at'    => date('c'),
-            'ip'    => request()->ip(),
-            'ua'    => substr((string) request()->userAgent(), 0, 160),
-            'stack' => config('logging.default'),
-        ];
-        logger()->info('STACK PING', $ctx);
-        logger()->error('STACK PING ERROR', $ctx);
-        return 'ok';
-    } catch (\Throwable $e) {
-        // pase lo que pase, deja huella en el error_log del servidor
-        error_log('LOG_PING_FAIL: '.$e->getMessage());
-        return response('fail', 500);
-    }
-});
-
-
 /*
 |--------------------------------------------------------------------------
 | Invitados
@@ -67,41 +48,6 @@ Route::middleware('auth')->group(function () {
 
     // Dashboard
     Route::get('/dashboard', [DashboardController::class,'index'])->name('dashboard');
-
-    /*
-    |--------------------------------------------------------------------------
-    | PRUEBA DE LOGGING (canal por defecto = stack)
-    |--------------------------------------------------------------------------
-    */
-    Route::get('/debug/log-ping', function () {
-        try {
-            $u = request()->user();
-            $ctx = [
-                'when'       => now()->toDateTimeString(),
-                'user_id'    => $u ? ($u->id ?? null) : null,
-                'user_email' => $u ? ($u->email ?? null) : null,
-                'ip'         => request()->ip(),
-                'agent'      => substr((string) request()->userAgent(), 0, 160),
-                'route'      => '/debug/log-ping',
-                'channel'    => config('logging.default'),
-            ];
-
-            logger()->debug('PING DEBUG',   $ctx);
-            logger()->info('PING INFO',     $ctx);
-            logger()->warning('PING WARN',  $ctx);
-            logger()->error('PING ERROR',   $ctx);
-
-            return response()->json([
-                'ok'      => true,
-                'message' => 'Se enviaron 4 niveles al canal por defecto (stack).',
-                'channel' => $ctx['channel'],
-            ]);
-        } catch (\Throwable $e) {
-            // Fallback para ver el error aunque el logger falle
-            error_log('log-ping FAILED: '.$e->getMessage().' @'.$e->getFile().':'.$e->getLine());
-            return response()->json(['ok' => false, 'error' => $e->getMessage()], 500);
-        }
-    })->name('debug.log_ping');
 
     /*
     |--------------------------------------------------------------------------
