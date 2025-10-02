@@ -4,32 +4,20 @@
 
 @push('head')
 <style>
-  .skeleton{
-    border:1px dashed var(--border);
-    border-radius:var(--radius);
-    padding:1rem;
-    color:var(--muted);
-    text-align:center
-  }
+  .skeleton{border:1px dashed var(--border);border-radius:var(--radius);padding:1rem;color:var(--muted);text-align:center}
   .tiny{ font-size:.9rem; color:var(--muted) }
-
-  /* Tabla */
   .rpt-pdp .table thead th{
     position:sticky; top:0; z-index:1;
     background:color-mix(in oklab, var(--surface-2) 55%, transparent)
   }
-  [data-theme="dark"] .rpt-pdp .table thead th{
-    background:color-mix(in oklab, var(--surface-2) 40%, transparent)
-  }
-  .rpt-pdp .table tbody tr:nth-child(even){
-    background:color-mix(in oklab, var(--surface-2) 22%, transparent)
-  }
+  [data-theme="dark"] .rpt-pdp .table thead th{background:color-mix(in oklab, var(--surface-2) 40%, transparent)}
+  .rpt-pdp .table tbody tr:nth-child(even){background:color-mix(in oklab, var(--surface-2) 22%, transparent)}
 </style>
 @endpush
 
 @section('content')
 <div class="card pad">
-  {{-- ===== Filtros ===== --}}
+  {{-- Filtros --}}
   <form id="filtros" class="row g-2 align-items-end">
     <div class="col-6 col-md-2">
       <label class="form-label">Desde</label>
@@ -66,9 +54,8 @@
 
   <hr class="my-3">
 
-  {{-- ===== Tabla (contenido reemplazable por AJAX) ===== --}}
+  {{-- Tabla (contenido reemplazable por AJAX) --}}
   <div id="tablaPdp">
-    {{-- Meta para summary/export --}}
     <div id="pagMeta" data-page="{{ $rows->currentPage() }}" data-total="{{ $rows->total() }}"></div>
 
     <div class="rpt-pdp">
@@ -88,24 +75,18 @@
           <tbody>
           @forelse($rows as $p)
             @php
-              $ops = method_exists($p,'operaciones')
-                  ? $p->operaciones->pluck('operacion')->implode(', ')
-                  : (is_array($p->operaciones ?? null) ? implode(', ', $p->operaciones) : '');
-
-              $monto = $p->monto_prometido ?? $p->monto_total ?? $p->importe ?? $p->monto ?? null;
-
-              $rawFecha = $p->{$fechaCol} ?? null;
-              $fecha = $rawFecha
-                       ? (optional($rawFecha)->format('Y-m-d') ?: (is_string($rawFecha) ? $rawFecha : null))
-                       : null;
+              $ops = $p->operaciones;
+              if (is_string($ops) && str_starts_with($ops,'[')) {
+                $ops = implode(', ', json_decode($ops,true) ?: []);
+              }
             @endphp
             <tr>
               <td class="text-nowrap">{{ $p->dni }}</td>
-              <td class="text-nowrap">{{ $ops }}</td>
-              <td class="text-nowrap">{{ $fecha }}</td>
-              <td class="text-end">{{ $monto!==null ? number_format((float)$monto,2) : '—' }}</td>
-              <td class="text-nowrap">{{ $p->workflow_estado ?? $p->estado ?? '—' }}</td>
-              <td class="text-nowrap">{{ $p->gestor ?? ($p->user->name ?? '—') }}</td>
+              <td class="text-nowrap">{{ is_array($ops) ? implode(', ', $ops) : ($ops ?? '') }}</td>
+              <td class="text-nowrap">{{ $p->fecha }}</td>
+              <td class="text-end">{{ $p->monto!==null ? number_format((float)$p->monto,2) : '—' }}</td>
+              <td class="text-nowrap">{{ $p->estado ?? '—' }}</td>
+              <td class="text-nowrap">{{ $p->gestor ?? '—' }}</td>
               <td class="text-nowrap">
                 @if(Route::has('promesas.acuerdo'))
                   <a href="{{ route('promesas.acuerdo', $p->id) }}" class="btn btn-sm btn-outline-secondary">
@@ -142,7 +123,6 @@
   const $btnExport = document.getElementById('btnExport');
   const $summary = document.getElementById('summary');
 
-  // Usa rutas por nombre (si existen) para mayor robustez
   const baseUrl   = "{{ route('reportes.pdp') }}";
   const exportUrl = "{{ route('reportes.pdp.export') }}";
 
@@ -156,24 +136,16 @@
   async function loadData(url=null){
     try{
       if(!url){ url = baseUrl + '?' + buildQuery({partial:1}); }
-      else {
-        const u = new URL(url, location.origin);
-        u.searchParams.set('partial','1');
-        url = u.pathname + '?' + u.searchParams.toString();
-      }
+      else { const u = new URL(url, location.origin); u.searchParams.set('partial','1'); url = u.pathname + '?' + u.searchParams.toString(); }
 
       $tabla.innerHTML = '<div class="skeleton">Cargando…</div>';
 
       const text = await fetch(url, {headers:{'X-Requested-With':'XMLHttpRequest'}}).then(r=>r.text());
       const doc  = new DOMParser().parseFromString(text, 'text/html');
       const frag = doc.querySelector('#tablaPdp');
-
-      // Reemplaza solo el contenido del contenedor de tabla
       $tabla.innerHTML = frag ? frag.innerHTML : text;
 
       hookPagination(); updateExport(); updateSummary();
-
-      // Actualiza URL navegable con los filtros actuales
       history.replaceState(null,'', baseUrl + '?' + buildQuery());
     }catch(e){
       console.error(e);
@@ -183,23 +155,17 @@
 
   function hookPagination(){
     $tabla.querySelectorAll('.pagination a').forEach(a=>{
-      a.addEventListener('click', e=>{
-        e.preventDefault();
-        loadData(a.href);
-      });
+      a.addEventListener('click', e=>{ e.preventDefault(); loadData(a.href); });
     });
   }
 
-  function updateExport(){
-    $btnExport.href = exportUrl + '?' + buildQuery();
-  }
+  function updateExport(){ $btnExport.href = exportUrl + '?' + buildQuery(); }
 
   function updateSummary(){
     const m = $tabla.querySelector('#pagMeta');
     $summary.textContent = m ? `Página ${m.dataset.page} · ${m.dataset.total} resultados` : '';
   }
 
-  // Eventos
   $btnBuscar.addEventListener('click', e=>{ e.preventDefault(); loadData(); });
   $btnLimpiar.addEventListener('click', ()=>{ $form.reset(); loadData(); });
   $form.querySelectorAll('input').forEach(el=>{
@@ -207,7 +173,6 @@
     el.addEventListener('change', ()=> updateExport());
   });
 
-  // Init
   updateExport(); updateSummary();
 })();
 </script>
