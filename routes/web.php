@@ -16,6 +16,41 @@ use App\Http\Controllers\AutorizacionController;
 use App\Http\Controllers\PromesaPdfController;
 use App\Http\Controllers\CnaController;
 use App\Http\Controllers\ReportePromesasController;
+/*----- PRUEBA -----*/
+use Throwable;
+use Monolog\Logger;
+use Monolog\Level;
+use Monolog\Handler\StreamHandler;
+use Monolog\Handler\RotatingFileHandler;
+
+Route::get('/__monolog_try', function () {
+    $out = [];
+
+    // A) StreamHandler -> test_stream.log
+    try {
+        $m = new Logger('manual-stream');
+        $h = new StreamHandler(storage_path('logs/test_stream.log'), Level::Debug);
+        $m->pushHandler($h);
+        $m->error('STREAM test '.date('c'));
+        $out['stream'] = 'ok';
+    } catch (Throwable $e) {
+        $out['stream'] = 'ERR: '.$e->getMessage();
+    }
+
+    // B) RotatingFileHandler (equivalente a "daily") -> laravel-YYYY-MM-DD.log
+    try {
+        $m2 = new Logger('manual-rotating');
+        $h2 = new RotatingFileHandler(storage_path('logs/laravel.log'), 14, Level::Debug);
+        $m2->pushHandler($h2);
+        $m2->error('ROTATING test '.date('c'));
+        $out['rotating'] = 'ok';
+    } catch (Throwable $e) {
+        $out['rotating'] = 'ERR: '.$e->getMessage();
+    }
+
+    return response()->json($out);
+});
+/*----- PRUEBA / -----*/
 
 /*
 |--------------------------------------------------------------------------
@@ -50,19 +85,24 @@ Route::get('/__env_check', function () {
 
 // C) ¿Qué ve Monolog? (handlers)
 Route::get('/__dump_logging', function () {
-    $logger   = Log::getLogger(); // Monolog\Logger
-    $handlers = [];
-    foreach ($logger->getHandlers() as $h) {
-        $handlers[] = get_class($h).(
-            method_exists($h,'getUrl') ? ' -> '.$h->getUrl() : ''
-        );
+    try {
+        $logger = Log::getLogger();
+        $handlers = [];
+        foreach ($logger->getHandlers() as $h) {
+            $s = get_class($h);
+            if (method_exists($h, 'getUrl')) $s .= ' -> '.$h->getUrl();
+            $handlers[] = $s;
+        }
+        return response()->json([
+            'default_channel' => config('logging.default'),
+            'channels'        => array_keys(config('logging.channels')),
+            'handlers'        => $handlers,
+        ]);
+    } catch (Throwable $e) {
+        return response()->json(['dump_err' => $e->getMessage()], 500);
     }
-    return response()->json([
-        'default_channel' => config('logging.default'),
-        'channels_def'    => array_keys(config('logging.channels')),
-        'handlers'        => $handlers,
-    ]);
 });
+
 
 // D) Escribir usando helper logger() (evita Facade)
 Route::get('/__log_test_open', function () {
