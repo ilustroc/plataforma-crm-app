@@ -1,7 +1,6 @@
 <?php
 
 use Illuminate\Support\Facades\Route;
-use Illuminate\Support\Str;
 
 use App\Http\Controllers\AuthController;
 use App\Http\Controllers\ClientsControllers;
@@ -52,44 +51,51 @@ Route::middleware('auth')->group(function () {
 
     /*
     |--------------------------------------------------------------------------
-    | Ruta de PRUEBA de logging (usa el canal por defecto: stack)
+    | PRUEBA DE LOGGING (canal por defecto = stack)
     |--------------------------------------------------------------------------
     */
     Route::get('/debug/log-ping', function () {
-        $u = request()->user();
-        $ctx = [
-            'when'  => now()->toDateTimeString(),
-            'user'  => $u ? ['id' => $u->id ?? null, 'email' => $u->email ?? null] : null,
-            'ip'    => request()->ip(),
-            'agent' => Str::limit(request()->userAgent() ?? '', 120),
-            'route' => '/debug/log-ping',
-        ];
+        try {
+            $u = request()->user();
+            $ctx = [
+                'when'       => now()->toDateTimeString(),
+                'user_id'    => $u ? ($u->id ?? null) : null,
+                'user_email' => $u ? ($u->email ?? null) : null,
+                'ip'         => request()->ip(),
+                'agent'      => substr((string) request()->userAgent(), 0, 160),
+                'route'      => '/debug/log-ping',
+                'channel'    => config('logging.default'),
+            ];
 
-        logger()->debug('PING DEBUG', $ctx);
-        logger()->info('PING INFO', $ctx);
-        logger()->warning('PING WARNING', $ctx);
-        logger()->error('PING ERROR', $ctx);
+            logger()->debug('PING DEBUG',   $ctx);
+            logger()->info('PING INFO',     $ctx);
+            logger()->warning('PING WARN',  $ctx);
+            logger()->error('PING ERROR',   $ctx);
 
-        return response()->json([
-            'ok'  => true,
-            'msg' => 'Logs enviados al canal por defecto (stack). Revisa storage/logs o el error_log del hosting según tu stack.'
-        ]);
+            return response()->json([
+                'ok'      => true,
+                'message' => 'Se enviaron 4 niveles al canal por defecto (stack).',
+                'channel' => $ctx['channel'],
+            ]);
+        } catch (\Throwable $e) {
+            // Fallback para ver el error aunque el logger falle
+            error_log('log-ping FAILED: '.$e->getMessage().' @'.$e->getFile().':'.$e->getLine());
+            return response()->json(['ok' => false, 'error' => $e->getMessage()], 500);
+        }
     })->name('debug.log_ping');
 
     /*
     |--------------------------------------------------------------------------
-    | Clientes (búsqueda, ficha y acciones relacionadas)
+    | Clientes
     |--------------------------------------------------------------------------
     */
     Route::prefix('clientes')->group(function () {
         Route::get('/',      [ClientsControllers::class,'index'])->name('clientes.index');
         Route::get('/{dni}', [ClientsControllers::class,'show'])->name('clientes.show');
 
-        // Promesas de pago (crear desde la ficha del cliente)
         Route::post('/{dni}/promesas', [ClientsControllers::class,'storePromesa'])
             ->name('clientes.promesas.store');
 
-        // CNA (crear solicitud desde la ficha del cliente)
         Route::post('/{dni}/cnas', [CnaController::class, 'store'])
             ->name('clientes.cna.store');
     });
@@ -100,15 +106,12 @@ Route::middleware('auth')->group(function () {
     |--------------------------------------------------------------------------
     */
     Route::prefix('reportes')->group(function () {
-        // Gestiones
         Route::get('/gestiones',        [ReporteGestionesController::class, 'index'])->name('reportes.gestiones');
         Route::get('/gestiones/export', [ReporteGestionesController::class, 'export'])->name('reportes.gestiones.export');
 
-        // Pagos
         Route::get('/pagos',        [ReportePagosController::class, 'index'])->name('reportes.pagos');
         Route::get('/pagos/export', [ReportePagosController::class, 'export'])->name('reportes.pagos.export');
 
-        // Otros
         Route::get('/pdp',        [ReportePromesasController::class, 'index'])->name('reportes.pdp');
         Route::get('/pdp/export', [ReportePromesasController::class, 'export'])->name('reportes.pdp.export');
     });
@@ -118,22 +121,18 @@ Route::middleware('auth')->group(function () {
     | Autorización (Promesas + CNA)
     |--------------------------------------------------------------------------
     */
-    // Bandeja (muestra lo que corresponde según rol)
     Route::get('/autorizacion', [AutorizacionController::class,'index'])->name('autorizacion');
 
-    // --- Promesas: supervisor ---
     Route::middleware('role:supervisor')->group(function () {
         Route::post('/autorizacion/{promesa}/preaprobar',   [AutorizacionController::class,'preaprobar'])->name('autorizacion.preaprobar');
         Route::post('/autorizacion/{promesa}/rechazar-sup', [AutorizacionController::class,'rechazarSup'])->name('autorizacion.rechazar.sup');
     });
 
-    // --- Promesas: administrador ---
     Route::middleware('role:administrador')->group(function () {
         Route::post('/autorizacion/{promesa}/aprobar',        [AutorizacionController::class,'aprobar'])->name('autorizacion.aprobar');
         Route::post('/autorizacion/{promesa}/rechazar-admin', [AutorizacionController::class,'rechazarAdmin'])->name('autorizacion.rechazar.admin');
     });
 
-    // PDF de la propuesta (aprobadas)
     Route::middleware('role:administrador,supervisor')->get(
         '/promesas/{promesa}/acuerdo',
         [PromesaPdfController::class, 'acuerdo']
@@ -144,19 +143,16 @@ Route::middleware('auth')->group(function () {
     | CNA – Flujo de aprobación
     |--------------------------------------------------------------------------
     */
-    // Supervisor
     Route::middleware('role:supervisor')->group(function () {
         Route::post('/cna/{cna}/preaprobar',   [CnaController::class,'preaprobar'])->name('cna.preaprobar');
         Route::post('/cna/{cna}/rechazar-sup', [CnaController::class,'rechazarSup'])->name('cna.rechazar.sup');
     });
 
-    // Administrador
     Route::middleware('role:administrador')->group(function () {
         Route::post('/cna/{cna}/aprobar',        [CnaController::class,'aprobar'])->name('cna.aprobar');
         Route::post('/cna/{cna}/rechazar-admin', [CnaController::class,'rechazarAdmin'])->name('cna.rechazar.admin');
     });
 
-    // Descargar DOCX/PDF de CNA (sup/admin)
     Route::middleware('role:administrador,supervisor')->group(function () {
         Route::get('/cna/{id}/pdf',  [CnaController::class, 'pdf'])->name('cna.pdf');
         Route::get('/cna/{id}/docx', [CnaController::class, 'docx'])->name('cna.docx');
@@ -169,29 +165,23 @@ Route::middleware('auth')->group(function () {
     */
     Route::middleware('role:administrador')->group(function () {
 
-        // Integración ▸ Data
         Route::view('/integracion/data', 'placeholders.integracion-data')->name('integracion.data');
 
-        // Clientes (master)
         Route::get('/integracion/data/clientes/template', [ClientesCargaController::class, 'templateClientesMaster'])
             ->name('integracion.data.clientes.template');
         Route::post('/integracion/data/clientes/import',  [ClientesCargaController::class, 'importClientesMaster'])
             ->name('integracion.data.clientes.import');
 
-        // Integración ▸ Pagos
         Route::get('/integracion/pagos',          [PlaceholdersPagosController::class, 'index'])->name('integracion.pagos');
         Route::post('/integracion/pagos/import',  [PlaceholdersPagosController::class, 'import'])->name('integracion.pagos.import');
         Route::get('/integracion/pagos/template', [PlaceholdersPagosController::class, 'template'])->name('integracion.pagos.template');
 
-        // Caja Cusco ▸ Castigada
         Route::post('/integracion/pagos/import/cusco-castigada',  [PlaceholdersPagosController::class, 'importCajaCuscoCastigada'])->name('integracion.pagos.import.cusco');
         Route::get('/integracion/pagos/template/cusco-castigada', [PlaceholdersPagosController::class, 'templateCajaCuscoCastigada'])->name('integracion.pagos.template.cusco');
 
-        // Caja Cusco ▸ Extrajudicial
         Route::get('/integracion/pagos/template/cusco-extrajudicial', [PlaceholdersPagosController::class, 'templateCajaCuscoExtrajudicial'])->name('integracion.pagos.template.cusco_extrajudicial');
         Route::post('/integracion/pagos/import/cusco-extrajudicial',  [PlaceholdersPagosController::class, 'importCajaCuscoExtrajudicial'])->name('integracion.pagos.import.cusco_extrajudicial');
 
-        // Administración de usuarios
         Route::get('/administracion',                           [AdminUsersController::class, 'index'])->name('administracion');
         Route::post('/administracion/supervisores',             [AdminUsersController::class, 'storeSupervisor'])->name('administracion.supervisores.store');
         Route::post('/administracion/asesores',                 [AdminUsersController::class, 'storeAsesor'])->name('administracion.asesores.store');
