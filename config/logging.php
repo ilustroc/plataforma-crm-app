@@ -54,8 +54,10 @@ return [
     'channels' => [
         'stack' => [
             'driver' => 'stack',
-            'channels' => ['single'],
-            'ignore_exceptions' => false,
+            // escribe al archivo y TAMBIÉN al error_log del hosting
+            'channels' => ['single', 'errorlog'],
+            // si el archivo falla, NO rompas el request (sigue logueando a errorlog)
+            'ignore_exceptions' => true,
         ],
 
         'single' => [
