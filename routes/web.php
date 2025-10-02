@@ -19,6 +19,19 @@ use App\Http\Controllers\ReportePromesasController;
 
 /*
 |--------------------------------------------------------------------------
+| Logs
+|--------------------------------------------------------------------------
+*/
+Route::get('/__log_test_open', function () {
+    Log::debug('DEBUG open route', ['ts' => now()->toDateTimeString()]);
+    Log::info('INFO open route',   ['ip' => request()->ip()]);
+    Log::warning('WARN open route');
+    Log::error('ERROR open route');
+    return 'ok';
+});
+
+/*
+|--------------------------------------------------------------------------
 | Invitados
 |--------------------------------------------------------------------------
 */
