@@ -22,55 +22,70 @@ use App\Http\Controllers\ReportePromesasController;
 | Logs
 |--------------------------------------------------------------------------
 */
-// === 0) Prueba de permisos de filesystem (sin Laravel Log) ===
+Route::get('/__hello', fn () => 'hello');
+
+// A) ¿filesystem ok SIN Laravel?
 Route::get('/__fs_test', function () {
     $dir = storage_path('logs');
-    $file = $dir.'/fs_test.txt';
     @mkdir($dir, 0775, true);
-    $ok = @file_put_contents($file, "FS OK: ".date('c')."\n", FILE_APPEND);
+    $file = $dir.'/fs_test.txt';
+    $bytes = @file_put_contents($file, "FS OK: ".date('c')."\n", FILE_APPEND);
     return response()->json([
-        'storage_logs_dir' => $dir,
-        'wrote_bytes'      => $ok === false ? 'false' : $ok,
-        'exists'           => file_exists($file),
-        'file'             => $file,
+        'dir'    => $dir,
+        'file'   => $file,
+        'bytes'  => $bytes === false ? 'false' : $bytes,
+        'exists' => file_exists($file),
     ]);
 });
 
-// === 1) Log por helper (evita Facade) ===
-Route::get('/__log_test_open', function () {
-    logger()->debug('DEBUG open route', ['ts' => now()->toDateTimeString()]);
-    logger()->info('INFO open route',   ['ip' => request()->ip()]);
-    logger()->warning('WARN open route');
-    logger()->error('ERROR open route');
-    return 'ok';
-});
-
-// === 2) Ver si el .env y config están cargando ===
+// B) ¿.env vs config? ¿qué canal está activo?
 Route::get('/__env_check', function () {
     return response()->json([
         'env(LOG_CHANNEL)'        => env('LOG_CHANNEL'),
         'config(logging.default)' => config('logging.default'),
         'env(APP_DEBUG)'          => env('APP_DEBUG'),
         'config(app.debug)'       => config('app.debug'),
-        'timezone'                => config('app.timezone'),
     ]);
 });
 
-// === 3) ¿Dónde escribe PHP sus errores? ===
+// C) ¿Qué ve Monolog? (handlers)
+Route::get('/__dump_logging', function () {
+    $logger   = Log::getLogger(); // Monolog\Logger
+    $handlers = [];
+    foreach ($logger->getHandlers() as $h) {
+        $handlers[] = get_class($h).(
+            method_exists($h,'getUrl') ? ' -> '.$h->getUrl() : ''
+        );
+    }
+    return response()->json([
+        'default_channel' => config('logging.default'),
+        'channels_def'    => array_keys(config('logging.channels')),
+        'handlers'        => $handlers,
+    ]);
+});
+
+// D) Escribir usando helper logger() (evita Facade)
+Route::get('/__log_test_open', function () {
+    logger()->debug('DEBUG open route', ['ts' => now()->toDateTimeString()]);
+    logger()->info('INFO open route',   ['ip' => request()->ip()]);
+    logger()->warning('WARN open route');
+    logger()->error('ERROR open route');
+    return 'logged';
+});
+
+// E) ¿A dónde escribe PHP sus errores?
 Route::get('/__php_errorlog', function () {
+    error_log('TEST error_log() '.date('c')); // manda al error_log de PHP
     return response()->json([
         'ini_error_log' => ini_get('error_log'),
         'display_errors'=> ini_get('display_errors'),
         'log_errors'    => ini_get('log_errors'),
         'user'          => get_current_user(),
-        'uid'           => function_exists('getmyuid') ? getmyuid() : 'n/a',
     ]);
 });
 
-// === 4) Forzar excepción para ver si cae al log ===
-Route::get('/__boom', function () {
-    throw new \RuntimeException('BOOM test '.now());
-}); 
+// F) Forzar excepción para ver si Monolog captura
+Route::get('/__boom', fn () => throw new \RuntimeException('BOOM '.now()));
 
 /*
 |--------------------------------------------------------------------------
