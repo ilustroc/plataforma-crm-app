@@ -1,7 +1,6 @@
 <?php
 
 use Illuminate\Support\Facades\Route;
-use Illuminate\Support\Facades\Log;
 
 use App\Http\Controllers\AuthController;
 use App\Http\Controllers\ClientsControllers;
@@ -16,116 +15,6 @@ use App\Http\Controllers\AutorizacionController;
 use App\Http\Controllers\PromesaPdfController;
 use App\Http\Controllers\CnaController;
 use App\Http\Controllers\ReportePromesasController;
-/*----- PRUEBA -----*/
-use Throwable;
-use Monolog\Logger;
-use Monolog\Level;
-use Monolog\Handler\StreamHandler;
-use Monolog\Handler\RotatingFileHandler;
-
-Route::get('/__monolog_try', function () {
-    $out = [];
-
-    // A) StreamHandler -> test_stream.log
-    try {
-        $m = new Logger('manual-stream');
-        $h = new StreamHandler(storage_path('logs/test_stream.log'), Level::Debug);
-        $m->pushHandler($h);
-        $m->error('STREAM test '.date('c'));
-        $out['stream'] = 'ok';
-    } catch (Throwable $e) {
-        $out['stream'] = 'ERR: '.$e->getMessage();
-    }
-
-    // B) RotatingFileHandler (equivalente a "daily") -> laravel-YYYY-MM-DD.log
-    try {
-        $m2 = new Logger('manual-rotating');
-        $h2 = new RotatingFileHandler(storage_path('logs/laravel.log'), 14, Level::Debug);
-        $m2->pushHandler($h2);
-        $m2->error('ROTATING test '.date('c'));
-        $out['rotating'] = 'ok';
-    } catch (Throwable $e) {
-        $out['rotating'] = 'ERR: '.$e->getMessage();
-    }
-
-    return response()->json($out);
-});
-/*----- PRUEBA / -----*/
-
-/*
-|--------------------------------------------------------------------------
-| Logs
-|--------------------------------------------------------------------------
-*/
-Route::get('/__hello', fn () => 'hello');
-
-// A) ¿filesystem ok SIN Laravel?
-Route::get('/__fs_test', function () {
-    $dir = storage_path('logs');
-    @mkdir($dir, 0775, true);
-    $file = $dir.'/fs_test.txt';
-    $bytes = @file_put_contents($file, "FS OK: ".date('c')."\n", FILE_APPEND);
-    return response()->json([
-        'dir'    => $dir,
-        'file'   => $file,
-        'bytes'  => $bytes === false ? 'false' : $bytes,
-        'exists' => file_exists($file),
-    ]);
-});
-
-// B) ¿.env vs config? ¿qué canal está activo?
-Route::get('/__env_check', function () {
-    return response()->json([
-        'env(LOG_CHANNEL)'        => env('LOG_CHANNEL'),
-        'config(logging.default)' => config('logging.default'),
-        'env(APP_DEBUG)'          => env('APP_DEBUG'),
-        'config(app.debug)'       => config('app.debug'),
-    ]);
-});
-
-// C) ¿Qué ve Monolog? (handlers)
-Route::get('/__dump_logging', function () {
-    try {
-        $logger = Log::getLogger();
-        $handlers = [];
-        foreach ($logger->getHandlers() as $h) {
-            $s = get_class($h);
-            if (method_exists($h, 'getUrl')) $s .= ' -> '.$h->getUrl();
-            $handlers[] = $s;
-        }
-        return response()->json([
-            'default_channel' => config('logging.default'),
-            'channels'        => array_keys(config('logging.channels')),
-            'handlers'        => $handlers,
-        ]);
-    } catch (Throwable $e) {
-        return response()->json(['dump_err' => $e->getMessage()], 500);
-    }
-});
-
-
-// D) Escribir usando helper logger() (evita Facade)
-Route::get('/__log_test_open', function () {
-    logger()->debug('DEBUG open route', ['ts' => now()->toDateTimeString()]);
-    logger()->info('INFO open route',   ['ip' => request()->ip()]);
-    logger()->warning('WARN open route');
-    logger()->error('ERROR open route');
-    return 'logged';
-});
-
-// E) ¿A dónde escribe PHP sus errores?
-Route::get('/__php_errorlog', function () {
-    error_log('TEST error_log() '.date('c')); // manda al error_log de PHP
-    return response()->json([
-        'ini_error_log' => ini_get('error_log'),
-        'display_errors'=> ini_get('display_errors'),
-        'log_errors'    => ini_get('log_errors'),
-        'user'          => get_current_user(),
-    ]);
-});
-
-// F) Forzar excepción para ver si Monolog captura
-Route::get('/__boom', fn () => throw new \RuntimeException('BOOM '.now()));
 
 /*
 |--------------------------------------------------------------------------
@@ -145,60 +34,6 @@ Route::middleware('guest')->group(function () {
 Route::post('/logout', [AuthController::class, 'logout'])
     ->middleware('auth')
     ->name('logout');
-
-/*
-|--------------------------------------------------------------------------
-| Utilidades (solo auth + role administrador)
-|--------------------------------------------------------------------------
-*/
-Route::middleware(['auth','role:administrador'])->group(function () {
-
-    // Ver último log (diario o fallback)
-    Route::get('/__last-error', function () {
-        $files = glob(storage_path('logs/laravel-*.log'));
-        rsort($files);
-        $file = $files[0] ?? storage_path('logs/laravel.log');
-
-        if (!is_file($file)) {
-            return response('<pre>Sin logs en storage/logs.</pre>', 200)
-                ->header('Content-Type','text/html');
-        }
-
-        $n = (int) request('n', 300);
-        $n = max(50, min(2000, $n));
-        $lines = @file($file, FILE_IGNORE_NEW_LINES) ?: [];
-        $tail  = implode("\n", array_slice($lines, -$n));
-
-        return response('<pre style="white-space:pre-wrap">'.e($tail).'</pre>', 200)
-            ->header('Content-Type','text/html');
-    })->name('__last_error');
-
-    // A) ¿.env cargado?
-    Route::get('/debug/env-check', function () {
-        return response()->json([
-            'env(LOG_CHANNEL)'        => env('LOG_CHANNEL'),
-            'config(logging.default)' => config('logging.default'),
-            'env(APP_ENV)'            => env('APP_ENV'),
-            'config(app.env)'         => config('app.env'),
-            'config(app.debug)'       => config('app.debug'),
-            'storage_logs_dir'        => storage_path('logs'),
-        ]);
-    })->name('debug.env_check');
-
-    // B) Escribir en el log diario
-    Route::get('/debug/log-test', function () {
-        Log::debug('DEBUG ping', ['ts' => now()->toDateTimeString()]);
-        Log::info('INFO ping',   ['ip' => request()->ip()]);
-        Log::warning('WARN ping');
-        Log::error('ERROR ping');
-        return 'Log escrito. Revisa storage/logs/';
-    })->name('debug.log_test');
-
-    // C) Forzar excepción (debe aparecer en el log)
-    Route::get('/debug/boom', function () {
-        throw new \RuntimeException('BOOM test '.now());
-    })->name('debug.boom');
-});
 
 /*
 |--------------------------------------------------------------------------
@@ -339,7 +174,6 @@ Route::middleware('auth')->group(function () {
     // Zonas por rol (opcional)
     Route::middleware('role:administrador')->get('/admin', fn () => 'Zona Admin');
     Route::middleware('role:supervisor')->get('/supervisor', fn () => 'Zona Supervisor');
-    // OJO: se elimina la ruta '/sistemas' y cualquier uso del rol sistemas
 });
 
 /*
