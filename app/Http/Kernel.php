@@ -20,7 +20,7 @@ class Kernel extends HttpKernel
     protected $routeMiddleware = [
         // ...
         'role' => \App\Http\Middleware\RoleMiddleware::class,
-        'role' => \Spatie\Permission\Middlewares\RoleMiddleware::class, // si usas spatie/laravel-permission
+        'role' => \Spatie\Permission\Middlewares\RoleMiddleware::class,
     ];
     
     protected $middlewareGroups = [
