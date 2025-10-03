@@ -120,7 +120,7 @@
     </div>
   </div>
   {{-- ====== /Promesas ====== --}}
-
+  
   {{-- ====== Solicitudes de CNA ====== --}}
   <div class="card mt-4">
     <div class="card-header fw-bold">Solicitudes de CNA</div>
@@ -217,7 +217,6 @@
     </div>
   </div>
   {{-- ====== /Solicitudes de CNA ====== --}}
-
 
 </div>
 

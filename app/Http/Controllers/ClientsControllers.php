@@ -223,28 +223,27 @@ class ClientsControllers extends Controller
 
     public function storePromesa(string $dni, Request $r)
     {
-        // Contexto
         $r->merge(['dni' => $dni]);
-    
-        // Si es cancelación: mapear fecha_pago_cancel → fecha_pago antes de validar
+
         if ($r->input('tipo') === 'cancelacion' && $r->filled('fecha_pago_cancel')) {
             $r->merge(['fecha_pago' => $r->input('fecha_pago_cancel')]);
         }
-    
-        // ================= VALIDACIÓN =================
-        // OJO: no dupliques claves 'fecha_pago' (en PHP la segunda pisa a la primera)
+
+        // ===== VALIDACIÓN
         $rules = [
             'dni'           => 'required|string|max:30',
-            'tipo'          => 'required|in:convenio,cancelacion', // agrega 'convenio_balon' si lo usas
+            'tipo'          => 'required|in:convenio,cancelacion',
             'nota'          => 'nullable|string|max:500',
-            'operaciones'   => 'array|min:1',
+
+            // <<-- HAZ LA LISTA OBLIGATORIA
+            'operaciones'   => 'required|array|min:1',
             'operaciones.*' => 'string|max:50',
-        
-            // CANCELACIÓN (solo valida cuando tipo=cancelacion)
-            'fecha_pago'   => 'exclude_unless:tipo,cancelacion|required|date',
-            'monto_cancel' => 'exclude_unless:tipo,cancelacion|required|numeric|min:0.01',
-        
-            // CONVENIO (solo valida cuando tipo=convenio)
+
+            // Cancelación
+            'fecha_pago'    => 'exclude_unless:tipo,cancelacion|required|date',
+            'monto_cancel'  => 'exclude_unless:tipo,cancelacion|required|numeric|min:0.01',
+
+            // Convenio
             'nro_cuotas'     => 'exclude_unless:tipo,convenio|required|integer|min:1',
             'monto_convenio' => 'exclude_unless:tipo,convenio|required|numeric|min:0.01',
             'cron_fecha'     => 'exclude_unless:tipo,convenio|required|array|min:1',
@@ -253,47 +252,41 @@ class ClientsControllers extends Controller
             'cron_monto.*'   => 'exclude_unless:tipo,convenio|numeric|min:0.01',
             'cron_balon'     => 'exclude_unless:tipo,convenio|nullable|integer|min:1',
         ];
-
         $r->validate($rules);
-    
-        // ================= NORMALIZACIONES =================
-        // Fechas → YYYY-MM-DD
+
+        // ===== NORMALIZACIONES
         if ($r->filled('fecha_pago')) {
             $r->merge(['fecha_pago' => $this->toIsoDate($r->input('fecha_pago'))]);
         }
-        // Cronograma (convenio)
-        $cronFechas = array_map(function($f){ return $this->toIsoDate($f); }, (array)$r->input('cron_fecha', []));
-        $cronMontos = array_map(function($m){ return $this->normalizeMoney($m); }, (array)$r->input('cron_monto', []));
+
+        $cronFechas = array_map(fn($f)=>$this->toIsoDate($f), (array)$r->input('cron_fecha', []));
+        $cronMontos = array_map(fn($m)=>$this->normalizeMoney($m), (array)$r->input('cron_monto', []));
         $cronBalon  = (int)$r->input('cron_balon', 0);
-    
-        // Montos puntuales → 1234.56
+
         foreach (['monto_convenio','monto_cancel'] as $fld) {
             if ($r->has($fld)) $r->merge([$fld => $this->normalizeMoney($r->input($fld))]);
         }
-    
-        // ================= REGLAS DE NEGOCIO (convenio) =================
+
+        // ===== REGLAS CONVENIO (igual que tenías)
         if ($r->input('tipo') === 'convenio') {
             $n = max(1, (int)$r->input('nro_cuotas'));
-            // Asegura que vengan N filas (si hay desfase, recorta/ajusta)
             if (count($cronFechas) !== $n || count($cronMontos) !== $n) {
                 $cronFechas = array_slice($cronFechas, 0, $n);
                 $cronMontos = array_slice($cronMontos, 0, $n);
                 while (count($cronFechas) < $n) $cronFechas[] = $cronFechas ? end($cronFechas) : now()->toDateString();
                 while (count($cronMontos) < $n) $cronMontos[] = 0;
             }
-            // Suma = monto_convenio (tolerancia 0.01)
             $suma = array_sum(array_map('floatval', $cronMontos));
             if (abs($suma - (float)$r->input('monto_convenio')) > 0.01) {
                 return back()->withErrors('La suma del cronograma (S/ '.number_format($suma,2).') debe coincidir con el Monto convenio.')
-                             ->withInput();
+                            ->withInput();
             }
-            // Índice de balón válido
             if ($cronBalon > 0 && $cronBalon > $n) {
                 return back()->withErrors('La cuota balón no existe en el cronograma.')->withInput();
             }
         }
-    
-        // ================= PERSISTENCIA =================
+
+        // ===== PERSISTENCIA
         DB::beginTransaction();
         try {
             $base = [
@@ -304,20 +297,19 @@ class ClientsControllers extends Controller
                 'cumplimiento_estado' => 'pendiente',
                 'user_id'             => $r->user()->id ?? null,
             ];
-    
+
             if ($r->input('tipo') === 'convenio') {
                 $n = max(1, (int)$r->input('nro_cuotas'));
                 $firstDate = Carbon::parse($cronFechas[0] ?? now());
-                // Monto de cuota referencial (promedio) para persistir en columna legacy
                 $avgCuota = $n > 0 ? (array_sum(array_map('floatval', $cronMontos)) / $n) : 0;
-    
+
                 $data = array_merge($base, [
                     'fecha_promesa'  => now()->toDateString(),
-                    'fecha_pago'     => $firstDate->toDateString(),   // 1ª cuota
+                    'fecha_pago'     => $firstDate->toDateString(),
                     'cuota_dia'      => (int)$firstDate->day,
                     'nro_cuotas'     => $n,
                     'monto_convenio' => $r->input('monto_convenio'),
-                    'monto_cuota'    => $avgCuota, // referencial para reportes antiguos
+                    'monto_cuota'    => $avgCuota,
                 ]);
             } else { // cancelación
                 $fecha = Carbon::parse($r->input('fecha_pago'));
@@ -327,24 +319,37 @@ class ClientsControllers extends Controller
                     'monto'         => $r->input('monto_cancel'),
                 ]);
             }
-    
+
             /** @var \App\Models\PromesaPago $promesa */
             $promesa = PromesaPago::create($data);
-    
-            // Operaciones (pivote)
-            $ops = (array)($r->operaciones ?? []);
+
+            // --- Operaciones (limpias, únicas) ---
+            $ops = collect($r->input('operaciones', []))
+                ->map(fn($op)=>trim((string)$op))
+                ->filter()
+                ->unique()
+                ->values()
+                ->all();
+
+            // Legacy: guarda TODAS en cadena "op1, op2"
+            $promesa->operacion = implode(', ', $ops);
+            $promesa->save();
+
+            // Detalle: una fila por operación
+            $now = now();
+            $rows = [];
             foreach ($ops as $op) {
-                PromesaOperacion::firstOrCreate([
+                $rows[] = [
                     'promesa_id' => $promesa->id,
                     'operacion'  => $op,
-                ]);
+                    'cartera'    => 'PROPIA', // o la cartera real por operación si la tienes
+                    'created_at' => $now,
+                    'updated_at' => $now,
+                ];
             }
-            if (!$promesa->operacion && !empty($ops)) {
-                $promesa->operacion = $ops[0]; // retrocompat
-                $promesa->save();
-            }
-    
-            // Guardar cronograma (solo convenio)
+            PromesaOperacion::insert($rows);
+
+            // Cronograma (solo convenio)
             if ($promesa->tipo === 'convenio') {
                 $rows = [];
                 foreach ($cronFechas as $i => $f) {
@@ -360,7 +365,7 @@ class ClientsControllers extends Controller
                 }
                 PromesaCuota::insert($rows);
             }
-    
+
             DB::commit();
             return back()->with('ok', 'Propuesta registrada y enviada para autorización.');
         } catch (\Throwable $e) {

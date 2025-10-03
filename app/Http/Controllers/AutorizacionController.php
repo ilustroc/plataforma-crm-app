@@ -18,54 +18,112 @@ class AutorizacionController extends Controller
             $user   = Auth::user();
             $q      = trim((string)($req->q ?? ''));
             $status = $req->status;
-    
-            // ===== PROMESAS (lista sin paginar, como ya lo tenías) =====
-            $base = PromesaPago::query()
-                ->from('promesas_pago')
-                ->leftJoin('clientes_cuentas as cc', function($j){
-                    $j->on('cc.dni','=','promesas_pago.dni');
-                    $j->where(function($w){
-                        $w->whereNull('promesas_pago.operacion')
-                          ->orWhereColumn('cc.operacion','promesas_pago.operacion');
-                    });
-                })
-                ->leftJoin('users as u','u.id','=','promesas_pago.user_id')
+
+            // ===== PROMESAS (sin joins que dupliquen)
+            $promesas = PromesaPago::query()
+                ->with(['operaciones']) // traemos detalle de operaciones
                 ->when($q !== '', function ($w) use ($q) {
                     $w->where(function ($x) use ($q) {
-                        $x->where('promesas_pago.dni','like',"%{$q}%")
-                          ->orWhere('promesas_pago.operacion','like',"%{$q}%")
-                          ->orWhere('promesas_pago.nota','like',"%{$q}%")
-                          ->orWhere('cc.titular','like',"%{$q}%");
+                        $x->where('dni','like',"%{$q}%")
+                        ->orWhere('nota','like',"%{$q}%")
+                        // busca también por operación en la tabla detalle
+                        ->orWhereHas('operaciones', fn($qq)=>$qq->where('operacion','like',"%{$q}%"))
+                        // y por la columna legacy (por compatibilidad)
+                        ->orWhere('operacion','like',"%{$q}%");
                     });
                 });
-    
-            if (in_array(strtolower($user->role), ['supervisor'])) {
-                $base->where('promesas_pago.workflow_estado','pendiente');
+
+            if (strtolower($user->role) === 'supervisor') {
+                $promesas->where('workflow_estado','pendiente');
             } else {
-                $base->where('promesas_pago.workflow_estado','preaprobada');
+                $promesas->where('workflow_estado','preaprobada');
             }
             if (!empty($status)) {
-                $base->where('promesas_pago.workflow_estado', $status);
+                $promesas->where('workflow_estado', $status);
             }
-    
-            $rows = $base->select([
-                    'promesas_pago.*',
-                    'cc.cartera','cc.titular','cc.entidad','cc.producto','cc.moneda',
-                    'cc.zona','cc.departamento',
-                    'cc.agente as asesor_nombre',
-                    'cc.anio_castigo','cc.propiedades',
-                    'cc.laboral as trabajo','cc.clasificacion',
-                    'cc.deuda_total','cc.saldo_capital','cc.interes',
-                    DB::raw('(COALESCE(cc.deuda_total,0) - COALESCE(cc.saldo_capital,0)) as monto_campania'),
-                    DB::raw('CASE WHEN COALESCE(cc.deuda_total,0)>0
-                              THEN ROUND(100*(COALESCE(cc.deuda_total,0)-COALESCE(cc.saldo_capital,0))/cc.deuda_total,2)
-                              ELSE NULL END as porc_descuento'),
-                    'u.name as creador_nombre',
-                ])
-                ->orderByDesc('promesas_pago.fecha_promesa')
-                ->get();
-    
-            // Cronogramas (si existe la tabla singular promesa_cuotas)
+
+            $rows = $promesas->orderByDesc('fecha_promesa')->get();
+
+            // --- Traer info de cuentas solo para las operaciones de estas promesas
+            $opsAll = $rows->flatMap(function($p){
+                    if ($p->relationLoaded('operaciones') && $p->operaciones->count()) {
+                        return $p->operaciones->pluck('operacion');
+                    }
+                    // fallback: columna legacy "operacion" en cadena
+                    return collect(array_filter(array_map('trim', explode(',', (string)($p->operacion ?? '')))));
+                })
+                ->filter()
+                ->unique()
+                ->values()
+                ->all();
+
+            $ccByOp = [];
+            if (!empty($opsAll)) {
+                $ccByOp = DB::table('clientes_cuentas')
+                    ->select([
+                        'operacion','cartera','titular','entidad','producto','moneda',
+                        'saldo_capital','deuda_total','agente'
+                    ])
+                    ->whereIn('operacion', $opsAll)
+                    ->get()
+                    ->keyBy('operacion');
+            }
+
+            // --- Armar agregados por promesa (sin duplicar filas)
+            $rows = $rows->map(function($p) use ($ccByOp) {
+                // Lista de operaciones (relación o legacy)
+                $ops = $p->relationLoaded('operaciones') && $p->operaciones->count()
+                    ? $p->operaciones->pluck('operacion')->map(fn($x)=>(string)$x)->values()
+                    : collect(array_filter(array_map('trim', explode(',', (string)($p->operacion ?? '')))));
+
+                // Guardar string legacy ya agregado (para la vista actual)
+                $p->operacion = $ops->implode(', ');     // ej. "123, 456"
+                $p->ops_list  = $ops->values();          // ej. ["123","456"]
+
+                // Agregados de cuentas
+                $titulares = collect();
+                $entidades = collect();
+                $productos = collect();
+                $monedas   = collect();
+                $carteras  = collect();
+                $agentes   = collect();
+                $sumCap    = 0.0;
+                $sumDeu    = 0.0;
+
+                foreach ($ops as $op) {
+                    $cc = $ccByOp[$op] ?? null;
+                    if (!$cc) continue;
+                    if ($cc->titular)  $titulares->push($cc->titular);
+                    if ($cc->entidad)  $entidades->push($cc->entidad);
+                    if ($cc->producto) $productos->push($cc->producto);
+                    if ($cc->moneda)   $monedas->push($cc->moneda);
+                    if ($cc->cartera)  $carteras->push($cc->cartera);
+                    if ($cc->agente)   $agentes->push($cc->agente);
+                    $sumCap += (float)($cc->saldo_capital ?? 0);
+                    $sumDeu += (float)($cc->deuda_total   ?? 0);
+                }
+
+                $uniqJoin = fn($c) => $c->filter()->unique()->implode(' / ');
+
+                // Asignar campos "simples" a la fila (compatibles con la vista actual)
+                $p->titular        = $uniqJoin($titulares);
+                $p->entidad        = $uniqJoin($entidades);
+                $p->producto       = $uniqJoin($productos);
+                $p->moneda         = $uniqJoin($monedas);
+                $p->cartera        = $uniqJoin($carteras);
+                $p->asesor_nombre  = $uniqJoin($agentes);
+
+                // Números agregados: sumas
+                $p->saldo_capital  = $sumCap;
+                $p->deuda_total    = $sumDeu;
+                $p->monto_campania = max(0, $sumDeu - $sumCap);
+                $p->porc_descuento = $sumDeu > 0 ? round(100 * ($p->monto_campania) / $sumDeu, 2) : null;
+
+                // Cronograma (se arma más abajo en tu código original, lo dejamos)
+                return $p;
+            });
+
+            // ===== Cronogramas (igual que tenías)
             $ids = $rows->pluck('id')->filter()->all();
             $cuotasById = collect();
             if (!empty($ids) && Schema::hasTable('promesa_cuotas')) {
@@ -90,19 +148,19 @@ class AutorizacionController extends Controller
                 })->values();
                 return $p;
             });
-    
-            // ===== CNA (pendientes para supervisor / preaprobadas para admin) =====
+
+            // ===== CNA (tu código tal cual) =====
             $cnaBase = CnaSolicitud::query()
                 ->when($q !== '', function ($w) use ($q) {
                     $w->where(function($x) use ($q){
                         $x->where('dni','like',"%{$q}%")
-                          ->orWhere('nro_carta','like',"%{$q}%")
-                          ->orWhere('producto','like',"%{$q}%")
-                          ->orWhere('nota','like',"%{$q}%");
+                        ->orWhere('nro_carta','like',"%{$q}%")
+                        ->orWhere('producto','like',"%{$q}%")
+                        ->orWhere('nota','like',"%{$q}%");
                     });
                 });
-    
-            if (in_array(strtolower($user->role), ['supervisor'])) {
+
+            if (strtolower($user->role) === 'supervisor') {
                 $cnaBase->where('workflow_estado','pendiente');
             } else {
                 $cnaBase->where('workflow_estado','preaprobada');
@@ -110,39 +168,33 @@ class AutorizacionController extends Controller
             if (!empty($status)) {
                 $cnaBase->where('workflow_estado', $status);
             }
-    
-            // paginamos CNA por su propia página (?page_cna=)
+
             $cnaRows = $cnaBase->orderByDesc('created_at')
                 ->paginate(10, ['*'], 'page_cna')
                 ->withQueryString();
-    
-            // === MAPA Operación -> Producto (solo para las CNA de esta página) ===
-            $opsAll = collect($cnaRows->items())
+
+            // Mapa op->producto para CNA (igual)
+            $opsAllCna = collect($cnaRows->items())
                 ->flatMap(fn($c) => (array)($c->operaciones ?? []))
-                ->filter()
-                ->map(fn($op) => (string)$op)
-                ->unique()
-                ->values()
-                ->all();
-    
+                ->filter()->map(fn($op)=>(string)$op)->unique()->values()->all();
+
             $prodByOp = [];
-            if (!empty($opsAll)) {
+            if (!empty($opsAllCna)) {
                 $prodByOp = DB::table('clientes_cuentas')
                     ->select('operacion','producto')
-                    ->whereIn('operacion', $opsAll)
+                    ->whereIn('operacion', $opsAllCna)
                     ->get()
                     ->mapWithKeys(fn($r) => [(string)$r->operacion => (string)($r->producto ?? '—')])
                     ->all();
             }
-    
+
             return view('autorizacion.index', [
                 'rows'         => $rows,
                 'cnaRows'      => $cnaRows,
-                'prodByOp'     => $prodByOp, // ← clave para la vista
+                'prodByOp'     => $prodByOp,
                 'q'            => $q,
-                'isSupervisor' => in_array(strtolower($user->role), ['supervisor']),
+                'isSupervisor' => strtolower($user->role) === 'supervisor',
             ]);
-    
         } catch (\Throwable $e) {
             \Log::error('Autorizacion.index ERROR', [
                 'msg'   => $e->getMessage(),
@@ -152,7 +204,6 @@ class AutorizacionController extends Controller
             return response('Error en Autorización: '.$e->getMessage(), 500);
         }
     }
-    
 
     // ===== SUPERVISOR =====
     public function preaprobar(Request $req, PromesaPago $promesa)
