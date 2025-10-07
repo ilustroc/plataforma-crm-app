@@ -326,7 +326,7 @@
 @endsection
 @push('scripts')
 <script>
-  // Rechazo (abre modal con action correcto)
+  // Rechazo (sin cambios)
   document.querySelectorAll('.js-open-rechazo').forEach(btn=>{
     btn.addEventListener('click', ()=>{
       document.getElementById('formRechazo').setAttribute('action', btn.dataset.action);
@@ -334,26 +334,9 @@
     });
   });
 
-  // Nota para Pre-aprobar / Aprobar
-  document.querySelectorAll('.js-open-nota').forEach(btn=>{
-    btn.addEventListener('click', ()=>{
-      document.getElementById('formNotaEstado').setAttribute('action', btn.dataset.action);
-      document.getElementById('modalNotaEstadoTitulo').textContent = btn.dataset.title || 'Agregar nota';
-      document.getElementById('notaEstadoTxt').value = '';
-      new bootstrap.Modal(document.getElementById('modalNotaEstado')).show();
-    });
-  });
-
-  // Helpers
   const fmt = (n)=> (Math.round((Number(n)||0)*100)/100).toFixed(2);
-  const pct = (v)=>{
-    if (v===null || v===undefined || v==='') return '—';
-    const x = Number(v);
-    if (isNaN(x)) return '—';
-    return (x*100).toFixed(0)+'%';
-  };
+  const pct = (v)=> (v===null || v===undefined || v==='') ? '—' : ((Number(v)||0)*100).toFixed(0)+'%';
 
-  // Ver ficha (datos generales + acordeón + cronograma)
   document.querySelectorAll('.js-ver-ficha').forEach(btn=>{
     btn.addEventListener('click', ()=>{
       const tipo = (btn.dataset.tipo || '').toLowerCase();
@@ -362,77 +345,84 @@
       document.getElementById('f_dni').textContent   = btn.dataset.dni || '—';
       document.getElementById('t_fecha').textContent = btn.dataset.fecha || '—';
 
-      // Datos generales (sin "Año Castigo / Entidad / Campaña / %")
+      // Datos generales
       const set = (id, v)=> (document.getElementById('t_'+id).textContent = (v||'—'));
-      set('tipo',   tipo ? (tipo==='cancelacion' ? 'Cancelación' : 'Convenio') : '—');
+      set('tipo', tipo ? (tipo==='cancelacion' ? 'Cancelación' : 'Convenio') : '—');
       set('cartera', btn.dataset.cartera);
-      set('asesor',  btn.dataset.asesor);
-      set('agente',  btn.dataset.agente);
+      set('asesor',  btn.dataset.asesor);   // Equipo = AGENTE
+      set('agente',  btn.dataset.agente);   // quien creó
       set('titular', btn.dataset.titular);
       set('trab',    btn.dataset.trabaja);
       set('clasificacion', btn.dataset.clasificacion);
       set('deuda',   btn.dataset.deuda);
       set('neg',     btn.dataset.negociado);
-      set('detalle', btn.dataset.detalle);
 
-      // Notas (general y supervisor) – visibles para el admin
-      const ng = (btn.dataset.notaGen || '').trim();
-      const ns = (btn.dataset.notaSup || '').trim();
-      const genWrap = document.getElementById('nota_general_wrap');
-      const supWrap = document.getElementById('nota_sup_wrap');
-      if (ng) { genWrap.style.display='block'; document.getElementById('nota_general_txt').textContent = ng; }
-      else    { genWrap.style.display='none'; }
-      if (ns) { supWrap.style.display='block'; document.getElementById('nota_sup_txt').textContent = ns; }
-      else    { supWrap.style.display='none'; }
-
-      // Acordeón de cuentas
-      const acc = document.getElementById('acc_cuentas');
-      acc.innerHTML = '';
-      let cuentas = [];
-      try { cuentas = JSON.parse(btn.dataset.cuentas || '[]'); } catch(_) { cuentas = []; }
-
-      // Operaciones en el encabezado
-      document.getElementById('f_op').textContent = cuentas.length
-        ? cuentas.map(c=>c.operacion).join(', ')
-        : (btn.dataset.operacion || '—');
-
-      if (!cuentas.length) {
-        acc.innerHTML = '<div class="text-secondary small">No se encontraron cuentas asociadas.</div>';
-      } else {
-        cuentas.forEach((c, idx)=>{
-          const id = 'accItem_'+idx;
-          const html = `
-            <div class="accordion-item">
-              <h2 class="accordion-header" id="${id}_h">
-                <button class="accordion-button ${idx>0?'collapsed':''}" type="button"
-                        data-bs-toggle="collapse" data-bs-target="#${id}_c"
-                        aria-expanded="${idx===0?'true':'false'}" aria-controls="${id}_c">
-                  Operación ${c.operacion || '—'} · ${c.entidad || '—'} · ${c.producto || '—'}
-                </button>
-              </h2>
-              <div id="${id}_c" class="accordion-collapse collapse ${idx===0?'show':''}"
-                   aria-labelledby="${id}_h" data-bs-parent="#acc_cuentas">
-                <div class="accordion-body p-2">
-                  <table class="table table-sm mb-0">
-                    <tbody>
-                      <tr><th style="width:220px">Número de Operación</th><td>${c.operacion || '—'}</td></tr>
-                      <tr><th>Año Castigo</th><td>${c.anio_castigo ?? '—'}</td></tr>
-                      <tr><th>Entidad</th><td>${c.entidad || '—'}</td></tr>
-                      <tr><th>Producto</th><td>${c.producto || '—'}</td></tr>
-                      <tr><th>Capital</th><td>S/ ${fmt(c.saldo_capital)}</td></tr>
-                      <tr><th>Deuda Total</th><td>S/ ${fmt(c.deuda_total)}</td></tr>
-                      <tr><th>HASTA (% de descuento)</th><td>${pct(c.hasta)}</td></tr>
-                      <tr><th>CAPITAL_DESCUENTO (Campaña)</th><td>S/ ${fmt(c.capital_descuento)}</td></tr>
-                    </tbody>
-                  </table>
-                </div>
-              </div>
-            </div>`;
-          acc.insertAdjacentHTML('beforeend', html);
-        });
+      // Notas
+      const notaGen = (btn.dataset.detalle || '').trim();
+      const notaSup = (btn.dataset.notaSup || '').trim();
+      const ngWrap = document.getElementById('nota_general_wrap');
+      const nsWrap = document.getElementById('nota_sup_wrap');
+      if (ngWrap) {
+        if (notaGen) { ngWrap.style.display='block'; document.getElementById('nota_general_txt').textContent = notaGen; }
+        else { ngWrap.style.display='none'; }
+      }
+      if (nsWrap) {
+        if (notaSup) { nsWrap.style.display='block'; document.getElementById('nota_sup_txt').textContent = notaSup; }
+        else { nsWrap.style.display='none'; }
       }
 
-      // Cronograma
+      // ===== Acordeón por cuenta =====
+      const acc = document.getElementById('acc_cuentas');
+      if (acc) {
+        acc.innerHTML = '';
+        let cuentas = [];
+        try {
+          const raw = btn.getAttribute('data-cuentas'); // más seguro que dataset para JSON largo
+          cuentas = raw ? JSON.parse(raw) : [];
+        } catch(e) { cuentas = []; }
+
+        // Muestra las operaciones en el encabezado
+        document.getElementById('f_op').textContent = cuentas.length
+          ? cuentas.map(c=>c.operacion).join(', ')
+          : (btn.dataset.operacion || '—');
+
+        if (!cuentas.length) {
+          acc.innerHTML = '<div class="text-secondary small">No se encontraron cuentas asociadas.</div>';
+        } else {
+          cuentas.forEach((c, idx)=>{
+            const id = 'accItem_'+idx;
+            const html = `
+              <div class="accordion-item">
+                <h2 class="accordion-header" id="${id}_h">
+                  <button class="accordion-button ${idx>0?'collapsed':''}" type="button"
+                          data-bs-toggle="collapse" data-bs-target="#${id}_c"
+                          aria-expanded="${idx===0?'true':'false'}" aria-controls="${id}_c">
+                    Operación ${c.operacion || '—'} · ${c.entidad || '—'} · ${c.producto || '—'}
+                  </button>
+                </h2>
+                <div id="${id}_c" class="accordion-collapse collapse ${idx===0?'show':''}" aria-labelledby="${id}_h" data-bs-parent="#acc_cuentas">
+                  <div class="accordion-body p-2">
+                    <table class="table table-sm mb-0">
+                      <tbody>
+                        <tr><th style="width:220px">Número de Operación</th><td>${c.operacion || '—'}</td></tr>
+                        <tr><th>Año Castigo</th><td>${c.anio_castigo ?? '—'}</td></tr>
+                        <tr><th>Entidad</th><td>${c.entidad || '—'}</td></tr>
+                        <tr><th>Producto</th><td>${c.producto || '—'}</td></tr>
+                        <tr><th>Capital</th><td>S/ ${fmt(c.saldo_capital)}</td></tr>
+                        <tr><th>Deuda Total</th><td>S/ ${fmt(c.deuda_total)}</td></tr>
+                        <tr><th>HASTA (% de descuento)</th><td>${pct(c.hasta)}</td></tr>
+                        <tr><th>CAPITAL_DESCUENTO (Campaña)</th><td>S/ ${fmt(c.capital_descuento)}</td></tr>
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+              </div>`;
+            acc.insertAdjacentHTML('beforeend', html);
+          });
+        }
+      }
+
+      // ===== Cronograma (oculta si es cancelación)
       const cronoWrap  = document.getElementById('crono_wrap');
       const cronoBody  = document.getElementById('crono_body');
       const cronoTotal = document.getElementById('crono_total');
@@ -441,7 +431,7 @@
       const titulo     = document.getElementById('crono_titulo');
 
       let crono = [];
-      try { crono = JSON.parse(btn.dataset.crono || '[]'); } catch(_) { crono = []; }
+      try { crono = JSON.parse(btn.getAttribute('data-crono') || '[]'); } catch(_) { crono = []; }
 
       if (tipo === 'cancelacion') { cronoWrap.classList.add('d-none'); return; }
 
