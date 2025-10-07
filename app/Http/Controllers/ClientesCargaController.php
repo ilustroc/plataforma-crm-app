@@ -3,7 +3,7 @@
 namespace App\Http\Controllers;
 
 use Illuminate\Http\Request;
-use App\Models\ClienteCuenta; // <-- ¡IMPORTANTE!
+use App\Models\ClienteCuenta;
 
 
 class ClientesCargaController extends Controller
@@ -13,7 +13,7 @@ class ClientesCargaController extends Controller
         $headers = [
             'CARTERA','TIPO_DOC','DNI','OPERACIÓN','CONCATENAR','AGENTE','TITULAR','AÑO_CASTIGO',
             'MONEDA','ENTIDAD','PRODUCTO','COSECHA','DEPARTAMENTO','ZONA','UBICACIÓN_GEOGRAFICA',
-            'FECHA_COMPRA','EDAD','SEXO','ESTADO_CIVIL','TELF1','TELF2','TELF3',
+            'FECHA_COMPRA','EDAD','SEXO','ESTADO_CIVIL','TELF1','TELF2','TELF3','HASTA','CAPITAL_DESCUENTO',
             'SALDO_CAPITAL','INTERES','DEUDA_TOTAL','LABORAL','VEHICULOS','PROPIEDADES',
             'CONSOLIDADO_VEHICULOS_PROPIEDADES','CLASIFICACION','SCORE','CORREO_ELECTRONICO',
             'DIRECCION','PROVINCIA','DISTRITO',
@@ -47,10 +47,7 @@ private function doImportClientesMaster(string $filepath): array
   $fh = fopen($filepath,'r'); if(!$fh) return [0,0,['No se pudo abrir el archivo']];
   $first = fgets($fh); if($first===false){ fclose($fh); return [0,0,['Archivo vacío']]; }
   $del = (substr_count($first,';')>substr_count($first,','))?';':','; rewind($fh);
-
   $headers = fgetcsv($fh,0,$del); if(!$headers){ fclose($fh); return [0,0,['Sin encabezados']]; }
-
-  // normalizador de encabezados
   $norm = function(string $s): string {
     $s = preg_replace('/^\xEF\xBB\xBF/u','',$s);           // BOM
     $s = str_replace("\xC2\xA0",' ',$s);                   // NBSP
@@ -59,11 +56,8 @@ private function doImportClientesMaster(string $filepath): array
     $s = preg_replace('/[^A-Z0-9]+/','_',$s);
     return trim($s,'_');
   };
-
   $map = [];
   foreach($headers as $i=>$h) $map[$i] = $norm($h);
-
-  // alias → canon
   $alias = [
     'TIPO_DOC'=>'TIPO_DOC','TIPO_DOCUMENTO'=>'TIPO_DOC',
     'OPERACION'=>'OPERACION','OPERACIÓN'=>'OPERACION',
@@ -73,7 +67,20 @@ private function doImportClientesMaster(string $filepath): array
     'DEUDA_TOTAL'=>'DEUDA_TOTAL','CLASIFICACION'=>'CLASIFICACION','CLASIFICACIÓN'=>'CLASIFICACION',
     'CORREO_ELECTRONICO'=>'CORREO_ELECTRONICO','CORREO_ELECTRÓNICO'=>'CORREO_ELECTRONICO',
   ];
-
+  $frac = function(?string $v) use ($num): ?float {
+      if ($v === null) return null;
+      $raw = trim($v);
+      // Si viene con % explícito
+      if (str_ends_with($raw, '%')) {
+          $n = $num(rtrim($raw, '%'));
+          return $n === null ? null : max(0, min(1, $n / 100));
+      }
+      // Si viene como número "crudo"
+      $n = $num($raw);
+      if ($n === null) return null;
+      // Si es mayor a 1, asumimos 0–100 (60 => 0.6)
+      return $n > 1 ? max(0, min(1, $n / 100)) : max(0, min(1, $n));
+  };
   $toUtf8 = function(?string $s): ?string {
     if ($s===null) return null; $s = trim($s);
     if ($s==='') return null;
@@ -113,7 +120,7 @@ private function doImportClientesMaster(string $filepath): array
         case 'CONCATENAR':             $data['concatenar']=$val; break;
         case 'AGENTE':                 $data['agente']=$val; break;
         case 'TITULAR':                $data['titular']=$val; break;
-        case 'ANO_CASTIGO': // por si llega sin tilde
+        case 'ANO_CASTIGO':
         case 'ANIO_CASTIGO':
         case 'AÑO_CASTIGO':            $data['anio_castigo']=$val? (int)$val:null; break;
         case 'MONEDA':                 $data['moneda']=$val; break;
@@ -133,13 +140,15 @@ private function doImportClientesMaster(string $filepath): array
         case 'SALDO_CAPITAL':          $data['saldo_capital']=$num($val); break;
         case 'INTERES':                $data['interes']=$num($val); break;
         case 'DEUDA_TOTAL':            $data['deuda_total']=$num($val); break;
+        case 'HASTA':                  $data['hasta'] = $frac($val); break;
+        case 'CAPITAL_DESCUENTO':      $data['capital_descuento'] = $num($val); break;
         case 'LABORAL':                $data['laboral']=$val; break;
         case 'VEHICULOS':
         case 'VEHÍCULOS':              $data['vehiculos']=$val; break;
         case 'PROPIEDADES':            $data['propiedades']=$val; break;
         case 'CONSOLIDADO_VEHICULOS_PROPIEDADES':
         case 'CONSOLIDADO_VEHICULOS_PROPIEDADES_':
-        case 'CONSOLIDADO_VEHICULOS_PROPIEDADES__': // por si normaliza doble "_"
+        case 'CONSOLIDADO_VEHICULOS_PROPIEDADES__':
         case 'CONSOLIDADO_VEHICULOS_PROPIEDADES___':
         case 'CONSOLIDADO_VEHICULOS_PROPIEDADES____':
         case 'CONSOLIDADO_VEHICULOS_PROPIEDADES_____':
@@ -156,12 +165,10 @@ private function doImportClientesMaster(string $filepath): array
         case 'DISTRITO':               $data['distrito']=$val; break;
       }
     }
-
     // construir concatenar si no vino
     if (empty($data['concatenar']) && !empty($data['dni']) && !empty($data['operacion'])) {
       $data['concatenar'] = $data['dni'].$data['operacion'];
     }
-
     // clave mínima: DNI u OPERACION (ideal ambos)
     if (empty($data['dni']) && empty($data['operacion']) && empty($data['concatenar'])) {
       $skip++; $err[]="Fila {$rowNum}: sin clave (DNI/OPERACION/CONCATENAR)."; continue;
