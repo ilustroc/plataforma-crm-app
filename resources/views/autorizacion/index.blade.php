@@ -121,8 +121,6 @@
     </div>
   </div>
   {{-- ====== /Promesas ====== --}}
-
-  {{-- ====== /Promesas ====== --}}
   
   {{-- ====== Solicitudes de CNA ====== --}}
   <div class="card mt-4">
@@ -221,8 +219,6 @@
   </div>
   {{-- ====== /Solicitudes de CNA ====== --}}
 
-</div>
-
   {{-- Rechazo --}}
   <div class="modal fade" id="modalRechazo" tabindex="-1" aria-hidden="true">
     <div class="modal-dialog">
@@ -250,13 +246,17 @@
           <h6 class="modal-title">Detalle de Propuesta</h6>
           <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Cerrar"></button>
         </div>
+
         <div class="modal-body">
+          {{-- Encabezado --}}
           <div class="mb-2">
             <strong>DNI:</strong> <span id="f_dni">—</span> &nbsp;&nbsp;
-            <strong>Operación:</strong> <span id="f_op">—</span> &nbsp;&nbsp;
+            <strong>Operación(es):</strong> <span id="f_op">—</span> &nbsp;&nbsp;
             <strong>Fecha:</strong> <span id="t_fecha">—</span>
           </div>
 
+          {{-- Datos generales --}}
+          <h6 class="mb-2">Datos generales</h6>
           <table class="table table-sm">
             <tbody>
               <tr><th style="width:220px">Tipo</th><td id="t_tipo">—</td></tr>
@@ -277,13 +277,18 @@
             </tbody>
           </table>
 
+          {{-- Detalle / Nota --}}
           <div class="mb-2">
             <strong>Detalle / Nota</strong>
             <div class="form-control-plaintext" id="t_detalle"></div>
           </div>
 
+          {{-- Cuentas incluidas en la propuesta (ACORDEÓN) --}}
+          <h6 class="mt-4 mb-2">Cuentas incluidas en la propuesta</h6>
+          <div class="accordion" id="acc_cuentas"></div>
+
           {{-- Cronograma (si aplica) --}}
-          <div id="crono_wrap" class="d-none">
+          <div id="crono_wrap" class="d-none mt-4">
             <h6 class="mt-3 mb-2" id="crono_titulo">Cronograma de cuotas</h6>
             <div class="table-responsive">
               <table class="table table-sm align-middle">
@@ -312,12 +317,14 @@
           </div>
           {{-- /Cronograma --}}
         </div>
+
         <div class="modal-footer">
           <button class="btn btn-outline-secondary" type="button" data-bs-dismiss="modal">Cerrar</button>
         </div>
       </div>
     </div>
   </div>
+
 @endsection
 
 @push('scripts')
