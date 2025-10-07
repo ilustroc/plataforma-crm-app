@@ -84,7 +84,7 @@
                   data-detalle="{{ $p->nota ?? '' }}"
                   data-crono='@json($crono)'
                   data-hasbalon="{{ $hasBalon ? 1 : 0 }}"
-                  data-cuentas='@json($p->cuentas_json ?? [])' {{-- << NUEVO: cuentas para el acordeón --}}
+                  data-cuentas='@json($p->cuentas_json ?? [])'
                   data-bs-toggle="modal" data-bs-target="#modalFicha">
                   Ver ficha
                 </button>
@@ -120,6 +120,8 @@
       </div>
     </div>
   </div>
+  {{-- ====== /Promesas ====== --}}
+
   {{-- ====== /Promesas ====== --}}
   
   {{-- ====== Solicitudes de CNA ====== --}}

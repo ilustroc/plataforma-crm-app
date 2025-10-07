@@ -19,15 +19,15 @@ class AutorizacionController extends Controller
             $q      = trim((string)($req->q ?? ''));
             $status = $req->status;
 
-            // ===== PROMESAS (sin joins que dupliquen filas) =====
+            // ===== PROMESAS (sin JOIN que duplique) =====
             $promesas = PromesaPago::query()
-                ->with(['operaciones']) // detalle de operaciones
+                ->with(['operaciones'])
                 ->when($q !== '', function ($w) use ($q) {
                     $w->where(function ($x) use ($q) {
                         $x->where('dni','like',"%{$q}%")
                         ->orWhere('nota','like',"%{$q}%")
-                        ->orWhere('operacion','like',"%{$q}%") // legacy
-                        ->orWhereHas('operaciones', fn($qq)=>$qq->where('operacion','like',"%{$q}%"));
+                        ->orWhereHas('operaciones', fn($qq)=>$qq->where('operacion','like',"%{$q}%"))
+                        ->orWhere('operacion','like',"%{$q}%");
                     });
                 });
 
@@ -40,81 +40,110 @@ class AutorizacionController extends Controller
                 $promesas->where('workflow_estado', $status);
             }
 
-            /** @var \Illuminate\Support\Collection $rows */
             $rows = $promesas->orderByDesc('fecha_promesa')->get();
 
-            // ===== Universo de operaciones y DNIs (para traer cuentas) =====
-            $opsByPromesa = $rows->mapWithKeys(function($p){
+            // --- Operaciones únicas de todas las promesas
+            $opsAll = $rows->flatMap(function($p){
+                    if ($p->relationLoaded('operaciones') && $p->operaciones->count()) {
+                        return $p->operaciones->pluck('operacion');
+                    }
+                    return collect(array_filter(array_map('trim', explode(',', (string)($p->operacion ?? '')))));
+                })
+                ->filter()->unique()->values()->all();
+
+            // --- Traer info de cuentas por operación (incluye HASTA y CAPITAL_DESCUENTO)
+            $ccByOp = [];
+            if (!empty($opsAll)) {
+                $ccByOp = DB::table('clientes_cuentas')
+                    ->select([
+                        'operacion','cartera','titular','entidad','producto','moneda','agente',
+                        'anio_castigo','saldo_capital','deuda_total',
+                        'hasta','capital_descuento'
+                    ])
+                    ->whereIn('operacion', $opsAll)
+                    ->get()
+                    ->keyBy('operacion');
+            }
+
+            // --- Armar agregados y cuentas_json para la vista/modal
+            $rows = $rows->map(function($p) use ($ccByOp) {
+
                 $ops = $p->relationLoaded('operaciones') && $p->operaciones->count()
                     ? $p->operaciones->pluck('operacion')->map(fn($x)=>(string)$x)->values()
                     : collect(array_filter(array_map('trim', explode(',', (string)($p->operacion ?? '')))));
-                return [$p->id => $ops];
-            });
 
-            $opsUniverse = $opsByPromesa->flatten()->filter()->unique()->values()->all();
-            $dnis        = $rows->pluck('dni')->filter()->unique()->values()->all();
-
-            // ===== Traer cuentas: Operación + DNI (incluye HASTA y CAPITAL_DESCUENTO) =====
-            $ccAll = collect();
-            if (!empty($dnis)) {
-                $ccAll = DB::table('clientes_cuentas')
-                    ->select(
-                        'dni','operacion','anio_castigo','entidad','producto',
-                        'saldo_capital','deuda_total','hasta','capital_descuento'
-                    )
-                    ->whereIn('dni', $dnis)
-                    ->when(!empty($opsUniverse), fn($q2) => $q2->whereIn('operacion', $opsUniverse))
-                    ->get()
-                    ->mapWithKeys(fn($r) => [ ($r->dni.'|'.$r->operacion) => $r ]);
-            }
-
-            // ===== Agregados + JSON de cuentas por promesa (para el modal acordeón) =====
-            $rows = $rows->map(function($p) use ($opsByPromesa, $ccAll) {
-                $ops = $opsByPromesa[$p->id] ?? collect();
-
-                // para listados
-                $p->operacion = $ops->implode(', ');  // ej. "123, 456"
+                $p->operacion = $ops->implode(', ');
                 $p->ops_list  = $ops->values();
 
                 $titulares = collect(); $entidades = collect(); $productos = collect();
-                $sumCap = 0.0; $sumDeu = 0.0;
+                $monedas = collect(); $carteras = collect(); $agentes = collect();
 
-                $cuentas = $ops->map(function($op) use ($p, $ccAll, &$titulares, &$entidades, &$productos, &$sumCap, &$sumDeu){
-                    $k  = $p->dni.'|'.$op;
-                    $cc = $ccAll[$k] ?? null;
-                    if (!$cc) return null;
+                $sumCap = 0.0; $sumDeu = 0.0;
+                $sumCampania = 0.0;       // suma de CAPITAL_DESCUENTO
+                $hastas = [];             // lista de HASTA (fracción 0–1)
+
+                $cuentas = [];
+
+                foreach ($ops as $op) {
+                    /** @var object|null $cc */
+                    $cc = $ccByOp[$op] ?? null;
+                    if (!$cc) continue;
+
+                    if ($cc->titular)  $titulares->push($cc->titular);
                     if ($cc->entidad)  $entidades->push($cc->entidad);
                     if ($cc->producto) $productos->push($cc->producto);
+                    if ($cc->moneda)   $monedas->push($cc->moneda);
+                    if ($cc->cartera)  $carteras->push($cc->cartera);
+                    if ($cc->agente)   $agentes->push($cc->agente);
+
                     $sumCap += (float)($cc->saldo_capital ?? 0);
-                    $sumDeu += (float)($cc->deuda_total ?? 0);
+                    $sumDeu += (float)($cc->deuda_total   ?? 0);
 
-                    return [
-                        'operacion'         => (string)($cc->operacion ?? ''),
-                        'anio_castigo'      => (int)($cc->anio_castigo ?? 0),
-                        'entidad'           => (string)($cc->entidad ?? '—'),
-                        'producto'          => (string)($cc->producto ?? '—'),
-                        'saldo_capital'     => (float)($cc->saldo_capital ?? 0),
-                        'deuda_total'       => (float)($cc->deuda_total ?? 0),
-                        'hasta'             => is_null($cc->hasta) ? null : (float)$cc->hasta,        // fracción 0..1
-                        'capital_descuento' => (float)($cc->capital_descuento ?? 0),                  // monto S/
+                    // campaña por cuenta
+                    $sumCampania += (float)($cc->capital_descuento ?? 0);
+                    if ($cc->hasta !== null) $hastas[] = (float)$cc->hasta;
+
+                    // para el acordeón
+                    $cuentas[] = [
+                        'operacion'          => (string)$op,
+                        'anio_castigo'       => $cc->anio_castigo,
+                        'entidad'            => $cc->entidad,
+                        'producto'           => $cc->producto,
+                        'saldo_capital'      => (float)$cc->saldo_capital,
+                        'deuda_total'        => (float)$cc->deuda_total,
+                        'hasta'              => $cc->hasta !== null ? (float)$cc->hasta : null,              // 0–1
+                        'capital_descuento'  => $cc->capital_descuento !== null ? (float)$cc->capital_descuento : null,
                     ];
-                })->filter()->values();
+                }
 
-                $p->entidad        = $entidades->unique()->implode(' / ');
-                $p->producto       = $productos->unique()->implode(' / ');
+                $uniqJoin = fn($c) => $c->filter()->unique()->implode(' / ');
+
+                $p->titular        = $uniqJoin($titulares);
+                $p->entidad        = $uniqJoin($entidades);
+                $p->producto       = $uniqJoin($productos);
+                $p->moneda         = $uniqJoin($monedas);
+                $p->cartera        = $uniqJoin($carteras);
+                $p->asesor_nombre  = $uniqJoin($agentes);
+
                 $p->saldo_capital  = $sumCap;
                 $p->deuda_total    = $sumDeu;
-                $p->monto_campania = max(0, $sumDeu - $sumCap);
-                $p->porc_descuento = $sumDeu > 0 ? round(100 * ($p->monto_campania) / $sumDeu, 2) : null;
 
-                $p->cuentas_json   = $cuentas; // ← para el acordeón del modal
+                // Monto campaña y % descuento: usar columnas nuevas si existen, si no, fallback
+                $p->monto_campania = $sumCampania > 0 ? $sumCampania : max(0, $sumDeu - $sumCap);
+                if (count($hastas) > 0) {
+                    $p->porc_descuento = round(100 * (array_sum($hastas) / count($hastas)), 2); // promedio
+                } else {
+                    $p->porc_descuento = $sumDeu > 0 ? round(100 * ($p->monto_campania) / $sumDeu, 2) : null;
+                }
+
+                $p->cuentas_json = $cuentas;  // para el acordeón de la vista
                 return $p;
             });
 
-            // ===== Cronogramas =====
+            // ===== Cronogramas (si existieran) =====
             $ids = $rows->pluck('id')->filter()->all();
             $cuotasById = collect();
-            if (!empty($ids) && Schema::hasTable('promesa_cuotas')) {
+            if (!empty($ids) && \Illuminate\Support\Facades\Schema::hasTable('promesa_cuotas')) {
                 $cuotasById = DB::table('promesa_cuotas')
                     ->select('promesa_id','nro','fecha','monto','es_balon')
                     ->whereIn('promesa_id', $ids)
@@ -137,7 +166,7 @@ class AutorizacionController extends Controller
                 return $p;
             });
 
-            // ===== CNA (igual que venías usando) =====
+            // ===== CNA (igual que tenías) =====
             $cnaBase = CnaSolicitud::query()
                 ->when($q !== '', function ($w) use ($q) {
                     $w->where(function($x) use ($q){
@@ -161,7 +190,6 @@ class AutorizacionController extends Controller
                 ->paginate(10, ['*'], 'page_cna')
                 ->withQueryString();
 
-            // Mapa op->producto para CNA
             $opsAllCna = collect($cnaRows->items())
                 ->flatMap(fn($c) => (array)($c->operaciones ?? []))
                 ->filter()->map(fn($op)=>(string)$op)->unique()->values()->all();
@@ -183,6 +211,7 @@ class AutorizacionController extends Controller
                 'q'            => $q,
                 'isSupervisor' => strtolower($user->role) === 'supervisor',
             ]);
+
         } catch (\Throwable $e) {
             \Log::error('Autorizacion.index ERROR', [
                 'msg'   => $e->getMessage(),
