@@ -68,20 +68,16 @@
                   data-cartera="{{ $p->cartera ?? '—' }}"
                   data-asesor="{{ $p->asesor_nombre ?? '—' }}"
                   data-agente="{{ $p->creador_nombre ?? '—' }}"
-                  data-entidad="{{ $p->entidad ?? '—' }}"
                   data-titular="{{ $p->titular ?? '—' }}"
-                  data-anio="{{ $p->anio_castigo ?? '—' }}"
-                  data-prop="{{ $p->propiedades ?? '—' }}"
                   data-trabaja="{{ ($p->trabajo ?? '') === 'SI' ? 'SI' : 'NO' }}"
                   data-clasificacion="{{ $p->clasificacion ?? '—' }}"
                   data-deuda="{{ number_format((float)($p->deuda_total ?? 0),2) }}"
-                  data-capital="{{ number_format((float)($p->saldo_capital ?? 0),2) }}"
                   data-capital-raw="{{ (float)($p->saldo_capital ?? 0) }}"
-                  data-campania="{{ number_format((float)($p->monto_campania ?? 0),2) }}"
-                  data-desc="{{ $p->porc_descuento ?? '—' }}"
                   data-negociado="{{ number_format($montoMostrar, 2) }}"
                   data-totalconvenio-raw="{{ (float)($p->monto_convenio ?? 0) }}"
                   data-detalle="{{ $p->nota ?? '' }}"
+                  data-nota-sup="{{ $p->nota_preaprobacion ?? '' }}"
+                  data-nota-gen="{{ $p->nota ?? '' }}"
                   data-crono='@json($crono)'
                   data-hasbalon="{{ $hasBalon ? 1 : 0 }}"
                   data-cuentas='@json($p->cuentas_json ?? [])'
@@ -90,20 +86,22 @@
                 </button>
 
                 @if($isSupervisor)
-                  <form class="d-inline" method="POST" action="{{ route('autorizacion.preaprobar',$p) }}">
-                    @csrf
-                    <button class="btn btn-primary btn-sm">Pre-aprobar</button>
-                  </form>
+                  <button class="btn btn-primary btn-sm js-open-nota"
+                          data-title="Pre-aprobar"
+                          data-action="{{ route('autorizacion.preaprobar',$p) }}">
+                    Pre-aprobar
+                  </button>
                   <button class="btn btn-outline-danger btn-sm js-open-rechazo"
                           data-action="{{ route('autorizacion.rechazar.sup',$p) }}"
                           data-bs-toggle="modal" data-bs-target="#modalRechazo">
                     Rechazar
                   </button>
                 @else
-                  <form class="d-inline" method="POST" action="{{ route('autorizacion.aprobar',$p) }}">
-                    @csrf
-                    <button class="btn btn-primary btn-sm">Aprobar</button>
-                  </form>
+                  <button class="btn btn-primary btn-sm js-open-nota"
+                          data-title="Aprobar"
+                          data-action="{{ route('autorizacion.aprobar',$p) }}">
+                    Aprobar
+                  </button>
                   <button class="btn btn-outline-danger btn-sm js-open-rechazo"
                           data-action="{{ route('autorizacion.rechazar.admin',$p) }}"
                           data-bs-toggle="modal" data-bs-target="#modalRechazo">
@@ -121,7 +119,113 @@
     </div>
   </div>
   {{-- ====== /Promesas ====== --}}
-  
+
+  {{-- Modal de NOTA (para Pre-aprobar / Aprobar) --}}
+  <div class="modal fade" id="modalNotaEstado" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog">
+      <form class="modal-content" id="formNotaEstado" method="POST" action="#">
+        @csrf
+        <div class="modal-header">
+          <h6 class="modal-title" id="modalNotaEstadoTitulo">Agregar nota</h6>
+          <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Cerrar"></button>
+        </div>
+        <div class="modal-body">
+          <textarea name="nota_estado" id="notaEstadoTxt" class="form-control" rows="5" maxlength="500"
+                    placeholder="(opcional) Escribe una nota para esta decisión…"></textarea>
+        </div>
+        <div class="modal-footer">
+          <button class="btn btn-outline-secondary" type="button" data-bs-dismiss="modal">Cancelar</button>
+          <button class="btn btn-primary" type="submit">Guardar</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  {{-- Modal FICHA (Datos generales + acordeón por cuenta + cronograma) --}}
+  <div class="modal fade" id="modalFicha" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-lg modal-dialog-scrollable">
+      <div class="modal-content">
+        <div class="modal-header">
+          <h6 class="modal-title">Detalle de Propuesta</h6>
+          <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Cerrar"></button>
+        </div>
+        <div class="modal-body">
+          <div class="mb-2">
+            <strong>DNI:</strong> <span id="f_dni">—</span> &nbsp;&nbsp;
+            <strong>Operación(es):</strong> <span id="f_op">—</span> &nbsp;&nbsp;
+            <strong>Fecha:</strong> <span id="t_fecha">—</span>
+          </div>
+
+          {{-- Datos generales (simplificado) --}}
+          <table class="table table-sm">
+            <tbody>
+              <tr><th style="width:220px">Tipo</th><td id="t_tipo">—</td></tr>
+              <tr><th>Cartera</th><td id="t_cartera">—</td></tr>
+              <tr><th>Equipo</th><td id="t_asesor">—</td></tr>
+              <tr><th>Asesor (quien creó)</th><td id="t_agente">—</td></tr>
+              <tr><th>Cliente</th><td id="t_titular">—</td></tr>
+              <tr><th>Trabajo</th><td id="t_trab">—</td></tr>
+              <tr><th>Calificación SBS</th><td id="t_clasificacion">—</td></tr>
+              <tr><th>Deuda Total (sumada)</th><td id="t_deuda">—</td></tr>
+              <tr><th>Monto Negociado</th><td id="t_neg">—</td></tr>
+            </tbody>
+          </table>
+
+          {{-- Notas visibles para ADMIN: general + supervisor (si existen) --}}
+          <div class="mb-2">
+            <strong>Notas</strong>
+            <div class="small text-muted mt-1" id="nota_general_wrap" style="display:none">
+              <span class="badge bg-secondary me-1">General</span>
+              <span id="nota_general_txt"></span>
+            </div>
+            <div class="small text-muted mt-1" id="nota_sup_wrap" style="display:none">
+              <span class="badge bg-info me-1">Supervisor</span>
+              <span id="nota_sup_txt"></span>
+            </div>
+          </div>
+
+          {{-- Acordeón por cuenta --}}
+          <h6 class="mt-3">Cuentas incluidas</h6>
+          <div class="accordion" id="acc_cuentas"></div>
+
+          {{-- Cronograma (si aplica) --}}
+          <div id="crono_wrap" class="d-none mt-3">
+            <h6 class="mb-2" id="crono_titulo">Cronograma de cuotas</h6>
+            <div class="table-responsive">
+              <table class="table table-sm align-middle">
+                <thead class="table-light">
+                  <tr>
+                    <th style="width:60px" class="text-center">#</th>
+                    <th style="width:160px" class="text-center">Fecha</th>
+                    <th class="text-end">Importe (S/)</th>
+                    <th style="width:120px" class="text-center"></th>
+                  </tr>
+                </thead>
+                <tbody id="crono_body"></tbody>
+                <tfoot>
+                  <tr>
+                    <th colspan="2" class="text-end">TOTAL CONVENIO</th>
+                    <th class="text-end" id="crono_total">0.00</th>
+                    <th></th>
+                  </tr>
+                  <tr id="fila_balon" class="d-none">
+                    <th colspan="2" class="text-end">Cuota balón (Capital – Convenio)</th>
+                    <th class="text-end" id="crono_balon">0.00</th>
+                    <th></th>
+                  </tr>
+                </tfoot>
+              </table>
+            </div>
+          </div>
+          {{-- /Cronograma --}}
+        </div>
+        <div class="modal-footer">
+          <button class="btn btn-outline-secondary" type="button" data-bs-dismiss="modal">Cerrar</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
   {{-- ====== Solicitudes de CNA ====== --}}
   <div class="card mt-4">
     <div class="card-header fw-bold">Solicitudes de CNA</div>
@@ -219,114 +323,7 @@
   </div>
   {{-- ====== /Solicitudes de CNA ====== --}}
 
-  {{-- Rechazo --}}
-  <div class="modal fade" id="modalRechazo" tabindex="-1" aria-hidden="true">
-    <div class="modal-dialog">
-      <form class="modal-content" id="formRechazo" method="POST" action="#">
-        @csrf
-        <div class="modal-header"><h6 class="modal-title">Motivo / Nota de rechazo</h6>
-          <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Cerrar"></button>
-        </div>
-        <div class="modal-body">
-          <textarea name="nota_estado" id="motivoTxt" class="form-control" rows="5" maxlength="500" required></textarea>
-        </div>
-        <div class="modal-footer">
-          <button class="btn btn-outline-secondary" type="button" data-bs-dismiss="modal">Cancelar</button>
-          <button class="btn btn-danger" type="submit">Rechazar</button>
-        </div>
-      </form>
-    </div>
-  </div>
-
-  {{-- Ficha --}}
-  <div class="modal fade" id="modalFicha" tabindex="-1" aria-hidden="true">
-    <div class="modal-dialog modal-lg modal-dialog-scrollable">
-      <div class="modal-content">
-        <div class="modal-header">
-          <h6 class="modal-title">Detalle de Propuesta</h6>
-          <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Cerrar"></button>
-        </div>
-
-        <div class="modal-body">
-          {{-- Encabezado --}}
-          <div class="mb-2">
-            <strong>DNI:</strong> <span id="f_dni">—</span> &nbsp;&nbsp;
-            <strong>Operación(es):</strong> <span id="f_op">—</span> &nbsp;&nbsp;
-            <strong>Fecha:</strong> <span id="t_fecha">—</span>
-          </div>
-
-          {{-- Datos generales --}}
-          <h6 class="mb-2">Datos generales</h6>
-          <table class="table table-sm">
-            <tbody>
-              <tr><th style="width:220px">Tipo</th><td id="t_tipo">—</td></tr>
-              <tr><th>Cartera</th><td id="t_cartera">—</td></tr>
-              <tr><th>Equipo</th><td id="t_asesor">—</td></tr>
-              <tr><th>Asesor (quien creó)</th><td id="t_agente">—</td></tr>
-              <tr><th>Entidad</th><td id="t_entidad">—</td></tr>
-              <tr><th>Cliente</th><td id="t_titular">—</td></tr>
-              <tr><th>Año Castigo</th><td id="t_anio">—</td></tr>
-              <tr><th>Propiedades</th><td id="t_prop">—</td></tr>
-              <tr><th>Trabajo</th><td id="t_trab">—</td></tr>
-              <tr><th>Calificación SBS</th><td id="t_clasificacion">—</td></tr>
-              <tr><th>Deuda Total</th><td id="t_deuda">—</td></tr>
-              <tr><th>Capital</th><td id="t_capital">—</td></tr>
-              <tr><th>Monto Campaña</th><td id="t_camp">—</td></tr>
-              <tr><th>% Descuento</th><td id="t_desc">—</td></tr>
-              <tr><th>Monto Negociado</th><td id="t_neg">—</td></tr>
-            </tbody>
-          </table>
-
-          {{-- Detalle / Nota --}}
-          <div class="mb-2">
-            <strong>Detalle / Nota</strong>
-            <div class="form-control-plaintext" id="t_detalle"></div>
-          </div>
-
-          {{-- Cuentas incluidas en la propuesta (ACORDEÓN) --}}
-          <h6 class="mt-4 mb-2">Cuentas incluidas en la propuesta</h6>
-          <div class="accordion" id="acc_cuentas"></div>
-
-          {{-- Cronograma (si aplica) --}}
-          <div id="crono_wrap" class="d-none mt-4">
-            <h6 class="mt-3 mb-2" id="crono_titulo">Cronograma de cuotas</h6>
-            <div class="table-responsive">
-              <table class="table table-sm align-middle">
-                <thead class="table-light">
-                  <tr>
-                    <th style="width:60px" class="text-center">#</th>
-                    <th style="width:160px" class="text-center">Fecha</th>
-                    <th class="text-end">Importe (S/)</th>
-                  </tr>
-                </thead>
-                <tbody id="crono_body"></tbody>
-                <tfoot>
-                  <tr>
-                    <th colspan="2" class="text-end">TOTAL CONVENIO</th>
-                    <th class="text-end" id="crono_total">0.00</th>
-                    <th></th>
-                  </tr>
-                  <tr id="fila_balon" class="d-none">
-                    <th colspan="2" class="text-end">Cuota balón (Capital – Convenio)</th>
-                    <th class="text-end" id="crono_balon">0.00</th>
-                    <th></th>
-                  </tr>
-                </tfoot>
-              </table>
-            </div>
-          </div>
-          {{-- /Cronograma --}}
-        </div>
-
-        <div class="modal-footer">
-          <button class="btn btn-outline-secondary" type="button" data-bs-dismiss="modal">Cerrar</button>
-        </div>
-      </div>
-    </div>
-  </div>
-
 @endsection
-
 @push('scripts')
 <script>
   // Rechazo (abre modal con action correcto)
@@ -334,6 +331,16 @@
     btn.addEventListener('click', ()=>{
       document.getElementById('formRechazo').setAttribute('action', btn.dataset.action);
       setTimeout(()=> document.getElementById('motivoTxt').focus(), 150);
+    });
+  });
+
+  // Nota para Pre-aprobar / Aprobar
+  document.querySelectorAll('.js-open-nota').forEach(btn=>{
+    btn.addEventListener('click', ()=>{
+      document.getElementById('formNotaEstado').setAttribute('action', btn.dataset.action);
+      document.getElementById('modalNotaEstadoTitulo').textContent = btn.dataset.title || 'Agregar nota';
+      document.getElementById('notaEstadoTxt').value = '';
+      new bootstrap.Modal(document.getElementById('modalNotaEstado')).show();
     });
   });
 
@@ -346,82 +353,86 @@
     return (x*100).toFixed(0)+'%';
   };
 
-  // Ver ficha
+  // Ver ficha (datos generales + acordeón + cronograma)
   document.querySelectorAll('.js-ver-ficha').forEach(btn=>{
     btn.addEventListener('click', ()=>{
       const tipo = (btn.dataset.tipo || '').toLowerCase();
 
-      // Encabezado simple
-      document.getElementById('f_dni').textContent = btn.dataset.dni || '—';
-      document.getElementById('t_fecha').textContent= btn.dataset.fecha || '—';
+      // Encabezado
+      document.getElementById('f_dni').textContent   = btn.dataset.dni || '—';
+      document.getElementById('t_fecha').textContent = btn.dataset.fecha || '—';
 
-      // Datos clave
+      // Datos generales (sin "Año Castigo / Entidad / Campaña / %")
       const set = (id, v)=> (document.getElementById('t_'+id).textContent = (v||'—'));
-      set('tipo', tipo ? (tipo==='cancelacion' ? 'Cancelación' : 'Convenio') : '—');
+      set('tipo',   tipo ? (tipo==='cancelacion' ? 'Cancelación' : 'Convenio') : '—');
       set('cartera', btn.dataset.cartera);
       set('asesor',  btn.dataset.asesor);
       set('agente',  btn.dataset.agente);
-      set('entidad', btn.dataset.entidad);
       set('titular', btn.dataset.titular);
-      set('anio',    btn.dataset.anio);
-      set('prop',    btn.dataset.prop);
       set('trab',    btn.dataset.trabaja);
       set('clasificacion', btn.dataset.clasificacion);
       set('deuda',   btn.dataset.deuda);
-      set('capital', btn.dataset.capital);
-      set('camp',    btn.dataset.campania);
-      set('desc',    (btn.dataset.desc ?? '').toString().trim() ? (btn.dataset.desc + '%') : '—');
       set('neg',     btn.dataset.negociado);
       set('detalle', btn.dataset.detalle);
 
-      // ===== Acordeón de cuentas =====
+      // Notas (general y supervisor) – visibles para el admin
+      const ng = (btn.dataset.notaGen || '').trim();
+      const ns = (btn.dataset.notaSup || '').trim();
+      const genWrap = document.getElementById('nota_general_wrap');
+      const supWrap = document.getElementById('nota_sup_wrap');
+      if (ng) { genWrap.style.display='block'; document.getElementById('nota_general_txt').textContent = ng; }
+      else    { genWrap.style.display='none'; }
+      if (ns) { supWrap.style.display='block'; document.getElementById('nota_sup_txt').textContent = ns; }
+      else    { supWrap.style.display='none'; }
+
+      // Acordeón de cuentas
       const acc = document.getElementById('acc_cuentas');
-      if (acc) {
-        acc.innerHTML = '';
-        let cuentas = [];
-        try { cuentas = JSON.parse(btn.dataset.cuentas || '[]'); } catch(_) { cuentas = []; }
+      acc.innerHTML = '';
+      let cuentas = [];
+      try { cuentas = JSON.parse(btn.dataset.cuentas || '[]'); } catch(_) { cuentas = []; }
 
-        document.getElementById('f_op').textContent = cuentas.length
-          ? cuentas.map(c=>c.operacion).join(', ')
-          : (btn.dataset.operacion || '—');
+      // Operaciones en el encabezado
+      document.getElementById('f_op').textContent = cuentas.length
+        ? cuentas.map(c=>c.operacion).join(', ')
+        : (btn.dataset.operacion || '—');
 
-        if (!cuentas.length) {
-          acc.innerHTML = '<div class="text-secondary small">No se encontraron cuentas asociadas.</div>';
-        } else {
-          cuentas.forEach((c, idx)=>{
-            const id = 'accItem_'+idx;
-            const html = `
-              <div class="accordion-item">
-                <h2 class="accordion-header" id="${id}_h">
-                  <button class="accordion-button ${idx>0?'collapsed':''}" type="button"
-                          data-bs-toggle="collapse" data-bs-target="#${id}_c"
-                          aria-expanded="${idx===0?'true':'false'}" aria-controls="${id}_c">
-                    Operación ${c.operacion || '—'} · ${c.entidad || '—'} · ${c.producto || '—'}
-                  </button>
-                </h2>
-                <div id="${id}_c" class="accordion-collapse collapse ${idx===0?'show':''}" aria-labelledby="${id}_h" data-bs-parent="#acc_cuentas">
-                  <div class="accordion-body p-2">
-                    <table class="table table-sm mb-0">
-                      <tbody>
-                        <tr><th style="width:220px">Número de Operación</th><td>${c.operacion || '—'}</td></tr>
-                        <tr><th>Año Castigo</th><td>${c.anio_castigo ?? '—'}</td></tr>
-                        <tr><th>Entidad</th><td>${c.entidad || '—'}</td></tr>
-                        <tr><th>Producto</th><td>${c.producto || '—'}</td></tr>
-                        <tr><th>Capital</th><td>S/ ${fmt(c.saldo_capital)}</td></tr>
-                        <tr><th>Deuda Total</th><td>S/ ${fmt(c.deuda_total)}</td></tr>
-                        <tr><th>HASTA (% de descuento)</th><td>${pct(c.hasta)}</td></tr>
-                        <tr><th>CAPITAL_DESCUENTO (Campaña)</th><td>S/ ${fmt(c.capital_descuento)}</td></tr>
-                      </tbody>
-                    </table>
-                  </div>
+      if (!cuentas.length) {
+        acc.innerHTML = '<div class="text-secondary small">No se encontraron cuentas asociadas.</div>';
+      } else {
+        cuentas.forEach((c, idx)=>{
+          const id = 'accItem_'+idx;
+          const html = `
+            <div class="accordion-item">
+              <h2 class="accordion-header" id="${id}_h">
+                <button class="accordion-button ${idx>0?'collapsed':''}" type="button"
+                        data-bs-toggle="collapse" data-bs-target="#${id}_c"
+                        aria-expanded="${idx===0?'true':'false'}" aria-controls="${id}_c">
+                  Operación ${c.operacion || '—'} · ${c.entidad || '—'} · ${c.producto || '—'}
+                </button>
+              </h2>
+              <div id="${id}_c" class="accordion-collapse collapse ${idx===0?'show':''}"
+                   aria-labelledby="${id}_h" data-bs-parent="#acc_cuentas">
+                <div class="accordion-body p-2">
+                  <table class="table table-sm mb-0">
+                    <tbody>
+                      <tr><th style="width:220px">Número de Operación</th><td>${c.operacion || '—'}</td></tr>
+                      <tr><th>Año Castigo</th><td>${c.anio_castigo ?? '—'}</td></tr>
+                      <tr><th>Entidad</th><td>${c.entidad || '—'}</td></tr>
+                      <tr><th>Producto</th><td>${c.producto || '—'}</td></tr>
+                      <tr><th>Capital</th><td>S/ ${fmt(c.saldo_capital)}</td></tr>
+                      <tr><th>Deuda Total</th><td>S/ ${fmt(c.deuda_total)}</td></tr>
+                      <tr><th>HASTA (% de descuento)</th><td>${pct(c.hasta)}</td></tr>
+                      <tr><th>CAPITAL_DESCUENTO (Campaña)</th><td>S/ ${fmt(c.capital_descuento)}</td></tr>
+                    </tbody>
+                  </table>
                 </div>
-              </div>`;
-            acc.insertAdjacentHTML('beforeend', html);
-          });
-        }
+              </div>
+            </div>`;
+          acc.insertAdjacentHTML('beforeend', html);
+        });
       }
 
-      // ===== Cronograma
+      // Cronograma
       const cronoWrap  = document.getElementById('crono_wrap');
       const cronoBody  = document.getElementById('crono_body');
       const cronoTotal = document.getElementById('crono_total');
