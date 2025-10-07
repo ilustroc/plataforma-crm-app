@@ -36,7 +36,7 @@
           <thead class="table-light">
             <tr>
               <th class="text-center">DNI</th>
-              <th class="text-center">Operación</th>
+              <th class="text-center">Operación(es)</th>
               <th class="text-center">Fecha</th>
               <th class="text-end">Monto (S/)</th>
               <th>Nota</th>
@@ -84,6 +84,7 @@
                   data-detalle="{{ $p->nota ?? '' }}"
                   data-crono='@json($crono)'
                   data-hasbalon="{{ $hasBalon ? 1 : 0 }}"
+                  data-cuentas='@json($p->cuentas_json ?? [])' {{-- << NUEVO: cuentas para el acordeón --}}
                   data-bs-toggle="modal" data-bs-target="#modalFicha">
                   Ver ficha
                 </button>
@@ -329,6 +330,12 @@
 
   // Helpers
   const fmt = (n)=> (Math.round((Number(n)||0)*100)/100).toFixed(2);
+  const pct = (v)=>{
+    if (v===null || v===undefined || v==='') return '—';
+    const x = Number(v);
+    if (isNaN(x)) return '—';
+    return (x*100).toFixed(0)+'%';
+  };
 
   // Ver ficha
   document.querySelectorAll('.js-ver-ficha').forEach(btn=>{
@@ -337,7 +344,6 @@
 
       // Encabezado simple
       document.getElementById('f_dni').textContent = btn.dataset.dni || '—';
-      document.getElementById('f_op').textContent  = btn.dataset.operacion || '—';
       document.getElementById('t_fecha').textContent= btn.dataset.fecha || '—';
 
       // Datos clave
@@ -359,7 +365,54 @@
       set('neg',     btn.dataset.negociado);
       set('detalle', btn.dataset.detalle);
 
-      // Cronograma
+      // ===== Acordeón de cuentas =====
+      const acc = document.getElementById('acc_cuentas');
+      if (acc) {
+        acc.innerHTML = '';
+        let cuentas = [];
+        try { cuentas = JSON.parse(btn.dataset.cuentas || '[]'); } catch(_) { cuentas = []; }
+
+        document.getElementById('f_op').textContent = cuentas.length
+          ? cuentas.map(c=>c.operacion).join(', ')
+          : (btn.dataset.operacion || '—');
+
+        if (!cuentas.length) {
+          acc.innerHTML = '<div class="text-secondary small">No se encontraron cuentas asociadas.</div>';
+        } else {
+          cuentas.forEach((c, idx)=>{
+            const id = 'accItem_'+idx;
+            const html = `
+              <div class="accordion-item">
+                <h2 class="accordion-header" id="${id}_h">
+                  <button class="accordion-button ${idx>0?'collapsed':''}" type="button"
+                          data-bs-toggle="collapse" data-bs-target="#${id}_c"
+                          aria-expanded="${idx===0?'true':'false'}" aria-controls="${id}_c">
+                    Operación ${c.operacion || '—'} · ${c.entidad || '—'} · ${c.producto || '—'}
+                  </button>
+                </h2>
+                <div id="${id}_c" class="accordion-collapse collapse ${idx===0?'show':''}" aria-labelledby="${id}_h" data-bs-parent="#acc_cuentas">
+                  <div class="accordion-body p-2">
+                    <table class="table table-sm mb-0">
+                      <tbody>
+                        <tr><th style="width:220px">Número de Operación</th><td>${c.operacion || '—'}</td></tr>
+                        <tr><th>Año Castigo</th><td>${c.anio_castigo ?? '—'}</td></tr>
+                        <tr><th>Entidad</th><td>${c.entidad || '—'}</td></tr>
+                        <tr><th>Producto</th><td>${c.producto || '—'}</td></tr>
+                        <tr><th>Capital</th><td>S/ ${fmt(c.saldo_capital)}</td></tr>
+                        <tr><th>Deuda Total</th><td>S/ ${fmt(c.deuda_total)}</td></tr>
+                        <tr><th>HASTA (% de descuento)</th><td>${pct(c.hasta)}</td></tr>
+                        <tr><th>CAPITAL_DESCUENTO (Campaña)</th><td>S/ ${fmt(c.capital_descuento)}</td></tr>
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+              </div>`;
+            acc.insertAdjacentHTML('beforeend', html);
+          });
+        }
+      }
+
+      // ===== Cronograma
       const cronoWrap  = document.getElementById('crono_wrap');
       const cronoBody  = document.getElementById('crono_body');
       const cronoTotal = document.getElementById('crono_total');
@@ -370,17 +423,11 @@
       let crono = [];
       try { crono = JSON.parse(btn.dataset.crono || '[]'); } catch(_) { crono = []; }
 
-      // Si es cancelación, no mostramos cronograma
-      if (tipo === 'cancelacion') {
-        cronoWrap.classList.add('d-none');
-        return;
-      }
+      if (tipo === 'cancelacion') { cronoWrap.classList.add('d-none'); return; }
 
-      // Título según si hay cuota balón
       const hasBalon = (btn.dataset.hasbalon === '1') || crono.some(r => !!r.es_balon);
       titulo.textContent = hasBalon ? 'Cronograma de cuotas (con balón)' : 'Cronograma de cuotas';
 
-      // Render
       cronoBody.innerHTML = '';
       let sum = 0;
       crono.forEach(r=>{
@@ -397,7 +444,6 @@
       cronoTotal.textContent = fmt(sum);
       cronoWrap.classList.remove('d-none');
 
-      // Cuota balón (Capital – Convenio)
       const capitalRaw  = parseFloat(btn.dataset.capitalRaw || '0');
       const convenioRaw = parseFloat(btn.dataset.totalconvenioRaw || String(sum));
       const balon = Math.max(capitalRaw - convenioRaw, 0);
@@ -412,3 +458,4 @@
   });
 </script>
 @endpush
+
