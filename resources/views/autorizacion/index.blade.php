@@ -84,25 +84,24 @@
                   data-bs-toggle="modal" data-bs-target="#modalFicha">
                   Ver ficha
                 </button>
-
                 @if($isSupervisor)
-                  <button class="btn btn-primary btn-sm js-open-nota"
+                  <button type="button" class="btn btn-primary btn-sm js-open-nota"
                           data-title="Pre-aprobar"
                           data-action="{{ route('autorizacion.preaprobar',$p) }}">
                     Pre-aprobar
                   </button>
-                  <button class="btn btn-outline-danger btn-sm js-open-rechazo"
+                  <button type="button" class="btn btn-outline-danger btn-sm js-open-rechazo"
                           data-action="{{ route('autorizacion.rechazar.sup',$p) }}"
                           data-bs-toggle="modal" data-bs-target="#modalRechazo">
                     Rechazar
                   </button>
                 @else
-                  <button class="btn btn-primary btn-sm js-open-nota"
+                  <button type="button" class="btn btn-primary btn-sm js-open-nota"
                           data-title="Aprobar"
                           data-action="{{ route('autorizacion.aprobar',$p) }}">
                     Aprobar
                   </button>
-                  <button class="btn btn-outline-danger btn-sm js-open-rechazo"
+                  <button type="button" class="btn btn-outline-danger btn-sm js-open-rechazo"
                           data-action="{{ route('autorizacion.rechazar.admin',$p) }}"
                           data-bs-toggle="modal" data-bs-target="#modalRechazo">
                     Rechazar
@@ -326,6 +325,35 @@
 @endsection
 @push('scripts')
 <script>
+    // Modal de NOTA (para Pre-aprobar / Aprobar)
+  (function () {
+    const frm   = document.getElementById('formNotaEstado');
+    const title = document.getElementById('modalNotaEstadoTitulo');
+    const txt   = document.getElementById('notaEstadoTxt');
+    const modalEl = document.getElementById('modalNotaEstado');
+    let modal;
+
+    // Asegura Bootstrap
+    function ensureModal() {
+      if (!modal) {
+        // Requiere bootstrap.bundle.min.js cargado en el layout
+        modal = new bootstrap.Modal(modalEl);
+      }
+      return modal;
+    }
+
+    document.querySelectorAll('.js-open-nota').forEach(btn => {
+      btn.addEventListener('click', () => {
+        // setea action y título
+        frm.setAttribute('action', btn.dataset.action || '#');
+        title.textContent = btn.dataset.title || 'Agregar nota';
+        txt.value = '';
+
+        ensureModal().show();
+        setTimeout(() => txt.focus(), 120);
+      });
+    });
+  })();
   // Rechazo (sin cambios)
   document.querySelectorAll('.js-open-rechazo').forEach(btn=>{
     btn.addEventListener('click', ()=>{
