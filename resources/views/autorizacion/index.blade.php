@@ -90,6 +90,7 @@
                           data-action="{{ route('autorizacion.preaprobar',$p) }}">
                     Pre-aprobar
                   </button>
+
                   <button type="button" class="btn btn-outline-danger btn-sm js-open-rechazo"
                           data-action="{{ route('autorizacion.rechazar.sup',$p) }}"
                           data-bs-toggle="modal" data-bs-target="#modalRechazo">
@@ -101,6 +102,7 @@
                           data-action="{{ route('autorizacion.aprobar',$p) }}">
                     Aprobar
                   </button>
+
                   <button type="button" class="btn btn-outline-danger btn-sm js-open-rechazo"
                           data-action="{{ route('autorizacion.rechazar.admin',$p) }}"
                           data-bs-toggle="modal" data-bs-target="#modalRechazo">
@@ -118,6 +120,27 @@
     </div>
   </div>
   {{-- ====== /Promesas ====== --}}
+
+  {{-- Modal RECHAZO (nota obligatoria) --}}
+  <div class="modal fade" id="modalRechazo" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog">
+      <form class="modal-content" id="formRechazo" method="POST" action="#">
+        @csrf
+        <div class="modal-header">
+          <h6 class="modal-title">Motivo / Nota de rechazo</h6>
+          <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Cerrar"></button>
+        </div>
+        <div class="modal-body">
+          <textarea name="nota_estado" id="motivoTxt" class="form-control" rows="5" maxlength="500" required></textarea>
+        </div>
+        <div class="modal-footer">
+          <button class="btn btn-outline-secondary" type="button" data-bs-dismiss="modal">Cancelar</button>
+          <button class="btn btn-danger" type="submit">Rechazar</button>
+        </div>
+      </form>
+    </div>
+  </div>
+  {{-- /Modal RECHAZO --}}
 
   {{-- Modal de NOTA (para Pre-aprobar / Aprobar) --}}
   <div class="modal fade" id="modalNotaEstado" tabindex="-1" aria-hidden="true">
@@ -224,6 +247,7 @@
       </div>
     </div>
   </div>
+  {{-- /Modal FICHA --}}x
 
   {{-- ====== Solicitudes de CNA ====== --}}
   <div class="card mt-4">
