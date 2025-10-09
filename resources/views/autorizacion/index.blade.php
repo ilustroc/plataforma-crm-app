@@ -247,7 +247,7 @@
       </div>
     </div>
   </div>
-  {{-- /Modal FICHA --}}x
+  {{-- /Modal FICHA --}}
 
   {{-- ====== Solicitudes de CNA ====== --}}
   <div class="card mt-4">
