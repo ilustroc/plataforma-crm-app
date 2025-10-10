@@ -1,7 +1,74 @@
 @extends('layouts.app')
 @section('title','Panel')
 @section('crumb','Resumen')
+@push('styles')
+<style>
+  /* ===== Helpers ===== */
+  .pad{padding:.9rem 1rem}
+  .card{border:1px solid var(--bs-border-color); border-radius:.8rem}
+  .shadow-soft{box-shadow:0 6px 18px rgba(15,23,42,.06)}
+  .rounded-xl{border-radius:1rem}
+  .sticky-right{position:sticky; top:1rem}
+  .text-xxs{font-size:.75rem}
 
+  /* ===== KPI widgets ===== */
+  .kpi{
+    display:flex; align-items:center; gap:.75rem;
+    padding:.85rem 1rem; border-radius:.8rem;
+  }
+  .kpi .ico{
+    width:46px;height:46px;border-radius:50%;
+    display:flex;align-items:center;justify-content:center;
+    background:var(--bs-secondary-bg); color:var(--bs-primary)
+  }
+  .kpi .val{font-size:1.25rem;font-weight:700}
+
+  /* ===== Tabla compacta con thead sticky ===== */
+  .tbl-compact tbody tr>td{padding:.45rem .6rem}
+  .tbl-compact thead th{position:sticky; top:0; z-index:1; background:var(--bs-body-bg)}
+
+  /* ===== Notificaciones (lado derecho) ===== */
+  .notifs {border:1px solid var(--bs-border-color); border-radius:.9rem; overflow:hidden}
+  .notifs-header{
+    background:#1f2937; color:#fff; font-weight:600; padding:.65rem .9rem;
+    display:flex; align-items:center; gap:.5rem
+  }
+  .notif-block{padding:.5rem}
+  .notif-title{
+    display:flex; align-items:center; gap:.5rem; padding:.35rem .35rem .25rem;
+    font-weight:600
+  }
+  .notif-count{
+    margin-left:auto; background:#eef2ff; color:#4338ca; font-weight:700;
+    padding:.1rem .55rem; border-radius:999px; font-size:.8rem
+  }
+  .notif-item{
+    display:flex; align-items:center; gap:.6rem; padding:.55rem .5rem;
+    border-radius:.6rem; text-decoration:none; color:inherit
+  }
+  .notif-item:hover{background:var(--bs-tertiary-bg)}
+  .notif-dot{width:8px;height:8px;border-radius:50%}
+  .notif-body{flex:1; min-width:0}
+  .notif-main{white-space:nowrap; overflow:hidden; text-overflow:ellipsis}
+  .notif-sub{font-size:.85rem; color:var(--bs-secondary-color);
+    white-space:nowrap; overflow:hidden; text-overflow:ellipsis}
+  .notif-tag{
+    font-size:.75rem; border:1px solid var(--bs-border-color);
+    background:var(--bs-body-bg); border-radius:999px; padding:.15rem .5rem; white-space:nowrap
+  }
+  .notif-empty{color:var(--bs-secondary-color); font-size:.9rem; padding:.2rem .5rem .6rem}
+
+  /* ===== Input group de búsqueda ===== */
+  .quick-search .form-control{border-top-right-radius:0;border-bottom-right-radius:0}
+  .quick-search .btn{border-top-left-radius:0;border-bottom-left-radius:0}
+
+  /* ===== Badges de estado en pagos ===== */
+  .badge-soft-success{background:rgba(25,135,84,.1); color:#198754}
+  .badge-soft-warning{background:rgba(255,193,7,.12); color:#946200}
+  .badge-soft-danger {background:rgba(220,53,69,.12); color:#b02a37}
+  .badge-soft-secondary{background:rgba(108,117,125,.12); color:#495057}
+</style>
+@endpush
 @section('content')
 <div class="container-fluid">
   <div class="row g-3">
@@ -208,39 +275,6 @@
   </div>
 </div>
 @endsection
-
-@push('styles')
-<style>
-  .pad{ padding: .85rem 1rem; }
-  /* ===== Notifs (UTP-like) ===== */
-  .notifs{ overflow:hidden; }
-  .notifs-header{
-    background:#1f2937; color:#fff; font-weight:600; padding:.6rem .9rem; border-bottom:1px solid rgba(255,255,255,.08);
-  }
-  .notif-block{ padding:.5rem .5rem 0; }
-  .notif-title{
-    display:flex; align-items:center; gap:.5rem; font-weight:600; padding:.4rem .4rem;
-  }
-  .notif-count{
-    margin-left:auto; background:#eef2ff; color:#4338ca; font-weight:700; font-size:.8rem;
-    padding:.1rem .5rem; border-radius:999px;
-  }
-  .notif-item{
-    display:flex; align-items:center; gap:.6rem; padding:.55rem .4rem; border-radius:.5rem;
-    text-decoration:none; color:inherit;
-  }
-  .notif-item:hover{ background:#f8fafc; }
-  .notif-dot{ width:8px; height:8px; border-radius:50%; flex:0 0 8px; }
-  .notif-body{ flex:1; min-width:0; }
-  .notif-main{ white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
-  .notif-sub{ font-size:.85rem; color:#6b7280; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
-  .notif-tag{
-    font-size:.75rem; background:#fff; border:1px solid #e5e7eb; border-radius:999px; padding:.15rem .5rem; white-space:nowrap;
-  }
-  .notif-empty{ color:#9ca3af; font-size:.9rem; padding:.25rem .4rem .7rem; }
-</style>
-@endpush
-
 @push('scripts')
 <script>
   // Buscar por DNI -> /clientes/{dni}
