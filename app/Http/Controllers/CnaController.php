@@ -203,7 +203,6 @@ class CnaController extends Controller
         abort(404, 'Archivo no encontrado: '.$docxRel);
     }
 
-
     /* =========================================================
      * Helpers
      * ======================================================= */
@@ -230,8 +229,8 @@ class CnaController extends Controller
 
         $docxDir = 'cna/docx';
         $pdfDir  = 'cna/pdfs';
-        Storage::makeDirectory($docxDir);
-        Storage::makeDirectory($pdfDir);
+        \Storage::makeDirectory($docxDir);
+        \Storage::makeDirectory($pdfDir);
 
         $docxName = "CNA {$cna->nro_carta} - {$cna->dni}.docx";
         $pdfName  = "CNA {$cna->nro_carta} - {$cna->dni}.pdf";
@@ -241,15 +240,29 @@ class CnaController extends Controller
         // ---------- Rellenar DOCX ----------
         $tp = new TemplateProcessor($tplPath);
 
-        $titular = $cna->titular ?? DB::table('clientes_cuentas')
+        $titular = $cna->titular ?? \DB::table('clientes_cuentas')
             ->where('dni', $cna->dni)->value('titular');
 
-        // Fecha robusta (por si viene como string)
+        // Fecha de pago (opcional)
         $fechaPago = '';
         if ($cna->fecha_pago_realizado) {
-            try {
-                $fechaPago = Carbon::parse($cna->fecha_pago_realizado)->format('d/m/Y');
-            } catch (\Throwable $e) { $fechaPago = (string)$cna->fecha_pago_realizado; }
+            try { $fechaPago = Carbon::parse($cna->fecha_pago_realizado)->format('d/m/Y'); }
+            catch (\Throwable $e) { $fechaPago = (string)$cna->fecha_pago_realizado; }
+        }
+
+        // >>> NUEVO: fecha de aprobación en español <<<
+        // Usa la fecha de aprobación si existe; si no, hoy.
+        try {
+            Carbon::setLocale('es');
+            $aprobadoAt = $cna->aprobado_at
+                ? Carbon::parse($cna->aprobado_at)
+                : now();
+            // “26 de setiembre de 2025”
+            $aprobadoAtStr = $aprobadoAt->translatedFormat('d \\de F \\de Y');
+            // Opcional: capitalizar el mes (si tu plantilla lo quiere así)
+            // $aprobadoAtStr = mb_convert_case($aprobadoAtStr, MB_CASE_TITLE, 'UTF-8');
+        } catch (\Throwable $e) {
+            $aprobadoAtStr = now()->format('d/m/Y');
         }
 
         foreach ([
@@ -262,20 +275,20 @@ class CnaController extends Controller
             'FECHA_PAGO'   => $fechaPago,
             'MONTO_PAGADO' => number_format((float)$cna->monto_pagado, 2),
             'OBSERVACION'  => (string)($cna->observacion ?? ''),
+            'APROBADO_AT'  => $aprobadoAtStr,
         ] as $k => $v) {
             $tp->setValue($k, $v);
         }
 
-        // Operaciones (decodifica si vienen como JSON)
+        // Operaciones
         $ops = is_array($cna->operaciones)
             ? $cna->operaciones
             : (json_decode($cna->operaciones ?? '[]', true) ?: []);
-
         $ops = array_values(array_filter(array_map('strval', $ops)));
 
         $byOp = collect();
         if ($ops) {
-            $byOp = DB::table('clientes_cuentas')
+            $byOp = \DB::table('clientes_cuentas')
                 ->select('operacion','producto','entidad')
                 ->whereIn('operacion', $ops)
                 ->get()
@@ -304,7 +317,7 @@ class CnaController extends Controller
         // Guardar DOCX
         $tp->saveAs(storage_path('app/'.$docxRel));
 
-        // ---------- Convertir a PDF (iLovePDF) ----------
+        // ---------- Convertir a PDF ----------
         try {
             $this->convertDocxToPdfViaIlovepdf(
                 storage_path('app/'.$docxRel),
@@ -312,11 +325,11 @@ class CnaController extends Controller
             );
             $cna->pdf_path = $pdfRel;
         } catch (\Throwable $e) {
-            Log::error('Error iLovePDF DOCX→PDF: '.$e->getMessage(), ['cna_id' => $cna->id]);
-            $cna->pdf_path = null; // dejamos al menos el DOCX
+            \Log::error('Error iLovePDF DOCX→PDF: '.$e->getMessage(), ['cna_id' => $cna->id]);
+            $cna->pdf_path = null;
         }
 
-        // Persistir rutas
+        // Persistir rutas (y por si acaso aseguramos guardar aprobado_at existente)
         $cna->docx_path = $docxRel;
         $cna->save();
     }
