@@ -87,6 +87,7 @@ Route::middleware('auth')->group(function () {
     |--------------------------------------------------------------------------
     */
     Route::get('/autorizacion', [AutorizacionController::class,'index'])->name('autorizacion');
+    Route::get('/autorizacion/pagos/{dni}', [AutorizacionController::class, 'pagosDni'])->name('autorizacion.pagos');
 
     Route::middleware('role:supervisor')->group(function () {
         Route::post('/autorizacion/{promesa}/preaprobar',   [AutorizacionController::class,'preaprobar'])->name('autorizacion.preaprobar');
