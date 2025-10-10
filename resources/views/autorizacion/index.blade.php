@@ -188,7 +188,7 @@
               <tr><th>Cliente</th><td id="t_titular">—</td></tr>
               <tr><th>Trabajo</th><td id="t_trab">—</td></tr>
               <tr><th>Calificación SBS</th><td id="t_clasificacion">—</td></tr>
-              <tr><th>Deuda Total (sumada)</th><td id="t_deuda">—</td></tr>
+              <tr><th>Suma Deuda Total</th><td id="t_deuda">—</td></tr>
               <tr><th>Monto Negociado</th><td id="t_neg">—</td></tr>
             </tbody>
           </table>
@@ -462,8 +462,8 @@
                         <tr><th>Producto</th><td>${c.producto || '—'}</td></tr>
                         <tr><th>Capital</th><td>S/ ${fmt(c.saldo_capital)}</td></tr>
                         <tr><th>Deuda Total</th><td>S/ ${fmt(c.deuda_total)}</td></tr>
-                        <tr><th>HASTA (% de descuento)</th><td>${pct(c.hasta)}</td></tr>
-                        <tr><th>CAPITAL_DESCUENTO (Campaña)</th><td>S/ ${fmt(c.capital_descuento)}</td></tr>
+                        <tr><th>Campaña</th><td>S/ ${fmt(c.capital_descuento)}</td></tr>
+                        <tr><th>% de descuento</th><td>${pct(c.hasta)}</td></tr>
                       </tbody>
                     </table>
                   </div>
