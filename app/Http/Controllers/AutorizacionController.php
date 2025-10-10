@@ -5,6 +5,9 @@ namespace App\Http\Controllers;
 use Carbon\Carbon;
 use App\Models\PromesaPago;
 use App\Models\CnaSolicitud;
+use App\Models\PagoPropia;
+use App\Models\PagoCajaCuscoCastigada;
+use App\Models\PagoCajaCuscoExtrajudicial;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
@@ -297,5 +300,45 @@ class AutorizacionController extends Controller
         if (!in_array(strtolower($user->role), [$role, 'sistemas'])) {
             abort(403, 'No autorizado.');
         }
+    }
+    // ===== LISTA PAGOS =====
+    public function pagosDni(string $dni)
+    {
+        $propia = PagoPropia::where('dni',$dni)->select(
+            DB::raw('DATE(fecha_de_pago) as fecha'),
+            DB::raw('pagado_en_soles as monto'),
+            'operacion as oper',
+            DB::raw("UPPER(COALESCE(gestor, equipos, '-')) as gestor"),
+            DB::raw("UPPER(COALESCE(status, '-')) as estado")
+        );
+
+        $castig = PagoCajaCuscoCastigada::where('dni',$dni)->select(
+            DB::raw('DATE(fecha_de_pago) as fecha'),
+            DB::raw('pagado_en_soles as monto'),
+            DB::raw('pagare as oper'),
+            DB::raw("'-' as gestor"),
+            DB::raw("UPPER('-') as estado")
+        );
+
+        $extra = PagoCajaCuscoExtrajudicial::where('dni',$dni)->select(
+            DB::raw('DATE(fecha_de_pago) as fecha'),
+            DB::raw('pagado_en_soles as monto'),
+            DB::raw('pagare as oper'),
+            DB::raw("'-' as gestor"),
+            DB::raw("UPPER('-') as estado")
+        );
+
+        $rows = $propia->get()->concat($castig->get())->concat($extra->get())
+            ->sortByDesc('fecha')->values()->map(function($r){
+                return [
+                    'oper'   => (string)($r->oper ?? ''),
+                    'fecha'  => (string)($r->fecha ?? ''),
+                    'monto'  => (float) ($r->monto ?? 0),
+                    'gestor' => (string)($r->gestor ?? ''),
+                    'estado' => strtoupper((string)($r->estado ?? '')),
+                ];
+            });
+
+        return response()->json(['dni'=>$dni,'pagos'=>$rows], 200);
     }
 }

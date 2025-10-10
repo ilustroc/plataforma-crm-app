@@ -315,7 +315,7 @@
 
                 {{-- Observación en lugar de nota --}}
                 <td class="text-truncate" style="max-width:420px" title="{{ $cna->observacion }}">
-                  {{ $cna->observacion }}
+                  {{ $cna->observacion ?: '—' }}
                 </td>
 
                 <td class="text-end">
@@ -395,27 +395,23 @@
 @endsection
 @push('scripts')
 <script>
-  /* ======================================================
-    Modal de NOTA (Pre-aprobar / Aprobar)
-  ====================================================== */
+  // =================== Modal de NOTA (Pre-aprobar / Aprobar) ===================
   (function () {
-    const frm     = document.getElementById('formNotaEstado');
-    const titleEl = document.getElementById('modalNotaEstadoTitulo');
-    const txt     = document.getElementById('notaEstadoTxt');
+    const frm   = document.getElementById('formNotaEstado');
+    const title = document.getElementById('modalNotaEstadoTitulo');
+    const txt   = document.getElementById('notaEstadoTxt');
     const modalEl = document.getElementById('modalNotaEstado');
     let modal;
 
     function ensureModal() {
-      if (!modal) {
-        modal = new bootstrap.Modal(modalEl);
-      }
+      if (!modal) modal = new bootstrap.Modal(modalEl);
       return modal;
     }
 
     document.querySelectorAll('.js-open-nota').forEach(btn => {
       btn.addEventListener('click', () => {
         frm.setAttribute('action', btn.dataset.action || '#');
-        titleEl.textContent = btn.dataset.title || 'Agregar nota';
+        title.textContent = btn.dataset.title || 'Agregar nota';
         txt.value = '';
         ensureModal().show();
         setTimeout(() => txt.focus(), 120);
@@ -423,44 +419,38 @@
     });
   })();
 
-  /* ======================================================
-    Modal de Rechazo
-  ====================================================== */
-  document.querySelectorAll('.js-open-rechazo').forEach(btn => {
-    btn.addEventListener('click', () => {
+  // ============================ Rechazo (modal) ================================
+  document.querySelectorAll('.js-open-rechazo').forEach(btn=>{
+    btn.addEventListener('click', ()=>{
       document.getElementById('formRechazo').setAttribute('action', btn.dataset.action);
-      setTimeout(() => document.getElementById('motivoTxt').focus(), 150);
+      setTimeout(()=> document.getElementById('motivoTxt').focus(), 150);
     });
   });
 
-  /* ======================================================
-    Helpers
-  ====================================================== */
-  const fmt = (n) => (Math.round((Number(n) || 0) * 100) / 100).toFixed(2);
-  const pct = (v) => (v === null || v === undefined || v === '') ? '—' : ((Number(v) || 0) * 100).toFixed(0) + '%';
+  // ========================== Helpers de formato ==============================
+  const fmt = (n)=> (Math.round((Number(n)||0)*100)/100).toFixed(2);
+  const pct = (v)=> (v===null || v===undefined || v==='') ? '—' : ((Number(v)||0)*100).toFixed(0)+'%';
 
-  /* ======================================================
-    Modal de FICHA (Detalle de propuesta)
-  ====================================================== */
-  document.querySelectorAll('.js-ver-ficha').forEach(btn => {
-    btn.addEventListener('click', () => {
+  // ============================= Ver FICHA ====================================
+  document.querySelectorAll('.js-ver-ficha').forEach(btn=>{
+    btn.addEventListener('click', ()=>{
       const tipo = (btn.dataset.tipo || '').toLowerCase();
 
       // Encabezado
-      document.getElementById('f_dni').textContent = btn.dataset.dni || '—';
+      document.getElementById('f_dni').textContent   = btn.dataset.dni || '—';
       document.getElementById('t_fecha').textContent = btn.dataset.fecha || '—';
 
       // Datos generales
-      const set = (id, v) => (document.getElementById('t_' + id).textContent = (v || '—'));
-      set('tipo', tipo ? (tipo === 'cancelacion' ? 'Cancelación' : 'Convenio') : '—');
+      const set = (id, v)=> (document.getElementById('t_'+id).textContent = (v||'—'));
+      set('tipo', tipo ? (tipo==='cancelacion' ? 'Cancelación' : 'Convenio') : '—');
       set('cartera', btn.dataset.cartera);
-      set('asesor', btn.dataset.asesor);   // Equipo
-      set('agente', btn.dataset.agente);   // Quien creó
+      set('asesor',  btn.dataset.asesor);   // Equipo = AGENTE
+      set('agente',  btn.dataset.agente);   // quien creó
       set('titular', btn.dataset.titular);
-      set('trab', btn.dataset.trabaja);
+      set('trab',    btn.dataset.trabaja);
       set('clasificacion', btn.dataset.clasificacion);
-      set('deuda', btn.dataset.deuda);
-      set('neg', btn.dataset.negociado);
+      set('deuda',   btn.dataset.deuda);
+      set('neg',     btn.dataset.negociado);
 
       // Notas
       const notaGen = (btn.dataset.detalle || '').trim();
@@ -468,55 +458,45 @@
       const ngWrap = document.getElementById('nota_general_wrap');
       const nsWrap = document.getElementById('nota_sup_wrap');
       if (ngWrap) {
-        if (notaGen) {
-          ngWrap.style.display = 'block';
-          document.getElementById('nota_general_txt').textContent = notaGen;
-        } else {
-          ngWrap.style.display = 'none';
-        }
+        if (notaGen) { ngWrap.style.display='block'; document.getElementById('nota_general_txt').textContent = notaGen; }
+        else { ngWrap.style.display='none'; }
       }
       if (nsWrap) {
-        if (notaSup) {
-          nsWrap.style.display = 'block';
-          document.getElementById('nota_sup_txt').textContent = notaSup;
-        } else {
-          nsWrap.style.display = 'none';
-        }
+        if (notaSup) { nsWrap.style.display='block'; document.getElementById('nota_sup_txt').textContent = notaSup; }
+        else { nsWrap.style.display='none'; }
       }
 
-      /* ================================================
-        Acordeón por cuenta
-      ================================================ */
+      // ===== Acordeón por cuenta =====
       const acc = document.getElementById('acc_cuentas');
       if (acc) {
         acc.innerHTML = '';
         let cuentas = [];
         try {
-          const raw = btn.getAttribute('data-cuentas');
+          const raw = btn.getAttribute('data-cuentas'); // más seguro para JSON largo
           cuentas = raw ? JSON.parse(raw) : [];
-        } catch (e) {
-          cuentas = [];
-        }
+        } catch(e) { cuentas = []; }
 
+        // Muestra las operaciones en el encabezado
         document.getElementById('f_op').textContent = cuentas.length
-          ? cuentas.map(c => c.operacion).join(', ')
+          ? cuentas.map(c=>c.operacion).join(', ')
           : (btn.dataset.operacion || '—');
 
         if (!cuentas.length) {
           acc.innerHTML = '<div class="text-secondary small">No se encontraron cuentas asociadas.</div>';
         } else {
-          cuentas.forEach((c, idx) => {
-            const id = 'accItem_' + idx;
+          cuentas.forEach((c, idx)=>{
+            const id = 'accItem_'+idx;
             const html = `
               <div class="accordion-item">
                 <h2 class="accordion-header" id="${id}_h">
-                  <button class="accordion-button ${idx > 0 ? 'collapsed' : ''}" type="button"
+                  <button class="accordion-button ${idx>0?'collapsed':''}" type="button"
                           data-bs-toggle="collapse" data-bs-target="#${id}_c"
-                          aria-expanded="${idx === 0 ? 'true' : 'false'}" aria-controls="${id}_c">
+                          aria-expanded="${idx===0?'true':'false'}" aria-controls="${id}_c">
                     Operación ${c.operacion || '—'} · ${c.entidad || '—'} · ${c.producto || '—'}
                   </button>
                 </h2>
-                <div id="${id}_c" class="accordion-collapse collapse ${idx === 0 ? 'show' : ''}" aria-labelledby="${id}_h" data-bs-parent="#acc_cuentas">
+                <div id="${id}_c" class="accordion-collapse collapse ${idx===0?'show':''}"
+                    aria-labelledby="${id}_h" data-bs-parent="#acc_cuentas">
                   <div class="accordion-body p-2">
                     <table class="table table-sm mb-0">
                       <tbody>
@@ -538,9 +518,7 @@
         }
       }
 
-      /* ================================================
-        Cronograma de cuotas
-      ================================================ */
+      // ===== Cronograma (oculta si es cancelación)
       const cronoWrap  = document.getElementById('crono_wrap');
       const cronoBody  = document.getElementById('crono_body');
       const cronoTotal = document.getElementById('crono_total');
@@ -549,41 +527,32 @@
       const titulo     = document.getElementById('crono_titulo');
 
       let crono = [];
-      try {
-        crono = JSON.parse(btn.getAttribute('data-crono') || '[]');
-      } catch (_) {
-        crono = [];
-      }
+      try { crono = JSON.parse(btn.getAttribute('data-crono') || '[]'); } catch(_) { crono = []; }
 
-      if (tipo === 'cancelacion') {
-        cronoWrap.classList.add('d-none');
-        return;
-      }
+      if (tipo === 'cancelacion') { cronoWrap.classList.add('d-none'); return; }
 
       const hasBalon = (btn.dataset.hasbalon === '1') || crono.some(r => !!r.es_balon);
       titulo.textContent = hasBalon ? 'Cronograma de cuotas (con balón)' : 'Cronograma de cuotas';
 
       cronoBody.innerHTML = '';
       let sum = 0;
-      crono.forEach(r => {
+      crono.forEach(r=>{
         sum += Number(r.monto) || 0;
         const tr = document.createElement('tr');
         tr.innerHTML = `
-          <td class="text-center">${String(r.nro ?? '').padStart(2, '0')}</td>
+          <td class="text-center">${String(r.nro ?? '').padStart(2,'0')}</td>
           <td class="text-center">${r.fecha || '—'}</td>
           <td class="text-end">${fmt(r.monto)}</td>
           <td class="text-center">${r.es_balon ? 'BALÓN' : ''}</td>
         `;
         cronoBody.appendChild(tr);
       });
-
       cronoTotal.textContent = fmt(sum);
       cronoWrap.classList.remove('d-none');
 
-      const capitalRaw = parseFloat(btn.dataset.capitalRaw || '0');
+      const capitalRaw  = parseFloat(btn.dataset.capitalRaw || '0');
       const convenioRaw = parseFloat(btn.dataset.totalconvenioRaw || String(sum));
       const balon = Math.max(capitalRaw - convenioRaw, 0);
-
       if (hasBalon || balon > 0.009) {
         filaBalon.classList.remove('d-none');
         cronoBalon.textContent = fmt(balon);
@@ -593,5 +562,61 @@
       }
     });
   });
+
+  // ============================== Ver PAGOS ===================================
+  // Requiere un modal con:
+  //  - <span id="pagos_dni"></span>  (en el título)
+  //  - <tbody id="pagos_tbody"></tbody> (cuerpo de la tabla)
+  (function(){
+    const modalEl = document.getElementById('modalPagos');
+    if (!modalEl) return;
+    const modal = new bootstrap.Modal(modalEl);
+    const spanDni = document.getElementById('pagos_dni');
+    const tbody   = document.getElementById('pagos_tbody');
+
+    const RUTA_PAGOS = @json(route('autorizacion.pagos', '__DNI__')); // placeholder
+
+    function setRowsLoading(){
+      tbody.innerHTML = '<tr><td colspan="5" class="text-center text-secondary py-3">Cargando…</td></tr>';
+    }
+    function setRowsEmpty(){
+      tbody.innerHTML = '<tr><td colspan="5" class="text-center text-muted py-3">Sin pagos registrados.</td></tr>';
+    }
+    function addRow(p){
+      const tr = document.createElement('tr');
+      const f  = p.fecha ? new Date(p.fecha).toLocaleDateString('es-PE') : '';
+      tr.innerHTML = `
+        <td class="text-nowrap">${p.oper ?? '—'}</td>
+        <td class="text-nowrap">${f}</td>
+        <td class="text-end text-nowrap">${fmt(p.monto)}</td>
+        <td class="text-nowrap">${p.gestor || '—'}</td>
+        <td class="text-nowrap">${String(p.estado || '—').toUpperCase()}</td>
+      `;
+      tbody.appendChild(tr);
+    }
+
+    document.querySelectorAll('.js-ver-pagos').forEach(btn=>{
+      btn.addEventListener('click', async ()=>{
+        const dni = String(btn.dataset.dni || '').trim();
+        spanDni.textContent = dni || '—';
+        setRowsLoading();
+        modal.show();
+
+        try{
+          const url = RUTA_PAGOS.replace('__DNI__', encodeURIComponent(dni || ''));
+          const r   = await fetch(url, { headers: { 'Accept': 'application/json' } });
+          if (!r.ok) throw new Error('HTTP '+r.status);
+          const j   = await r.json();
+          const arr = Array.isArray(j.pagos) ? j.pagos : [];
+          if (!arr.length) { setRowsEmpty(); return; }
+          tbody.innerHTML = '';
+          arr.forEach(addRow);
+        }catch(e){
+          tbody.innerHTML = '<tr><td colspan="5" class="text-center text-danger py-3">Error cargando pagos.</td></tr>';
+          console.error('Pagos DNI error:', e);
+        }
+      });
+    });
+  })();
 </script>
 @endpush
