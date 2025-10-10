@@ -5,11 +5,11 @@
 
 @push('head')
 <style>
-  /* ===== Tarjetas base ===== */
-  .card.pad{ background:#fff } /* fondo blanco uniforme */
+  /* ===== Tarjetas ===== */
+  .card.pad{ background:#fff }
   .shadow-soft{ box-shadow:0 6px 20px rgba(15,23,42,.06) }
 
-  /* ===== KPIs ===== */
+  /* ===== KPIs compactos ===== */
   .kpi{
     display:flex; align-items:center; gap:.75rem;
     border:1px solid var(--bs-border-color); border-radius:14px; padding:.9rem 1rem;
@@ -24,38 +24,35 @@
   .kpi .lbl{ font-size:.86rem; color:var(--bs-secondary-color) }
   .kpi .val{ font-weight:800; font-size:1.15rem; line-height:1 }
 
-  /* ===== Accesos rápidos ===== */
+  /* Accesos */
   .quick a{ border-radius:12px }
 
   /* ===== Gráfica del mes ===== */
   .chart-card .toolbar{ display:flex; align-items:center; gap:.5rem }
-  .chart-wrap{
-    position:relative; width:100%;
-    height: 280px; /* <-- clave para que no “caiga” */
-  }
+  .chart-wrap{ position:relative; width:100%; height:280px } /* evita “caída” */
 
-  /* ===== Notificaciones (Actividades) ===== */
+  /* ===== Actividades (rojo sólido) ===== */
   .notifs{ border:1px solid var(--bs-border-color); border-radius:16px; overflow:hidden; background:#fff }
   .notifs-header{
-    background: var(--bs-danger); /* rojo sólido */
-    color:#fff; font-weight:700; letter-spacing:.2px;
-    padding:.7rem .95rem; display:flex; align-items:center; gap:.55rem
+    background: var(--bs-danger); color:#fff;
+    font-weight:700; letter-spacing:.2px; padding:.7rem .95rem;
+    display:flex; align-items:center; gap:.55rem
   }
-  .notifs-body{ padding:.6rem .6rem .2rem; max-height:70vh; overflow:auto; background:#fff }
+  .notifs-body{ padding:.6rem .6rem .2rem; max-height:70vh; overflow:auto }
   .notif-group{ padding:.25rem .25rem .6rem }
   .notif-title{ display:flex; align-items:center; gap:.5rem; padding:.25rem .15rem; font-weight:600 }
   .notif-title .icon{
     width:28px;height:28px;border-radius:8px;display:flex;align-items:center;justify-content:center;
     background: color-mix(in oklab, var(--bs-danger) 12%, #fff); color: var(--bs-danger)
   }
-  .notif-count{ margin-left:auto; font-weight:700; font-size:.8rem; background:#fff; color:var(--bs-danger);
-    border:1px solid color-mix(in oklab, var(--bs-danger) 35%, #fff); border-radius:999px; padding:.15rem .55rem }
-
+  .notif-count{
+    margin-left:auto; font-weight:700; font-size:.8rem; background:#fff; color:var(--bs-danger);
+    border:1px solid color-mix(in oklab, var(--bs-danger) 35%, #fff); border-radius:999px; padding:.15rem .55rem
+  }
   .notif-list{ list-style:none; padding-left:0; margin:0 }
   .notif-item{
-    display:flex; align-items:center; gap:.7rem;
-    padding:.6rem; border-radius:12px; text-decoration:none; color:inherit;
-    border:1px solid transparent; background:#fff; transition:.15s
+    display:flex; align-items:center; gap:.7rem; padding:.6rem; border-radius:12px;
+    text-decoration:none; color:inherit; border:1px solid transparent; background:#fff; transition:.15s
   }
   .notif-item:hover{ background:var(--bs-tertiary-bg); border-color:var(--bs-border-color) }
   .notif-dot{ width:9px;height:9px;border-radius:50%; background:var(--bs-danger) }
@@ -121,9 +118,8 @@
         </div>
       </div>
 
-      {{-- Gráfica: Pagos del mes --}}
+      {{-- ===== Gráfica: Pagos del mes (diario) ===== --}}
       @php
-        // Fallback simple con lo que ya llega en $pagos (últimos 10) por día
         $ym = request('mes') ?: now()->format('Y-m');
         try { $base = \Carbon\Carbon::createFromFormat('Y-m', $ym)->startOfMonth(); }
         catch (\Exception $e) { $base = now()->startOfMonth(); }
@@ -135,27 +131,27 @@
         }
         $chartLabels = array_map(fn($k)=>\Carbon\Carbon::parse($k)->format('d'), array_keys($days));
         $chartData   = array_values($days);
+        $totalMes    = array_sum($chartData);
       @endphp
 
       <div class="card pad shadow-soft chart-card">
         <div class="d-flex justify-content-between align-items-center mb-2">
           <h6 class="mb-0 d-flex align-items-center gap-2">
             <i class="bi bi-bar-chart-steps text-danger"></i> Pagos del mes
+            <span class="ms-2 badge rounded-pill text-bg-light border">Total: <b>S/ {{ number_format($totalMes,2) }}</b></span>
           </h6>
           <div class="toolbar">
             @php $curr = \Carbon\Carbon::parse($base); @endphp
             <a class="btn btn-outline-secondary btn-sm"
                href="{{ url()->current().'?mes='.$curr->copy()->subMonth()->format('Y-m') }}"><i class="bi bi-chevron-left"></i></a>
-            <input type="month" id="mesPicker" class="form-control form-control-sm"
-                   value="{{ $curr->format('Y-m') }}">
+            <input type="month" id="mesPicker" class="form-control form-control-sm" value="{{ $curr->format('Y-m') }}">
             <a class="btn btn-outline-secondary btn-sm"
                href="{{ url()->current().'?mes='.$curr->copy()->addMonth()->format('Y-m') }}"><i class="bi bi-chevron-right"></i></a>
           </div>
         </div>
 
         <div class="chart-wrap">
-          <canvas id="chartPagos"
-                  data-chart='@json(["labels"=>$chartLabels,"data"=>$chartData])'></canvas>
+          <canvas id="chartPagos" data-chart='@json(["labels"=>$chartLabels,"data"=>$chartData])'></canvas>
         </div>
       </div>
 
@@ -309,17 +305,14 @@
 @endsection
 
 @push('scripts')
-{{-- Chart.js (solo si no está cargado globalmente) --}}
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1"></script>
 <script>
-  // Buscar por DNI -> /clientes/{dni}
+  // Buscar por DNI
   (() => {
     const frm   = document.getElementById('frmQuickDni');
     const input = document.getElementById('inpQuickDni');
     if (!frm || !input) return;
-
     const SHOW_URL = @json(route('clientes.show','__DNI__'));
-
     frm.addEventListener('submit', (e) => {
       e.preventDefault();
       const dni = (input.value || '').replace(/\D/g,'').slice(0,12);
@@ -336,48 +329,31 @@
     window.location.assign(url.toString());
   });
 
-  // Gráfica
+  // Gráfica diaria del mes
   (()=>{
     const el = document.getElementById('chartPagos');
     if(!el) return;
     const payload = (()=>{ try{ return JSON.parse(el.dataset.chart||'{}'); }catch(_){ return {}; }})();
     const labels = payload.labels || [];
     const data   = payload.data   || [];
+    const danger = getComputedStyle(document.documentElement).getPropertyValue('--bs-danger') || '#dc3545';
 
-    const ctx = el.getContext('2d');
-    new Chart(ctx, {
-      type: 'bar',
-      data: {
-        labels,
-        datasets: [{
-          label: 'S/ por día',
-          data,
-          borderWidth: 2,
-          borderColor: getComputedStyle(document.documentElement)
-                          .getPropertyValue('--bs-danger') || '#c62828',
-          backgroundColor: 'rgba(220, 53, 69, .15)', // rojo suave
-          hoverBackgroundColor: 'rgba(220, 53, 69, .25)',
-          borderRadius: 6
-        }]
-      },
-      options: {
-        responsive: true,
-        maintainAspectRatio: false,   // <-- importante para no crecer en altura
-        animation: { duration: 250 },
-        scales: {
-          x: { grid: { display:false } },
-          y: {
-            beginAtZero:true,
-            ticks: { callback:(v)=>'S/ '+Number(v).toLocaleString() }
-          }
+    new Chart(el.getContext('2d'), {
+      type:'bar',
+      data:{ labels, datasets:[{
+        label:'S/ por día', data,
+        borderWidth:2, borderColor: danger,
+        backgroundColor:'rgba(220,53,69,.15)', hoverBackgroundColor:'rgba(220,53,69,.25)',
+        borderRadius:6
+      }]},
+      options:{
+        responsive:true, maintainAspectRatio:false, animation:{duration:220},
+        scales:{
+          x:{ grid:{display:false} },
+          y:{ beginAtZero:true, ticks:{ callback:v=>'S/ '+Number(v).toLocaleString() } }
         },
-        plugins: {
-          legend: { display:false },
-          tooltip: {
-            callbacks: {
-              label: (ctx)=> 'S/ ' + Number(ctx.parsed.y ?? 0).toLocaleString(undefined,{minimumFractionDigits:2, maximumFractionDigits:2})
-            }
-          }
+        plugins:{ legend:{display:false},
+          tooltip:{ callbacks:{ label:(ctx)=>'S/ '+Number(ctx.parsed.y??0).toLocaleString(undefined,{minimumFractionDigits:2,maximumFractionDigits:2}) } }
         }
       }
     });
