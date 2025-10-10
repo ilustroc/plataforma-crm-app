@@ -2,83 +2,122 @@
 
 namespace App\Http\Controllers;
 
+use Carbon\Carbon;
 use Illuminate\Http\Request;
-use Illuminate\Support\Carbon;
-use App\Models\User;
-use App\Models\PagoPropia;
-use App\Models\PagoCajaCuscoCastigada;
-use App\Models\PagoCajaCuscoExtrajudicial;
+use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Schema;
+use App\Models\PromesaPago;
+use App\Models\CnaSolicitud;
 
 class PanelController extends Controller
 {
-    public function index()
+    public function index(Request $r)
     {
-        // Renderiza tu “Home / Panel”. Si ya tenías otro nombre de vista,
-        // cámbialo aquí.
-        return view('panel.index');
-    }
-    public function dashboard(Request $r)
-    {
-        // Filtros
-        $cartera = $r->query('cartera', 'propia', 'extrajudicial');          // propia | caja-cusco-castigada | extrajudicial
-        $mes     = $r->query('mes', now()->format('Y-m'));  // YYYY-MM
-        $gestor  = $r->query('gestor');                     // opcional (alias / nombre)
-        [$y,$m]  = explode('-', $mes);
-        $from    = Carbon::createFromDate((int)$y,(int)$m,1)->startOfMonth();
-        $to      = $from->copy()->endOfMonth();
+        $user  = Auth::user();
+        $role  = strtolower($user->role ?? '');
+        $isSupervisor = ($role === 'supervisor');
 
-        // Mapeo cartera -> modelo y columna de dinero
-        $map = [
-            'propia' => [
-                'model' => PagoPropia::query(),
-                'money' => 'pagado_en_soles',   // <<< importante
-            ],
-            'caja-cusco-castigada' => [
-                'model' => PagoCajaCuscoCastigada::query(),
-                'money' => 'pagado_en_soles',   // usamos este como “monto pagado”
-            ],
-            'caja-cusco-extrajudicial' => [
-                'model' => PagoCajaCuscoExtrajudicial::query(),
-                'money' => 'pagado_en_soles',   // usamos este como “monto pagado”
-            ],        ];
-        $cfg = $map[$cartera] ?? $map['propia'];
-        $qb  = $cfg['model']->whereBetween('fecha_de_pago', [$from->toDateString(), $to->toDateString()]);
-        if ($gestor) { $qb->where('gestor','like',"%{$gestor}%"); }
+        /* ===== PENDIENTES ===== */
+        $ppQuery = PromesaPago::query()
+            ->select('id','dni','operacion','fecha_promesa','monto','monto_convenio','nota','tipo')
+            ->orderByDesc('created_at');
 
-        // KPIs
-        $k = [
-            'pagos_num'   => (clone $qb)->count(),
-            'pagos_monto' => (clone $qb)->sum($cfg['money']),
-            // si luego agregas más KPIs, colócalos aquí
-        ];
+        $ppPendCount = (clone $ppQuery)
+            ->when($isSupervisor, fn($q)=>$q->where('workflow_estado','pendiente'),
+                               fn($q)=>$q->where('workflow_estado','preaprobada'))
+            ->count();
 
-        // Serie últimos 12 meses (suma mensual)
-        $meses = [];
-        $serie_pagos = [];
-        for ($i=11; $i>=0; $i--) {
-            $d = now()->startOfMonth()->subMonths($i);
-            $meses[] = strtoupper($d->format('M'));
-            $serie_pagos[] = (clone $cfg['model'])
-                ->whereBetween('fecha_de_pago', [$d->toDateString(), $d->copy()->endOfMonth()->toDateString()])
-                ->sum($cfg['money']);
+        $ppPend = (clone $ppQuery)
+            ->when($isSupervisor, fn($q)=>$q->where('workflow_estado','pendiente'),
+                               fn($q)=>$q->where('workflow_estado','preaprobada'))
+            ->limit(5)->get()
+            ->map(function($p){
+                $p->monto_mostrar = (float)($p->monto > 0 ? $p->monto : $p->monto_convenio);
+                return $p;
+            });
+
+        $cnaQuery = CnaSolicitud::query()->orderByDesc('created_at');
+        $cnaPendCount = (clone $cnaQuery)
+            ->when($isSupervisor, fn($q)=>$q->where('workflow_estado','pendiente'),
+                               fn($q)=>$q->where('workflow_estado','preaprobada'))
+            ->count();
+        $cnaPend = (clone $cnaQuery)
+            ->when($isSupervisor, fn($q)=>$q->where('workflow_estado','pendiente'),
+                               fn($q)=>$q->where('workflow_estado','preaprobada'))
+            ->select('id','dni','nro_carta','operaciones','observacion','created_at')
+            ->limit(5)->get();
+
+        /* ===== PRÓXIMOS VENCIMIENTOS (7 días) ===== */
+        $venc = collect(); $vencCount = 0;
+        if (Schema::hasTable('promesa_cuotas')) {
+            $hoy = Carbon::today();
+            $hasta = Carbon::today()->addDays(7);
+
+            $venc = DB::table('promesa_cuotas as c')
+                ->join('promesas_pago as p','p.id','=','c.promesa_id')
+                ->where('p.workflow_estado','aprobada')
+                ->whereBetween('c.fecha', [$hoy->toDateString(), $hasta->toDateString()])
+                ->select('p.dni','p.operacion','p.tipo','c.promesa_id','c.nro','c.fecha','c.monto')
+                ->orderBy('c.fecha')
+                ->limit(8)
+                ->get();
+
+            $vencCount = DB::table('promesa_cuotas as c')
+                ->join('promesas_pago as p','p.id','=','c.promesa_id')
+                ->where('p.workflow_estado','aprobada')
+                ->whereBetween('c.fecha', [$hoy->toDateString(), $hasta->toDateString()])
+                ->count();
         }
-        $supervisores = User::where('role', 'supervisor')
-            ->orderBy('name')->get(['id','name']);
 
-        $supervisorId = $r->query('supervisor_id');
+        /* ===== PAGOS RECIENTES (últimos 10) ===== */
+        $pagos = collect();
+        if (Schema::hasTable('pagos_propia') ||
+            Schema::hasTable('pagos_caja_cusco_castigada') ||
+            Schema::hasTable('pagos_caja_cusco_extrajudicial')) {
 
-        return view('dashboard.index', compact(
-            'k','mes','cartera','meses','serie_pagos',
-            'supervisores','supervisorId'
+            $q1 = Schema::hasTable('pagos_propia') ? DB::table('pagos_propia')->select([
+                    DB::raw('DATE(fecha_de_pago) as fecha'),
+                    DB::raw('pagado_en_soles as monto'),
+                    DB::raw('operacion as oper'),
+                    DB::raw("UPPER(COALESCE(gestor, equipos, '-')) as gestor"),
+                    DB::raw("UPPER(COALESCE(status, '-')) as estado"),
+                ]) : DB::query()->selectRaw("'0000-00-00' as fecha, 0 as monto, '' as oper, '-' as gestor, '-' as estado")->whereRaw('0=1');
+
+            $q2 = Schema::hasTable('pagos_caja_cusco_castigada') ? DB::table('pagos_caja_cusco_castigada')->select([
+                    DB::raw('DATE(fecha_de_pago) as fecha'),
+                    DB::raw('pagado_en_soles as monto'),
+                    DB::raw('pagare as oper'),
+                    DB::raw("'-' as gestor"),
+                    DB::raw("UPPER('-') as estado"),
+                ]) : DB::query()->selectRaw("'0000-00-00' as fecha, 0 as monto, '' as oper, '-' as gestor, '-' as estado")->whereRaw('0=1');
+
+            $q3 = Schema::hasTable('pagos_caja_cusco_extrajudicial') ? DB::table('pagos_caja_cusco_extrajudicial')->select([
+                    DB::raw('DATE(fecha_de_pago) as fecha'),
+                    DB::raw('pagado_en_soles as monto'),
+                    DB::raw('pagare as oper'),
+                    DB::raw("'-' as gestor"),
+                    DB::raw("UPPER('-') as estado"),
+                ]) : DB::query()->selectRaw("'0000-00-00' as fecha, 0 as monto, '' as oper, '-' as gestor, '-' as estado")->whereRaw('0=1');
+
+            $union = $q1->unionAll($q2)->unionAll($q3);
+            $pagos = DB::query()->fromSub($union,'p')
+                ->orderByDesc('fecha')->limit(10)->get();
+        }
+
+        /* ===== KPIs rápidos ===== */
+        $hoy = Carbon::today()->toDateString();
+        $kpiPromHoy = PromesaPago::whereDate('created_at',$hoy)->count();
+        $kpiPagosHoy = Schema::hasTable('pagos_propia')
+            ? (float) DB::table('pagos_propia')->whereDate('fecha_de_pago',$hoy)->sum('pagado_en_soles')
+            : 0.0;
+
+        return view('panel.resumen', compact(
+            'isSupervisor',
+            'ppPendCount','ppPend',
+            'cnaPendCount','cnaPend',
+            'venc','vencCount',
+            'pagos','kpiPromHoy','kpiPagosHoy'
         ));
-    }
-
-    private function pagosQuery(string $cartera)
-    {
-        return match ($cartera) {
-            'caja-cusco-castigada' => PagoCajaCuscoCastigada::query(),
-            'extrajudicial'        => PagoCajaCuscoExtrajudicial::query(),
-            default                => PagoPropia::query(),
-        };
     }
 }
