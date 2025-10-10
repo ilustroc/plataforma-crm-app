@@ -3,70 +3,50 @@
 @section('crumb','Resumen')
 @push('styles')
 <style>
-  /* ===== Helpers ===== */
-  .pad{padding:.9rem 1rem}
-  .card{border:1px solid var(--bs-border-color); border-radius:.8rem}
-  .shadow-soft{box-shadow:0 6px 18px rgba(15,23,42,.06)}
-  .rounded-xl{border-radius:1rem}
-  .sticky-right{position:sticky; top:1rem}
-  .text-xxs{font-size:.75rem}
-
-  /* ===== KPI widgets ===== */
-  .kpi{
-    display:flex; align-items:center; gap:.75rem;
-    padding:.85rem 1rem; border-radius:.8rem;
+  /* ===== Notifs v2 ===== */
+  .notifs{border:1px solid var(--bs-border-color); border-radius:1rem; overflow:hidden; background:var(--bs-body-bg)}
+  .notifs-header{
+    background:linear-gradient(90deg,#0f172a,#1f2937);
+    color:#fff; font-weight:600; letter-spacing:.2px;
+    padding:.7rem .95rem; display:flex; align-items:center; gap:.55rem
   }
-  .kpi .ico{
-    width:46px;height:46px;border-radius:50%;
-    display:flex;align-items:center;justify-content:center;
+  .notifs-body{padding:.6rem .6rem 0; max-height:70vh; overflow:auto}
+  .notif-group{background:transparent; padding:.35rem .35rem .6rem; margin-bottom:.35rem}
+  .notif-title{
+    display:flex; align-items:center; gap:.5rem;
+    padding:.35rem .3rem .25rem; font-weight:600; color:#111827
+  }
+  .notif-title .icon{
+    width:28px;height:28px;border-radius:8px;display:flex;align-items:center;justify-content:center;
     background:var(--bs-secondary-bg); color:var(--bs-primary)
   }
-  .kpi .val{font-size:1.25rem;font-weight:700}
-
-  /* ===== Tabla compacta con thead sticky ===== */
-  .tbl-compact tbody tr>td{padding:.45rem .6rem}
-  .tbl-compact thead th{position:sticky; top:0; z-index:1; background:var(--bs-body-bg)}
-
-  /* ===== Notificaciones (lado derecho) ===== */
-  .notifs {border:1px solid var(--bs-border-color); border-radius:.9rem; overflow:hidden}
-  .notifs-header{
-    background:#1f2937; color:#fff; font-weight:600; padding:.65rem .9rem;
-    display:flex; align-items:center; gap:.5rem
-  }
-  .notif-block{padding:.5rem}
-  .notif-title{
-    display:flex; align-items:center; gap:.5rem; padding:.35rem .35rem .25rem;
-    font-weight:600
-  }
   .notif-count{
-    margin-left:auto; background:#eef2ff; color:#4338ca; font-weight:700;
-    padding:.1rem .55rem; border-radius:999px; font-size:.8rem
+    margin-left:auto; font-weight:700; font-size:.8rem;
+    background:#eef2ff; color:#4338ca; padding:.15rem .55rem; border-radius:999px
   }
+
+  .notif-list{list-style:none; padding-left:0; margin:0}
   .notif-item{
-    display:flex; align-items:center; gap:.6rem; padding:.55rem .5rem;
-    border-radius:.6rem; text-decoration:none; color:inherit
+    display:flex; align-items:center; gap:.7rem;
+    padding:.65rem .6rem; border-radius:.75rem; text-decoration:none; color:inherit;
+    border:1px solid transparent; transition:.15s ease-in-out; background:transparent
   }
-  .notif-item:hover{background:var(--bs-tertiary-bg)}
-  .notif-dot{width:8px;height:8px;border-radius:50%}
+  .notif-item + .notif-item{margin-top:.25rem}
+  .notif-item:hover{background:var(--bs-tertiary-bg); border-color:var(--bs-border-color); box-shadow:0 2px 10px rgba(15,23,42,.06)}
+  .notif-dot{width:9px;height:9px;border-radius:50%}
   .notif-body{flex:1; min-width:0}
   .notif-main{white-space:nowrap; overflow:hidden; text-overflow:ellipsis}
-  .notif-sub{font-size:.85rem; color:var(--bs-secondary-color);
-    white-space:nowrap; overflow:hidden; text-overflow:ellipsis}
-  .notif-tag{
+  .notif-sub{font-size:.85rem; color:var(--bs-secondary-color); white-space:nowrap; overflow:hidden; text-overflow:ellipsis}
+  .notif-cta{
     font-size:.75rem; border:1px solid var(--bs-border-color);
-    background:var(--bs-body-bg); border-radius:999px; padding:.15rem .5rem; white-space:nowrap
+    background:var(--bs-body-bg); border-radius:999px; padding:.18rem .55rem; white-space:nowrap
   }
-  .notif-empty{color:var(--bs-secondary-color); font-size:.9rem; padding:.2rem .5rem .6rem}
+  .notif-empty{
+    color:var(--bs-secondary-color); font-size:.9rem; padding:.2rem .5rem .7rem; margin-left:.25rem
+  }
 
-  /* ===== Input group de búsqueda ===== */
-  .quick-search .form-control{border-top-right-radius:0;border-bottom-right-radius:0}
-  .quick-search .btn{border-top-left-radius:0;border-bottom-left-radius:0}
-
-  /* ===== Badges de estado en pagos ===== */
-  .badge-soft-success{background:rgba(25,135,84,.1); color:#198754}
-  .badge-soft-warning{background:rgba(255,193,7,.12); color:#946200}
-  .badge-soft-danger {background:rgba(220,53,69,.12); color:#b02a37}
-  .badge-soft-secondary{background:rgba(108,117,125,.12); color:#495057}
+  /* pequeñas mejoras en el link “Ver bandeja…” */
+  .notifs-footer{border-top:1px dashed var(--bs-border-color); padding:.5rem .6rem .6rem}
 </style>
 @endpush
 @section('content')
@@ -175,105 +155,116 @@
           </table>
         </div>
       </div>
-
     </div>
 
     <!-- ===== Columna derecha: Notificaciones estilo "UTP" ===== -->
-    <div class="col-lg-4">
-      <div class="card notifs">
-        <div class="notifs-header">
-          <i class="bi bi-list-task me-2"></i> Actividades
-        </div>
+  <div class="col-lg-4">
+    <div class="notifs shadow-soft sticky-right">
+      <div class="notifs-header">
+        <i class="bi bi-list-task"></i> Actividades
+      </div>
 
-        {{-- Bloque: Promesas por aprobar --}}
-        <div class="notif-block">
+      <div class="notifs-body">
+        {{-- Promesas por aprobar --}}
+        <section class="notif-group">
           <div class="notif-title">
-            <i class="bi bi-clipboard-check"></i>
+            <div class="icon"><i class="bi bi-clipboard-check"></i></div>
             <span>Promesas por aprobar</span>
             <span class="notif-count">{{ $ppPendCount }}</span>
           </div>
-          @forelse($ppPend as $p)
-            <a href="{{ route('autorizacion') }}" class="notif-item">
-              <div class="notif-dot bg-primary"></div>
-              <div class="notif-body">
-                <div class="notif-main">
-                  <span class="fw-semibold">{{ $p->dni }}</span>
-                  <span class="text-secondary"> • {{ $p->tipo === 'cancelacion' ? 'Cancelación' : 'Convenio' }}</span>
-                </div>
-                <div class="notif-sub">
-                  {{ $p->operacion ?: '—' }} — {{ optional($p->fecha_promesa)->format('Y-m-d') }} •
-                  <b>S/ {{ number_format($p->monto_mostrar,2) }}</b>
-                </div>
-              </div>
-              <span class="notif-tag">Revisar</span>
-            </a>
-          @empty
-            <div class="notif-empty">Nada pendiente aquí.</div>
-          @endforelse
-        </div>
+          <ul class="notif-list">
+            @forelse($ppPend as $p)
+              <li>
+                <a href="{{ route('autorizacion') }}" class="notif-item">
+                  <div class="notif-dot bg-primary"></div>
+                  <div class="notif-body">
+                    <div class="notif-main">
+                      <span class="fw-semibold">{{ $p->dni }}</span>
+                      <span class="text-secondary"> • {{ $p->tipo === 'cancelacion' ? 'Cancelación' : 'Convenio' }}</span>
+                    </div>
+                    <div class="notif-sub">
+                      {{ $p->operacion ?: '—' }}
+                      — {{ \Carbon\Carbon::parse($p->fecha_promesa)->format('Y-m-d') }}
+                      • <b>S/ {{ number_format($p->monto_mostrar,2) }}</b>
+                    </div>
+                  </div>
+                  <span class="notif-cta">Revisar</span>
+                </a>
+              </li>
+            @empty
+              <div class="notif-empty">Nada pendiente aquí.</div>
+            @endforelse
+          </ul>
+        </section>
 
-        {{-- Bloque: CNA por aprobar --}}
-        <div class="notif-block">
+        {{-- CNA por aprobar --}}
+        <section class="notif-group">
           <div class="notif-title">
-            <i class="bi bi-file-earmark-text"></i>
+            <div class="icon"><i class="bi bi-file-earmark-text"></i></div>
             <span>Solicitudes de CNA</span>
             <span class="notif-count">{{ $cnaPendCount }}</span>
           </div>
-          @forelse($cnaPend as $c)
-            @php
-              $ops = collect((array)$c->operaciones)->filter()->implode(', ');
-            @endphp
-            <a href="{{ route('autorizacion') }}#cna" class="notif-item">
-              <div class="notif-dot bg-info"></div>
-              <div class="notif-body">
-                <div class="notif-main">
-                  <span class="fw-semibold">CNA #{{ $c->nro_carta }}</span>
-                  <span class="text-secondary"> • DNI {{ $c->dni }}</span>
-                </div>
-                <div class="notif-sub">
-                  {{ $ops ?: '—' }} — {{ optional($c->created_at)->format('Y-m-d') }}
-                </div>
-              </div>
-              <span class="notif-tag">Revisar</span>
-            </a>
-          @empty
-            <div class="notif-empty">Sin nuevas CNA.</div>
-          @endforelse
-        </div>
+          <ul class="notif-list">
+            @forelse($cnaPend as $c)
+              @php $ops = collect((array)$c->operaciones)->filter()->implode(', '); @endphp
+              <li>
+                <a href="{{ route('autorizacion') }}#cna" class="notif-item">
+                  <div class="notif-dot bg-info"></div>
+                  <div class="notif-body">
+                    <div class="notif-main">
+                      <span class="fw-semibold">CNA #{{ $c->nro_carta }}</span>
+                      <span class="text-secondary"> • DNI {{ $c->dni }}</span>
+                    </div>
+                    <div class="notif-sub">
+                      {{ $ops ?: '—' }} — {{ optional($c->created_at)->format('Y-m-d') }}
+                    </div>
+                  </div>
+                  <span class="notif-cta">Revisar</span>
+                </a>
+              </li>
+            @empty
+              <div class="notif-empty">Sin nuevas CNA.</div>
+            @endforelse
+          </ul>
+        </section>
 
-        {{-- Bloque: Próximos vencimientos (7 días) --}}
-        <div class="notif-block">
+        {{-- Próximos vencimientos --}}
+        <section class="notif-group">
           <div class="notif-title">
-            <i class="bi bi-calendar-event"></i>
+            <div class="icon"><i class="bi bi-calendar-event"></i></div>
             <span>Cuotas en los próximos 7 días</span>
             <span class="notif-count">{{ $vencCount }}</span>
           </div>
-          @forelse($venc as $v)
-            <div class="notif-item">
-              <div class="notif-dot bg-warning"></div>
-              <div class="notif-body">
-                <div class="notif-main">
-                  <span class="fw-semibold">{{ \Carbon\Carbon::parse($v->fecha)->format('d/m') }}</span>
-                  <span class="text-secondary"> • DNI {{ $v->dni }}</span>
+          <ul class="notif-list">
+            @forelse($venc as $v)
+              <li>
+                <div class="notif-item">
+                  <div class="notif-dot bg-warning"></div>
+                  <div class="notif-body">
+                    <div class="notif-main">
+                      <span class="fw-semibold">{{ \Carbon\Carbon::parse($v->fecha)->format('d/m') }}</span>
+                      <span class="text-secondary"> • DNI {{ $v->dni }}</span>
+                    </div>
+                    <div class="notif-sub">
+                      {{ $v->operacion ?: '—' }}
+                      — {{ $v->tipo === 'cancelacion' ? 'Cancelación' : 'Convenio' }} #{{ $v->nro }}
+                    </div>
+                  </div>
+                  <span class="notif-cta">S/ {{ number_format((float)$v->monto,2) }}</span>
                 </div>
-                <div class="notif-sub">
-                  {{ $v->operacion ?: '—' }} — {{ $v->tipo === 'cancelacion' ? 'Cancelación' : 'Convenio' }} #{{ $v->nro }}
-                </div>
-              </div>
-              <span class="notif-tag">S/ {{ number_format((float)$v->monto,2) }}</span>
-            </div>
-          @empty
-            <div class="notif-empty">No hay vencimientos próximos.</div>
-          @endforelse
-        </div>
+              </li>
+            @empty
+              <div class="notif-empty">No hay vencimientos próximos.</div>
+            @endforelse
+          </ul>
+        </section>
+      </div>
 
-        <div class="p-2 text-end">
-          <a class="small" href="{{ route('autorizacion') }}">Ver bandeja completa →</a>
-        </div>
+      <div class="notifs-footer text-end">
+        <a class="small" href="{{ route('autorizacion') }}">Ver bandeja completa →</a>
       </div>
     </div>
   </div>
-</div>
 @endsection
 @push('scripts')
 <script>
