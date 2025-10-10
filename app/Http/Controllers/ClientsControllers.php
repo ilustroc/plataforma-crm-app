@@ -199,24 +199,22 @@ class ClientsControllers extends Controller
                 $cnasByOperacion = collect($map);
             }
 
+            // ===== F) Próximo N.º de carta CNA (para el modal)
+            $nextNroCarta = null;
+            if (Schema::hasTable('cna_solicitudes')) {
+                $maxCorr = (int) DB::table('cna_solicitudes')->max('correlativo');
+                $nextNroCarta = str_pad(($maxCorr ?: 0) + 1, 6, '0', STR_PAD_LEFT); // 000001, 000002, ...
+            }
+
             return view('clientes.show', compact(
-            'dni','titular','cuentas','pagos','promesas','ccd','pagosPorOperacion','totPagos'
+                'dni','titular','cuentas','pagos','promesas','ccd','pagosPorOperacion','totPagos'
             ) + [
-            'ccdByCodigo'     => $ccdByCodigo,
-            'cnasByOperacion' => $cnasByOperacion,
+                'ccdByCodigo'     => $ccdByCodigo,
+                'cnasByOperacion' => $cnasByOperacion,
+                'nextNroCarta'    => $nextNroCarta,   // << NUEVO
             ]);
         } catch (\Throwable $e) {
-            // Log y respuesta controlada para evitar 500 blancos
-            \Log::error('Clientes.show ERROR', [
-                'dni'  => $dni,
-                'msg'  => $e->getMessage(),
-                'file' => $e->getFile(),
-                'line' => $e->getLine(),
-            ]);
-            // Si prefieres ver el error (temporalmente):
-            // return response('Error en Clientes.show: '.$e->getMessage(), 500);
-
-            // O redirige con mensaje
+            \Log::error('Clientes.show ERROR', ['dni'=>$dni,'msg'=>$e->getMessage(),'file'=>$e->getFile(),'line'=>$e->getLine()]);
             return back()->withErrors('Ocurrió un error cargando el cliente. Revisa los logs.');
         }
     }

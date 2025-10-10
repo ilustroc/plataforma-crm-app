@@ -738,8 +738,7 @@
   {{-- ===== Modal: Solicitar Carta de No Adeudo (CNA) ===== --}}
   <div class="modal fade" id="modalCna" tabindex="-1" aria-hidden="true">
     <div class="modal-dialog modal-dialog-centered">
-      <form class="modal-content" method="POST"
-            action="{{ route('clientes.cna.store', $dni) }}">
+      <form class="modal-content" method="POST" action="{{ route('clientes.cna.store', $dni) }}">
         @csrf
         <div class="modal-header">
           <h6 class="modal-title d-flex align-items-center gap-2">
@@ -750,19 +749,14 @@
         </div>
 
         <div class="modal-body">
-          {{-- Nro de carta: se asigna automáticamente en el servidor --}}
+          {{-- N.º de carta (mostrar el correlativo que tocaría) --}}
           <div class="mb-3">
             <label class="form-label">N.º de carta</label>
-            <input class="form-control" value="Se asignará automáticamente" disabled>
-            <div class="form-text">El sistema otorgará el correlativo al guardar.</div>
+            <input class="form-control" value="{{ $nextNroCarta ?? '—' }}" disabled>
+            <div class="form-text">Se asignará este correlativo al guardar.</div>
           </div>
-
-          <div class="mb-3">
-            <label class="form-label">Producto</label>
-            <input type="text" name="producto" class="form-control" placeholder="Crédito personal / TC / …">
-            <div class="form-text">Opcional; si queda vacío se usa la info de las cuentas.</div>
-          </div>
-
+          
+          {{-- Fecha de pago y monto pagado --}}
           <div class="row g-2">
             <div class="col-md-6">
               <label class="form-label">Fecha de pago realizado <span class="text-danger">*</span></label>
@@ -776,8 +770,7 @@
 
           <div class="mb-3">
             <label class="form-label">Observación (opcional)</label>
-            <textarea name="observacion" class="form-control" rows="3"
-                      placeholder="Algún comentario contextual"></textarea>
+            <textarea name="observacion" class="form-control" rows="3" placeholder="Algún comentario contextual"></textarea>
           </div>
 
           {{-- Hidden con operaciones seleccionadas --}}

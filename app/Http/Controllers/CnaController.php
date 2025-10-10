@@ -20,7 +20,6 @@ class CnaController extends Controller
     public function store(Request $request, string $dni)
     {
         $data = $request->validate([
-            'producto'              => ['nullable','string','max:150'],
             'titular'               => ['nullable','string','max:150'],
             'nota'                  => ['nullable','string','max:1000'],
             'observacion'           => ['nullable','string','max:1000'],
@@ -45,9 +44,18 @@ class CnaController extends Controller
             ->whereNotNull('titular')
             ->value('titular');
 
-        $solicitud = DB::transaction(function () use ($dni, $data, $ops, $titular) {
-            $last = DB::table('cna_solicitudes')->lockForUpdate()->max('correlativo');
-            $next = ((int)$last) + 1;
+        // (Opcional) Derivar un "producto" de referencia con las operaciones elegidas
+        $productoAuto = DB::table('clientes_cuentas')
+            ->whereIn('operacion', $ops)
+            ->whereNotNull('producto')
+            ->pluck('producto')->filter()->unique()->implode(' / ') ?: null;
+
+        $solicitud = DB::transaction(function () use ($dni, $data, $ops, $titular, $productoAuto) {
+            // Bloqueo para evitar colisiones de correlativo
+            DB::table('cna_solicitudes')->lockForUpdate()->get();
+
+            $last = (int) DB::table('cna_solicitudes')->max('correlativo');
+            $next = $last + 1;
             $nro  = str_pad((string)$next, 6, '0', STR_PAD_LEFT);
 
             return CnaSolicitud::create([
@@ -55,9 +63,9 @@ class CnaController extends Controller
                 'nro_carta'            => $nro,
                 'dni'                  => $dni,
                 'titular'              => $titular,
-                'producto'             => $data['producto']   ?? null,
+                'producto'             => $productoAuto,
                 'operaciones'          => $ops,
-                'nota'                 => $data['nota']       ?? null,
+                'nota'                 => $data['nota'] ?? null,
                 'observacion'          => $data['observacion'] ?? null,
                 'fecha_pago_realizado' => $data['fecha_pago_realizado'],
                 'monto_pagado'         => $data['monto_pagado'],
