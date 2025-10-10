@@ -81,7 +81,7 @@
           </div>
           <form id="frmQuickDni" class="d-flex" role="search">
             <input id="inpQuickDni" class="form-control form-control-sm me-2" inputmode="numeric" autocomplete="off"
-                   placeholder="Buscar cliente por DNI (8 dígitos)" aria-label="DNI">
+                   placeholder="Buscar cliente por DNI" aria-label="DNI">
             <button class="btn btn-danger btn-sm" type="submit">
               <i class="bi bi-search me-1"></i> Buscar
             </button>
