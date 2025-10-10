@@ -27,13 +27,21 @@
 {{-- Buscar cliente --}}
 <div class="card mb-3">
   <div class="card-body d-flex align-items-center justify-content-between">
-    <form class="d-flex w-100" method="GET" action="{{ route('clientes.index') }}">
-      <input name="q" class="form-control me-2" placeholder="DNI / Operación / Titular / Cartera">
-      <button class="btn btn-primary">Buscar</button>
+    <form id="quickSearchForm" class="d-flex w-100" action="{{ route('clientes.index') }}" method="GET">
+      <input id="quickSearchDni"
+             name="q"
+             class="form-control me-2"
+             placeholder="DNI"
+             inputmode="numeric"
+             pattern="\d{8}"
+             maxlength="8"
+             autocomplete="off">
+      <button class="btn btn-primary" type="submit">Buscar</button>
     </form>
     <a class="btn btn-outline-secondary ms-2" href="{{ route('clientes.index') }}">Ver listado</a>
   </div>
 </div>
+
 
 {{-- KPIs --}}
 <div class="row g-3">
@@ -205,3 +213,28 @@
 
 </div>
 @endsection
+@push('scripts')
+<script>
+(function(){
+  const frm = document.getElementById('quickSearchForm');
+  const inp = document.getElementById('quickSearchDni');
+
+  // Plantilla de URL segura usando rutas de Laravel
+  const URL_TPL = @json(route('clientes.show', '__DNI__'));
+
+  frm?.addEventListener('submit', function(ev){
+    const v = (inp?.value || '').trim();
+    if (/^\d{8}$/.test(v)) {
+      ev.preventDefault();
+      // Redirige directo a /clientes/{dni}
+      window.location.href = URL_TPL.replace('__DNI__', encodeURIComponent(v));
+    } else {
+      // "Solo para DNI": bloquea y muestra aviso
+      ev.preventDefault();
+      alert('Ingresa un DNI válido de 8 dígitos.');
+      inp?.focus();
+    }
+  });
+})();
+</script>
+@endpush
