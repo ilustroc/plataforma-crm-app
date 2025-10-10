@@ -174,7 +174,7 @@ class AutorizacionController extends Controller
                     $x->where('dni','like',"%{$q}%")
                       ->orWhere('nro_carta','like',"%{$q}%")
                       ->orWhere('producto','like',"%{$q}%")
-                      ->orWhere('nota','like',"%{$q}%");
+                      ->orWhere('observacion','like',"%{$q}%");
                 });
             });
 
