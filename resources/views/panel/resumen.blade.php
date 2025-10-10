@@ -143,6 +143,7 @@
                   data-chart='@json(["labels"=>$chartLabels,"data"=>$chartData])'></canvas>
         </div>
       </div>
+    </div>
 
     {{-- ===== Columna derecha: Actividades ===== --}}
     <div class="col-lg-4">
@@ -271,7 +272,7 @@
     });
   })();
 
-  // Selector de mes (sin perder búsqueda actual)
+  // Selector de mes
   document.getElementById('mesPicker')?.addEventListener('change', (e)=>{
     const ym = e.target.value || '';
     const url = new URL(window.location.href);
@@ -299,7 +300,7 @@
           borderWidth: 2,
           borderColor: getComputedStyle(document.documentElement)
                           .getPropertyValue('--bs-danger') || '#c62828',
-          backgroundColor: 'rgba(220, 53, 69, .15)', // rojo suave
+          backgroundColor: 'rgba(220, 53, 69, .15)',
           hoverBackgroundColor: 'rgba(220, 53, 69, .25)',
           borderRadius: 6
         }]
