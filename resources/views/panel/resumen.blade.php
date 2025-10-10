@@ -5,11 +5,11 @@
 
 @push('head')
 <style>
-  /* ===== Tarjetas ===== */
-  .card.pad{ background:#fff }
+  /* ===== Tarjetas base ===== */
+  .card.pad{ background:#fff } /* fondo blanco uniforme */
   .shadow-soft{ box-shadow:0 6px 20px rgba(15,23,42,.06) }
 
-  /* ===== KPIs compactos ===== */
+  /* ===== KPIs ===== */
   .kpi{
     display:flex; align-items:center; gap:.75rem;
     border:1px solid var(--bs-border-color); border-radius:14px; padding:.9rem 1rem;
@@ -24,35 +24,38 @@
   .kpi .lbl{ font-size:.86rem; color:var(--bs-secondary-color) }
   .kpi .val{ font-weight:800; font-size:1.15rem; line-height:1 }
 
-  /* Accesos */
+  /* ===== Accesos rápidos ===== */
   .quick a{ border-radius:12px }
 
   /* ===== Gráfica del mes ===== */
   .chart-card .toolbar{ display:flex; align-items:center; gap:.5rem }
-  .chart-wrap{ position:relative; width:100%; height:280px } /* evita “caída” */
+  .chart-wrap{
+    position:relative; width:100%;
+    height: 280px; /* para evitar que “caiga” */
+  }
 
-  /* ===== Actividades (rojo sólido) ===== */
+  /* ===== Notificaciones (Actividades) ===== */
   .notifs{ border:1px solid var(--bs-border-color); border-radius:16px; overflow:hidden; background:#fff }
   .notifs-header{
-    background: var(--bs-danger); color:#fff;
-    font-weight:700; letter-spacing:.2px; padding:.7rem .95rem;
-    display:flex; align-items:center; gap:.55rem
+    background: var(--bs-danger); /* rojo sólido */
+    color:#fff; font-weight:700; letter-spacing:.2px;
+    padding:.7rem .95rem; display:flex; align-items:center; gap:.55rem
   }
-  .notifs-body{ padding:.6rem .6rem .2rem; max-height:70vh; overflow:auto }
+  .notifs-body{ padding:.6rem .6rem .2rem; max-height:70vh; overflow:auto; background:#fff }
   .notif-group{ padding:.25rem .25rem .6rem }
   .notif-title{ display:flex; align-items:center; gap:.5rem; padding:.25rem .15rem; font-weight:600 }
   .notif-title .icon{
     width:28px;height:28px;border-radius:8px;display:flex;align-items:center;justify-content:center;
     background: color-mix(in oklab, var(--bs-danger) 12%, #fff); color: var(--bs-danger)
   }
-  .notif-count{
-    margin-left:auto; font-weight:700; font-size:.8rem; background:#fff; color:var(--bs-danger);
-    border:1px solid color-mix(in oklab, var(--bs-danger) 35%, #fff); border-radius:999px; padding:.15rem .55rem
-  }
+  .notif-count{ margin-left:auto; font-weight:700; font-size:.8rem; background:#fff; color:var(--bs-danger);
+    border:1px solid color-mix(in oklab, var(--bs-danger) 35%, #fff); border-radius:999px; padding:.15rem .55rem }
+
   .notif-list{ list-style:none; padding-left:0; margin:0 }
   .notif-item{
-    display:flex; align-items:center; gap:.7rem; padding:.6rem; border-radius:12px;
-    text-decoration:none; color:inherit; border:1px solid transparent; background:#fff; transition:.15s
+    display:flex; align-items:center; gap:.7rem;
+    padding:.6rem; border-radius:12px; text-decoration:none; color:inherit;
+    border:1px solid transparent; background:#fff; transition:.15s
   }
   .notif-item:hover{ background:var(--bs-tertiary-bg); border-color:var(--bs-border-color) }
   .notif-dot{ width:9px;height:9px;border-radius:50%; background:var(--bs-danger) }
@@ -118,80 +121,101 @@
         </div>
       </div>
 
-      {{-- ===== Gráfica: Pagos del mes (diario) ===== --}}
-      @php
-        $ym = request('mes') ?: now()->format('Y-m');
-        try { $base = \Carbon\Carbon::createFromFormat('Y-m', $ym)->startOfMonth(); }
-        catch (\Exception $e) { $base = now()->startOfMonth(); }
-        $days = [];
-        for ($d=0; $d<$base->daysInMonth; $d++) { $days[$base->copy()->addDays($d)->format('Y-m-d')] = 0.0; }
-        foreach(($pagos ?? []) as $p){
-          $f = \Carbon\Carbon::parse($p->fecha)->format('Y-m-d');
-          if (isset($days[$f])) { $days[$f] += (float)$p->monto; }
-        }
-        $chartLabels = array_map(fn($k)=>\Carbon\Carbon::parse($k)->format('d'), array_keys($days));
-        $chartData   = array_values($days);
-        $totalMes    = array_sum($chartData);
-      @endphp
-
+      {{-- Gráfica: Pagos del mes --}}
       <div class="card pad shadow-soft chart-card">
         <div class="d-flex justify-content-between align-items-center mb-2">
           <h6 class="mb-0 d-flex align-items-center gap-2">
             <i class="bi bi-bar-chart-steps text-danger"></i> Pagos del mes
-            <span class="ms-2 badge rounded-pill text-bg-light border">Total: <b>S/ {{ number_format($totalMes,2) }}</b></span>
           </h6>
           <div class="toolbar">
-            @php $curr = \Carbon\Carbon::parse($base); @endphp
+            @php $curr = \Carbon\Carbon::createFromFormat('Y-m',$mes); @endphp
             <a class="btn btn-outline-secondary btn-sm"
                href="{{ url()->current().'?mes='.$curr->copy()->subMonth()->format('Y-m') }}"><i class="bi bi-chevron-left"></i></a>
-            <input type="month" id="mesPicker" class="form-control form-control-sm" value="{{ $curr->format('Y-m') }}">
+            <input type="month" id="mesPicker" class="form-control form-control-sm"
+                   value="{{ $curr->format('Y-m') }}">
             <a class="btn btn-outline-secondary btn-sm"
                href="{{ url()->current().'?mes='.$curr->copy()->addMonth()->format('Y-m') }}"><i class="bi bi-chevron-right"></i></a>
           </div>
         </div>
 
         <div class="chart-wrap">
-          <canvas id="chartPagos" data-chart='@json(["labels"=>$chartLabels,"data"=>$chartData])'></canvas>
+          <canvas id="chartPagos"
+                  data-chart='@json(["labels"=>$chartLabels,"data"=>$chartData])'></canvas>
         </div>
       </div>
 
-      {{-- Pagos recientes --}}
+      {{-- Pagos (PROPIA) con búsqueda/paginación --}}
       <div class="card pad shadow-soft">
-        <div class="d-flex justify-content-between align-items-center">
-          <h6 class="mb-0 d-flex align-items-center gap-2"><i class="bi bi-receipt text-danger"></i> Pagos recientes</h6>
-          <span class="text-secondary small">Últimos 10</span>
+        <div class="d-flex justify-content-between align-items-center flex-wrap gap-2">
+          <h6 class="mb-0 d-flex align-items-center gap-2">
+            <i class="bi bi-table text-danger"></i> Pagos – Cartera PROPIA
+          </h6>
+
+          <div class="d-flex align-items-center gap-2 text-secondary small">
+            <span>Total del mes: <b>S/ {{ number_format($propiasTotal,2) }}</b></span>
+          </div>
         </div>
+
+        <form method="GET" class="d-flex flex-wrap gap-2 mt-2">
+          <input type="hidden" name="mes" value="{{ $mes }}">
+          <div class="input-group input-group-sm" style="max-width:380px">
+            <span class="input-group-text"><i class="bi bi-search"></i></span>
+            <input name="q" value="{{ request('q') }}" class="form-control" placeholder="Buscar (DNI, operación, cliente, gestor, estado)">
+          </div>
+          <button class="btn btn-outline-secondary btn-sm">Buscar</button>
+          @if(request('q')) <a class="btn btn-link btn-sm" href="{{ url()->current().'?mes='.$mes }}">Limpiar</a> @endif
+        </form>
+
         <div class="table-responsive mt-2">
           <table class="table table-sm align-middle mb-0">
             <thead class="table-light">
               <tr>
-                <th class="text-nowrap">Operación/Pagaré</th>
-                <th class="text-nowrap">Fecha</th>
-                <th class="text-end text-nowrap">Monto (S/)</th>
-                <th class="text-nowrap">Gestor</th>
-                <th class="text-nowrap">Estado</th>
+                <th class="text-nowrap">DNI</th>
+                <th class="text-nowrap">Operación</th>
+                <th>Entidad</th>
+                <th>Equipos</th>
+                <th>Cliente</th>
+                <th>Producto</th>
+                <th>Moneda</th>
+                <th class="text-nowrap">F. Pago</th>
+                <th class="text-end text-nowrap">Monto Pagado</th>
+                <th class="text-end text-nowrap">Pagado en S/</th>
+                <th>Gestor</th>
+                <th>Estado</th>
               </tr>
             </thead>
             <tbody>
-            @forelse($pagos as $p)
+            @forelse($propias as $p)
               <tr>
-                <td class="text-nowrap">{{ $p->oper }}</td>
-                <td class="text-nowrap">{{ \Carbon\Carbon::parse($p->fecha)->format('d/m/Y') }}</td>
-                <td class="text-end text-nowrap">{{ number_format((float)$p->monto,2) }}</td>
+                <td class="text-nowrap">{{ $p->dni }}</td>
+                <td class="text-nowrap">{{ $p->operacion }}</td>
+                <td>{{ $p->entidad }}</td>
+                <td>{{ $p->equipos }}</td>
+                <td>{{ $p->nombre_cliente }}</td>
+                <td>{{ $p->producto }}</td>
+                <td>{{ $p->moneda }}</td>
+                <td class="text-nowrap">{{ optional(\Carbon\Carbon::parse($p->fecha_de_pago))->format('Y-m-d') }}</td>
+                <td class="text-end text-nowrap">{{ number_format((float)$p->monto_pagado,2) }}</td>
+                <td class="text-end text-nowrap">{{ number_format((float)$p->pagado_en_soles,2) }}</td>
                 <td class="text-nowrap">{{ $p->gestor }}</td>
-                @php $st = strtoupper((string)$p->estado);
-                     $cls = 'badge text-bg-secondary';
-                     if (str_contains($st,'CANCEL')) $cls = 'badge text-bg-success';
-                     elseif (str_contains($st,'PEND')) $cls = 'badge text-bg-warning';
-                     elseif (preg_match('/CUOTA|ABONO|PARCIAL|RECHAZ|ANUL/',$st)) $cls='badge text-bg-danger';
-                @endphp
-                <td class="text-nowrap"><span class="{{ $cls }}">{{ $st }}</span></td>
+                <td class="text-nowrap">{{ strtoupper((string)$p->status) }}</td>
               </tr>
             @empty
-              <tr><td colspan="5" class="text-center text-muted py-3">Sin pagos.</td></tr>
+              <tr><td colspan="12" class="text-center text-muted py-3">Sin registros en PROPIA para este mes.</td></tr>
             @endforelse
             </tbody>
           </table>
+        </div>
+
+        <div class="d-flex justify-content-between align-items-center mt-2">
+          <div class="small text-secondary">
+            @if($propias instanceof \Illuminate\Pagination\LengthAwarePaginator)
+              Mostrando {{ $propias->firstItem() }}–{{ $propias->lastItem() }} de {{ $propias->total() }}
+            @endif
+          </div>
+          @if($propias instanceof \Illuminate\Pagination\LengthAwarePaginator)
+            {{ $propias->onEachSide(1)->links('pagination::bootstrap-5') }}
+          @endif
         </div>
       </div>
     </div>
@@ -307,12 +331,14 @@
 @push('scripts')
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1"></script>
 <script>
-  // Buscar por DNI
+  // Buscar por DNI -> /clientes/{dni}
   (() => {
     const frm   = document.getElementById('frmQuickDni');
     const input = document.getElementById('inpQuickDni');
     if (!frm || !input) return;
+
     const SHOW_URL = @json(route('clientes.show','__DNI__'));
+
     frm.addEventListener('submit', (e) => {
       e.preventDefault();
       const dni = (input.value || '').replace(/\D/g,'').slice(0,12);
@@ -321,7 +347,7 @@
     });
   })();
 
-  // Selector de mes
+  // Selector de mes (sin perder búsqueda actual)
   document.getElementById('mesPicker')?.addEventListener('change', (e)=>{
     const ym = e.target.value || '';
     const url = new URL(window.location.href);
@@ -329,31 +355,49 @@
     window.location.assign(url.toString());
   });
 
-  // Gráfica diaria del mes
+  // Gráfica de pagos del mes
   (()=>{
     const el = document.getElementById('chartPagos');
     if(!el) return;
     const payload = (()=>{ try{ return JSON.parse(el.dataset.chart||'{}'); }catch(_){ return {}; }})();
+
     const labels = payload.labels || [];
     const data   = payload.data   || [];
-    const danger = getComputedStyle(document.documentElement).getPropertyValue('--bs-danger') || '#dc3545';
 
-    new Chart(el.getContext('2d'), {
-      type:'bar',
-      data:{ labels, datasets:[{
-        label:'S/ por día', data,
-        borderWidth:2, borderColor: danger,
-        backgroundColor:'rgba(220,53,69,.15)', hoverBackgroundColor:'rgba(220,53,69,.25)',
-        borderRadius:6
-      }]},
-      options:{
-        responsive:true, maintainAspectRatio:false, animation:{duration:220},
-        scales:{
-          x:{ grid:{display:false} },
-          y:{ beginAtZero:true, ticks:{ callback:v=>'S/ '+Number(v).toLocaleString() } }
+    const ctx = el.getContext('2d');
+    new Chart(ctx, {
+      type: 'bar',
+      data: {
+        labels,
+        datasets: [{
+          label: 'S/ por día',
+          data,
+          borderWidth: 2,
+          borderColor: getComputedStyle(document.documentElement)
+                          .getPropertyValue('--bs-danger') || '#c62828',
+          backgroundColor: 'rgba(220, 53, 69, .15)', // rojo suave
+          hoverBackgroundColor: 'rgba(220, 53, 69, .25)',
+          borderRadius: 6
+        }]
+      },
+      options: {
+        responsive: true,
+        maintainAspectRatio: false,
+        animation: { duration: 250 },
+        scales: {
+          x: { grid: { display:false } },
+          y: {
+            beginAtZero:true,
+            ticks: { callback:(v)=>'S/ '+Number(v).toLocaleString() }
+          }
         },
-        plugins:{ legend:{display:false},
-          tooltip:{ callbacks:{ label:(ctx)=>'S/ '+Number(ctx.parsed.y??0).toLocaleString(undefined,{minimumFractionDigits:2,maximumFractionDigits:2}) } }
+        plugins: {
+          legend: { display:false },
+          tooltip: {
+            callbacks: {
+              label: (ctx)=> 'S/ ' + Number(ctx.parsed.y ?? 0).toLocaleString(undefined,{minimumFractionDigits:2, maximumFractionDigits:2})
+            }
+          }
         }
       }
     });

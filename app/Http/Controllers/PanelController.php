@@ -73,7 +73,7 @@ class PanelController extends Controller
                 ->count();
         }
 
-        /* ===== PAGOS RECIENTES (últimos 10) ===== */
+        /* ===== PAGOS RECIENTES (últimos 10) – se mantiene por si luego lo usas ===== */
         $pagos = collect();
         if (
             Schema::hasTable('pagos_propia') ||
@@ -117,22 +117,22 @@ class PanelController extends Controller
                 ->get();
         }
 
-        /* ===== KPIs ===== */
+        /* ===== KPIs (hoy) ===== */
         $hoy = Carbon::today()->toDateString();
         $kpiPromHoy  = PromesaPago::whereDate('created_at',$hoy)->count();
         $kpiPagosHoy = Schema::hasTable('pagos_propia')
             ? (float) DB::table('pagos_propia')->whereDate('fecha_de_pago',$hoy)->sum('pagado_en_soles')
             : 0.0;
 
-        /* ======== NUEVO: gráfico de pagos por mes ======== */
-        $mes = $r->input('mes', Carbon::today()->format('Y-m'));             // 'YYYY-MM'
+        /* ===== GRÁFICO: pagos del mes (unión de todas las carteras) ===== */
+        $mes = $r->input('mes', Carbon::today()->format('Y-m')); // 'YYYY-MM'
         try {
             $ini = Carbon::createFromFormat('Y-m', $mes)->startOfMonth();
         } catch (\Exception $e) {
             $ini = Carbon::today()->startOfMonth();
             $mes = $ini->format('Y-m');
         }
-        $fin   = (clone $ini)->endOfMonth();
+        $fin = (clone $ini)->endOfMonth();
 
         $unionParts = [];
 
@@ -155,7 +155,9 @@ class PanelController extends Controller
         $daily = collect();
         if (count($unionParts)) {
             $union = array_shift($unionParts);
-            foreach ($unionParts as $q) { $union->unionAll($q); }
+            foreach ($unionParts as $q) {
+                $union->unionAll($q);
+            }
 
             $daily = DB::query()->fromSub($union, 't')
                 ->selectRaw('f, SUM(s) as total')
@@ -165,17 +167,48 @@ class PanelController extends Controller
                 ->keyBy('f');
         }
 
-        $days = $ini->daysInMonth;
+        $days       = $ini->daysInMonth;
         $chartLabels = [];
         $chartData   = [];
         $sumMes      = 0.0;
 
         for ($d = 1; $d <= $days; $d++) {
-            $date = $ini->copy()->day($d)->toDateString();   // YYYY-MM-DD
+            $date = $ini->copy()->day($d)->toDateString();
             $chartLabels[] = str_pad($d,2,'0',STR_PAD_LEFT);
             $val = (float) ($daily[$date]->total ?? 0);
             $chartData[] = round($val, 2);
             $sumMes += $val;
+        }
+
+        /* ===== TABLA COMPLETA: pagos_propia (filtro por mes + búsqueda + paginación) ===== */
+        $busq = trim($r->input('q', ''));
+
+        $propias = collect();
+        $propiasTotal = 0.0;
+
+        if (Schema::hasTable('pagos_propia')) {
+            $basePropias = DB::table('pagos_propia')
+                ->when($mes, fn($q)=>$q->whereBetween('fecha_de_pago', [$ini->toDateString(), $fin->toDateString()]))
+                ->when($busq !== '', function($q) use ($busq){
+                    $q->where(function($w) use ($busq){
+                        $w->where('dni','like',"%{$busq}%")
+                          ->orWhere('operacion','like',"%{$busq}%")
+                          ->orWhere('entidad','like',"%{$busq}%")
+                          ->orWhere('equipos','like',"%{$busq}%")
+                          ->orWhere('nombre_cliente','like',"%{$busq}%")
+                          ->orWhere('gestor','like',"%{$busq}%")
+                          ->orWhere('status','like',"%{$busq}%");
+                    });
+                });
+
+            $propias = (clone $basePropias)
+                ->select('dni','operacion','entidad','equipos','nombre_cliente','producto','moneda',
+                         'fecha_de_pago','monto_pagado','pagado_en_soles','gestor','status')
+                ->orderByDesc('fecha_de_pago')
+                ->paginate(25)
+                ->withQueryString();
+
+            $propiasTotal = (float) (clone $basePropias)->sum('pagado_en_soles');
         }
 
         return view('panel.resumen', compact(
@@ -184,7 +217,8 @@ class PanelController extends Controller
             'cnaPendCount','cnaPend',
             'venc','vencCount',
             'pagos','kpiPromHoy','kpiPagosHoy',
-            'mes','chartLabels','chartData','sumMes'
+            'mes','chartLabels','chartData','sumMes',
+            'propias','propiasTotal','busq'
         ));
     }
 }
