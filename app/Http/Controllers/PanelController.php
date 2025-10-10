@@ -124,12 +124,67 @@ class PanelController extends Controller
             ? (float) DB::table('pagos_propia')->whereDate('fecha_de_pago',$hoy)->sum('pagado_en_soles')
             : 0.0;
 
+        /* ======== NUEVO: gráfico de pagos por mes ======== */
+        $mes = $r->input('mes', Carbon::today()->format('Y-m'));             // 'YYYY-MM'
+        try {
+            $ini = Carbon::createFromFormat('Y-m', $mes)->startOfMonth();
+        } catch (\Exception $e) {
+            $ini = Carbon::today()->startOfMonth();
+            $mes = $ini->format('Y-m');
+        }
+        $fin   = (clone $ini)->endOfMonth();
+
+        $unionParts = [];
+
+        if (Schema::hasTable('pagos_propia')) {
+            $unionParts[] = DB::table('pagos_propia')
+                ->whereBetween('fecha_de_pago', [$ini->toDateString(), $fin->toDateString()])
+                ->selectRaw('DATE(fecha_de_pago) as f, pagado_en_soles as s');
+        }
+        if (Schema::hasTable('pagos_caja_cusco_castigada')) {
+            $unionParts[] = DB::table('pagos_caja_cusco_castigada')
+                ->whereBetween('fecha_de_pago', [$ini->toDateString(), $fin->toDateString()])
+                ->selectRaw('DATE(fecha_de_pago) as f, pagado_en_soles as s');
+        }
+        if (Schema::hasTable('pagos_caja_cusco_extrajudicial')) {
+            $unionParts[] = DB::table('pagos_caja_cusco_extrajudicial')
+                ->whereBetween('fecha_de_pago', [$ini->toDateString(), $fin->toDateString()])
+                ->selectRaw('DATE(fecha_de_pago) as f, pagado_en_soles as s');
+        }
+
+        $daily = collect();
+        if (count($unionParts)) {
+            $union = array_shift($unionParts);
+            foreach ($unionParts as $q) { $union->unionAll($q); }
+
+            $daily = DB::query()->fromSub($union, 't')
+                ->selectRaw('f, SUM(s) as total')
+                ->groupBy('f')
+                ->orderBy('f')
+                ->get()
+                ->keyBy('f');
+        }
+
+        $days = $ini->daysInMonth;
+        $chartLabels = [];
+        $chartData   = [];
+        $sumMes      = 0.0;
+
+        for ($d = 1; $d <= $days; $d++) {
+            $date = $ini->copy()->day($d)->toDateString();   // YYYY-MM-DD
+            $chartLabels[] = str_pad($d,2,'0',STR_PAD_LEFT);
+            $val = (float) ($daily[$date]->total ?? 0);
+            $chartData[] = round($val, 2);
+            $sumMes += $val;
+        }
+
         return view('panel.resumen', compact(
             'isSupervisor',
             'ppPendCount','ppPend',
             'cnaPendCount','cnaPend',
             'venc','vencCount',
-            'pagos','kpiPromHoy','kpiPagosHoy'
+            'pagos','kpiPromHoy','kpiPagosHoy',
+            'mes','chartLabels','chartData','sumMes'
         ));
     }
 }
