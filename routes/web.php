@@ -99,7 +99,7 @@ Route::middleware('auth')->group(function () {
         Route::post('/autorizacion/{promesa}/rechazar-admin', [AutorizacionController::class,'rechazarAdmin'])->name('autorizacion.rechazar.admin');
     });
 
-    Route::middleware('role:administrador,supervisor')->get(
+    Route::middleware('auth')->get(
         '/promesas/{promesa}/acuerdo',
         [PromesaPdfController::class, 'acuerdo']
     )->name('promesas.acuerdo');
