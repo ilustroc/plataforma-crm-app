@@ -5,58 +5,34 @@
 
 @push('head')
 <style>
-  /* ===== Tarjetas base ===== */
-  .card.pad{ background:#fff } /* fondo blanco uniforme */
+  .card.pad{ background:#fff }
   .shadow-soft{ box-shadow:0 6px 20px rgba(15,23,42,.06) }
 
-  /* ===== KPIs ===== */
-  .kpi{
-    display:flex; align-items:center; gap:.75rem;
-    border:1px solid var(--bs-border-color); border-radius:14px; padding:.9rem 1rem;
-    background:#fff;
-  }
-  .kpi .ico{
-    width:44px;height:44px;border-radius:50%;
-    display:flex;align-items:center;justify-content:center;
-    background: color-mix(in oklab, var(--bs-danger) 12%, #fff);
-    color: var(--bs-danger);
-  }
+  .kpi{ display:flex; align-items:center; gap:.75rem; border:1px solid var(--bs-border-color);
+        border-radius:14px; padding:.9rem 1rem; background:#fff }
+  .kpi .ico{ width:44px;height:44px;border-radius:50%; display:flex;align-items:center;justify-content:center;
+             background: color-mix(in oklab, var(--bs-danger) 12%, #fff); color: var(--bs-danger) }
   .kpi .lbl{ font-size:.86rem; color:var(--bs-secondary-color) }
   .kpi .val{ font-weight:800; font-size:1.15rem; line-height:1 }
 
-  /* ===== Accesos rápidos ===== */
   .quick a{ border-radius:12px }
 
-  /* ===== Gráfica del mes ===== */
   .chart-card .toolbar{ display:flex; align-items:center; gap:.5rem }
-  .chart-wrap{
-    position:relative; width:100%;
-    height: 280px; /* para evitar que “caiga” */
-  }
+  .chart-wrap{ position:relative; width:100%; height:280px }
 
-  /* ===== Notificaciones (Actividades) ===== */
   .notifs{ border:1px solid var(--bs-border-color); border-radius:16px; overflow:hidden; background:#fff }
-  .notifs-header{
-    background: var(--bs-danger); /* rojo sólido */
-    color:#fff; font-weight:700; letter-spacing:.2px;
-    padding:.7rem .95rem; display:flex; align-items:center; gap:.55rem
-  }
+  .notifs-header{ background: var(--bs-danger); color:#fff; font-weight:700; padding:.7rem .95rem;
+                  display:flex; align-items:center; gap:.55rem }
   .notifs-body{ padding:.6rem .6rem .2rem; max-height:70vh; overflow:auto; background:#fff }
   .notif-group{ padding:.25rem .25rem .6rem }
   .notif-title{ display:flex; align-items:center; gap:.5rem; padding:.25rem .15rem; font-weight:600 }
-  .notif-title .icon{
-    width:28px;height:28px;border-radius:8px;display:flex;align-items:center;justify-content:center;
-    background: color-mix(in oklab, var(--bs-danger) 12%, #fff); color: var(--bs-danger)
-  }
+  .notif-title .icon{ width:28px;height:28px;border-radius:8px;display:flex;align-items:center;justify-content:center;
+                      background: color-mix(in oklab, var(--bs-danger) 12%, #fff); color: var(--bs-danger) }
   .notif-count{ margin-left:auto; font-weight:700; font-size:.8rem; background:#fff; color:var(--bs-danger);
-    border:1px solid color-mix(in oklab, var(--bs-danger) 35%, #fff); border-radius:999px; padding:.15rem .55rem }
-
+                border:1px solid color-mix(in oklab, var(--bs-danger) 35%, #fff); border-radius:999px; padding:.15rem .55rem }
   .notif-list{ list-style:none; padding-left:0; margin:0 }
-  .notif-item{
-    display:flex; align-items:center; gap:.7rem;
-    padding:.6rem; border-radius:12px; text-decoration:none; color:inherit;
-    border:1px solid transparent; background:#fff; transition:.15s
-  }
+  .notif-item{ display:flex; align-items:center; gap:.7rem; padding:.6rem; border-radius:12px; text-decoration:none; color:inherit;
+               border:1px solid transparent; background:#fff; transition:.15s }
   .notif-item:hover{ background:var(--bs-tertiary-bg); border-color:var(--bs-border-color) }
   .notif-dot{ width:9px;height:9px;border-radius:50%; background:var(--bs-danger) }
   .notif-body .notif-main{ white-space:nowrap; overflow:hidden; text-overflow:ellipsis }
@@ -66,51 +42,117 @@
 </style>
 @endpush
 
-{{-- ... cabecera y estilos iguales ... --}}
-
 @section('content')
+@php
+  // Fallback por si aún no cambiaste el controller
+  $role  = $role  ?? strtolower(auth()->user()->role ?? '');
+  $isAsesor = $isAsesor ?? ($role==='asesor');
+  $isSupervisor = $isSupervisor ?? ($role==='supervisor');
+  $isAdmin = $isAdmin ?? in_array($role,['administrador','sistemas']);
+
+  // Colecciones para asesor (evita errores si no existen)
+  $misSup = $misSup ?? collect();
+  $misPre = $misPre ?? collect();
+  $misRes = $misRes ?? collect();
+  $cnaSup = $cnaSup ?? collect();
+  $cnaPre = $cnaPre ?? collect();
+  $cnaRes = $cnaRes ?? collect();
+@endphp
+
 <div class="container-fluid">
   <div class="row g-3">
+    {{-- ===== Izquierda ===== --}}
     <div class="col-lg-8">
-      {{-- Bienvenida + buscador (igual) --}}
-      {{-- KPIs (igual) --}}
 
-      {{-- ===== Accesos rápidos (por rol) ===== --}}
-      <div class="card pad shadow-soft quick">
-        <div class="d-flex flex-wrap gap-2">
-          @if(!$isAsesor)
-            <a href="{{ route('autorizacion') }}" class="btn btn-outline-danger">
-              <i class="bi bi-inboxes me-1"></i> Autorización
-            </a>
-            <a href="{{ route('dashboard') }}" class="btn btn-outline-secondary">
-              <i class="bi bi-graph-up me-1"></i> Dashboard
-            </a>
-            <a href="{{ route('reportes.pdp') }}" class="btn btn-outline-secondary">
-              <i class="bi bi-file-earmark-spreadsheet me-1"></i> Reportes
-            </a>
-          @endif
-          <a href="{{ route('clientes.index') }}" class="btn btn-outline-secondary">
-            <i class="bi bi-people me-1"></i> Clientes
-          </a>
+      {{-- Bienvenida + buscador --}}
+      <div class="card pad shadow-soft">
+        <div class="d-flex align-items-center justify-content-between flex-wrap gap-2">
+          <div>
+            <h5 class="mb-1">¡Bienvenido(a)!</h5>
+            <div class="text-secondary small">Panel inicial.</div>
+          </div>
+          <form id="frmQuickDni" class="d-flex" role="search">
+            <input id="inpQuickDni" class="form-control form-control-sm me-2" inputmode="numeric" autocomplete="off"
+                   placeholder="Buscar cliente por DNI" aria-label="DNI">
+            <button class="btn btn-danger btn-sm" type="submit">
+              <i class="bi bi-search me-1"></i> Buscar
+            </button>
+          </form>
         </div>
       </div>
 
-      {{-- Gráfica Pagos del mes (se alimenta con tus datos filtrados) --}}
-      {{-- ... tu bloque del gráfico exactamente igual ... --}}
+      {{-- KPIs --}}
+      <div class="row g-3">
+        <div class="col-sm-6">
+          <div class="kpi shadow-soft">
+            <div class="ico"><i class="bi bi-clipboard2-check"></i></div>
+            <div>
+              <div class="lbl">Promesas creadas hoy</div>
+              <div class="val">{{ number_format($kpiPromHoy) }}</div>
+            </div>
+          </div>
+        </div>
+        <div class="col-sm-6">
+          <div class="kpi shadow-soft">
+            <div class="ico"><i class="bi bi-cash-coin"></i></div>
+            <div>
+              <div class="lbl">Pagos registrados hoy</div>
+              <div class="val">S/ {{ number_format($kpiPagosHoy,2) }}</div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {{-- Accesos rápidos (ocultos para asesor) --}}
+      @unless($isAsesor)
+      <div class="card pad shadow-soft quick">
+        <div class="d-flex flex-wrap gap-2">
+          <a href="{{ route('autorizacion') }}" class="btn btn-outline-danger"><i class="bi bi-inboxes me-1"></i> Autorización</a>
+          <a href="{{ route('clientes.index') }}" class="btn btn-outline-secondary"><i class="bi bi-people me-1"></i> Clientes</a>
+          <a href="{{ route('dashboard') }}" class="btn btn-outline-secondary"><i class="bi bi-graph-up me-1"></i> Dashboard</a>
+          <a href="{{ route('reportes.pdp') }}" class="btn btn-outline-secondary"><i class="bi bi-file-earmark-spreadsheet me-1"></i> Reportes</a>
+        </div>
+      </div>
+      @endunless
+
+      {{-- Gráfica: Pagos del mes --}}
+      <div class="card pad shadow-soft chart-card">
+        <div class="d-flex justify-content-between align-items-center mb-2">
+          <h6 class="mb-0 d-flex align-items-center gap-2">
+            <i class="bi bi-bar-chart-steps text-danger"></i> Pagos del mes
+          </h6>
+          <div class="toolbar">
+            @php $curr = \Carbon\Carbon::createFromFormat('Y-m',$mes); @endphp
+            <a class="btn btn-outline-secondary btn-sm"
+               href="{{ url()->current().'?mes='.$curr->copy()->subMonth()->format('Y-m') }}"><i class="bi bi-chevron-left"></i></a>
+            <input type="month" id="mesPicker" class="form-control form-control-sm" value="{{ $curr->format('Y-m') }}">
+            <a class="btn btn-outline-secondary btn-sm"
+               href="{{ url()->current().'?mes='.$curr->copy()->addMonth()->format('Y-m') }}"><i class="bi bi-chevron-right"></i></a>
+          </div>
+        </div>
+        <div class="chart-wrap">
+          <canvas id="chartPagos" data-chart='@json(["labels"=>$chartLabels,"data"=>$chartData])'></canvas>
+        </div>
+      </div>
     </div>
 
-    {{-- ===== Columna derecha ===== --}}
+    {{-- ===== Derecha: Actividades ===== --}}
     <div class="col-lg-4">
       <div class="notifs shadow-soft sticky-right">
-        <div class="notifs-header"><i class="bi bi-list-task"></i> Actividades</div>
+        <div class="notifs-header">
+          <i class="bi bi-list-task"></i>
+          {{ $isAsesor ? 'Tus actividades' : 'Actividades' }}
+        </div>
+
         <div class="notifs-body">
 
+          {{-- ========== VISTA ASESOR ========== --}}
           @if($isAsesor)
-            {{-- ========== VISTA ASESOR ========== --}}
+            {{-- Promesas del asesor --}}
             <section class="notif-group">
               <div class="notif-title">
-                <div class="icon"><i class="bi bi-clock-history"></i></div>
-                <span>Tus promesas — en Supervisor</span>
+                <div class="icon"><i class="bi bi-clipboard-check"></i></div>
+                <span>Promesas — En Supervisor</span>
                 <span class="notif-count">{{ $misSup->count() }}</span>
               </div>
               <ul class="notif-list">
@@ -121,17 +163,17 @@
                       <div class="notif-body">
                         <div class="notif-main">
                           <span class="fw-semibold">{{ $p->dni }}</span>
-                          <span class="text-secondary"> • {{ $p->tipo==='cancelacion'?'Cancelación':'Convenio' }}</span>
+                          <span class="text-secondary"> • {{ $p->tipo === 'cancelacion' ? 'Cancelación' : 'Convenio' }}</span>
                         </div>
                         <div class="notif-sub">
-                          {{ $p->operacion ?: '—' }} — {{ optional($p->created_at)->format('Y-m-d') }}
+                          {{ $p->operacion ?: '—' }} — Pendiente de Supervisor
                         </div>
                       </div>
                       <span class="notif-cta">Ver cliente</span>
                     </a>
                   </li>
                 @empty
-                  <div class="text-secondary small px-2 pb-2">No tienes solicitudes en Supervisor.</div>
+                  <div class="text-secondary small px-2 pb-2">Sin pendientes con Supervisor.</div>
                 @endforelse
               </ul>
             </section>
@@ -139,7 +181,7 @@
             <section class="notif-group">
               <div class="notif-title">
                 <div class="icon"><i class="bi bi-hourglass-split"></i></div>
-                <span>Pre-aprobadas — esperando Administración</span>
+                <span>Promesas — Pre-aprobadas</span>
                 <span class="notif-count">{{ $misPre->count() }}</span>
               </div>
               <ul class="notif-list">
@@ -150,15 +192,17 @@
                       <div class="notif-body">
                         <div class="notif-main">
                           <span class="fw-semibold">{{ $p->dni }}</span>
-                          <span class="text-secondary"> • {{ $p->tipo==='cancelacion'?'Cancelación':'Convenio' }}</span>
+                          <span class="text-secondary"> • {{ $p->tipo === 'cancelacion' ? 'Cancelación' : 'Convenio' }}</span>
                         </div>
-                        <div class="notif-sub">{{ $p->operacion ?: '—' }} — {{ optional($p->updated_at)->format('Y-m-d') }}</div>
+                        <div class="notif-sub">
+                          {{ $p->operacion ?: '—' }} — Pre-aprobada (esperando Administración)
+                        </div>
                       </div>
                       <span class="notif-cta">Ver cliente</span>
                     </a>
                   </li>
                 @empty
-                  <div class="text-secondary small px-2 pb-2">No tienes pre-aprobadas.</div>
+                  <div class="text-secondary small px-2 pb-2">No hay pre-aprobadas.</div>
                 @endforelse
               </ul>
             </section>
@@ -166,26 +210,31 @@
             <section class="notif-group">
               <div class="notif-title">
                 <div class="icon"><i class="bi bi-check2-circle"></i></div>
-                <span>Resueltas recientemente</span>
+                <span>Promesas — Resueltas</span>
                 <span class="notif-count">{{ $misRes->count() }}</span>
               </div>
               <ul class="notif-list">
                 @forelse($misRes as $p)
+                  @php
+                    $estado = strtoupper($p->workflow_estado);
+                    $badgeC = 'var(--bs-success)';
+                    if ($estado==='RECHAZADA' || $estado==='RECHAZADA_SUP') $badgeC = 'var(--bs-danger)';
+                  @endphp
                   <li>
                     <a href="{{ route('clientes.show',$p->dni) }}" class="notif-item">
-                      <div class="notif-dot" style="background:var(--bs-success)"></div>
+                      <div class="notif-dot" style="background:{{ $badgeC }}"></div>
                       <div class="notif-body">
                         <div class="notif-main">
-                          <span class="fw-semibold">{{ strtoupper($p->workflow_estado) }}</span>
-                          <span class="text-secondary"> • DNI {{ $p->dni }}</span>
+                          <span class="fw-semibold">{{ $p->dni }}</span>
+                          <span class="text-secondary"> • {{ ucfirst($p->workflow_estado) }}</span>
                         </div>
-                        <div class="notif-sub">{{ $p->operacion ?: '—' }} — {{ optional($p->updated_at)->format('Y-m-d') }}</div>
+                        <div class="notif-sub">{{ $p->operacion ?: '—' }}</div>
                       </div>
                       <span class="notif-cta">Ver cliente</span>
                     </a>
                   </li>
                 @empty
-                  <div class="text-secondary small px-2 pb-2">Sin resoluciones recientes.</div>
+                  <div class="text-secondary small px-2 pb-2">Aún no hay resoluciones.</div>
                 @endforelse
               </ul>
             </section>
@@ -194,35 +243,87 @@
             <section class="notif-group">
               <div class="notif-title">
                 <div class="icon"><i class="bi bi-file-earmark-text"></i></div>
-                <span>Tus CNA</span>
-                <span class="notif-count">{{ $cnaSup->count() + $cnaPre->count() + $cnaRes->count() }}</span>
+                <span>CNA — En Supervisor</span>
+                <span class="notif-count">{{ $cnaSup->count() }}</span>
               </div>
               <ul class="notif-list">
-                @foreach([['En Supervisor',$cnaSup,'var(--bs-warning)'],['Pre-aprobadas',$cnaPre,'var(--bs-info)'],['Resueltas',$cnaRes,'var(--bs-success)']] as [$lbl,$lista,$color])
-                  @forelse($lista as $c)
-                    <li>
-                      <a href="{{ route('clientes.show',$c->dni) }}" class="notif-item">
-                        <div class="notif-dot" style="background:{{ $color }}"></div>
-                        <div class="notif-body">
-                          <div class="notif-main">
-                            <span class="fw-semibold">{{ $lbl }}</span>
-                            <span class="text-secondary"> • DNI {{ $c->dni }}</span>
-                          </div>
-                          <div class="notif-sub">CNA #{{ $c->nro_carta }} — {{ optional($c->updated_at ?? $c->created_at)->format('Y-m-d') }}</div>
+                @forelse($cnaSup as $c)
+                  <li>
+                    <a href="{{ route('clientes.show',$c->dni) }}" class="notif-item">
+                      <div class="notif-dot"></div>
+                      <div class="notif-body">
+                        <div class="notif-main"><span class="fw-semibold">DNI {{ $c->dni }}</span></div>
+                        <div class="notif-sub">Pendiente de Supervisor</div>
+                      </div>
+                      <span class="notif-cta">Ver cliente</span>
+                    </a>
+                  </li>
+                @empty
+                  <div class="text-secondary small px-2 pb-2">Sin CNA en supervisor.</div>
+                @endforelse
+              </ul>
+            </section>
+
+            <section class="notif-group">
+              <div class="notif-title">
+                <div class="icon"><i class="bi bi-hourglass-split"></i></div>
+                <span>CNA — Pre-aprobadas</span>
+                <span class="notif-count">{{ $cnaPre->count() }}</span>
+              </div>
+              <ul class="notif-list">
+                @forelse($cnaPre as $c)
+                  <li>
+                    <a href="{{ route('clientes.show',$c->dni) }}" class="notif-item">
+                      <div class="notif-dot" style="background:var(--bs-info)"></div>
+                      <div class="notif-body">
+                        <div class="notif-main"><span class="fw-semibold">DNI {{ $c->dni }}</span></div>
+                        <div class="notif-sub">Pre-aprobada (esperando Administración)</div>
+                      </div>
+                      <span class="notif-cta">Ver cliente</span>
+                    </a>
+                  </li>
+                @empty
+                  <div class="text-secondary small px-2 pb-2">Sin CNA pre-aprobadas.</div>
+                @endforelse
+              </ul>
+            </section>
+
+            <section class="notif-group">
+              <div class="notif-title">
+                <div class="icon"><i class="bi bi-check2-circle"></i></div>
+                <span>CNA — Resueltas</span>
+                <span class="notif-count">{{ $cnaRes->count() }}</span>
+              </div>
+              <ul class="notif-list">
+                @forelse($cnaRes as $c)
+                  @php
+                    $estado = strtoupper($c->workflow_estado);
+                    $badgeC = 'var(--bs-success)';
+                    if ($estado==='RECHAZADA' || $estado==='RECHAZADA_SUP') $badgeC = 'var(--bs-danger)';
+                  @endphp
+                  <li>
+                    <a href="{{ route('clientes.show',$c->dni) }}" class="notif-item">
+                      <div class="notif-dot" style="background:{{ $badgeC }}"></div>
+                      <div class="notif-body">
+                        <div class="notif-main">
+                          <span class="fw-semibold">DNI {{ $c->dni }}</span>
+                          <span class="text-secondary"> • {{ ucfirst($c->workflow_estado) }}</span>
                         </div>
-                        <span class="notif-cta">Ver cliente</span>
-                      </a>
-                    </li>
-                  @empty @endforelse
-                @endforeach
-                @if($cnaSup->isEmpty() && $cnaPre->isEmpty() && $cnaRes->isEmpty())
-                  <div class="text-secondary small px-2 pb-2">Sin CNA por ahora.</div>
-                @endif
+                        <div class="notif-sub">—</div>
+                      </div>
+                      <span class="notif-cta">Ver cliente</span>
+                    </a>
+                  </li>
+                @empty
+                  <div class="text-secondary small px-2 pb-2">Sin CNA resueltas.</div>
+                @endforelse
               </ul>
             </section>
 
           @else
-            {{-- ========== VISTA SUP/ADMIN (la tuya anterior) ========== --}}
+          {{-- ========== VISTA SUPERVISOR / ADMIN ========== --}}
+
+            {{-- Promesas por aprobar --}}
             <section class="notif-group">
               <div class="notif-title">
                 <div class="icon"><i class="bi bi-clipboard-check"></i></div>
@@ -237,10 +338,10 @@
                       <div class="notif-body">
                         <div class="notif-main">
                           <span class="fw-semibold">{{ $p->dni }}</span>
-                          <span class="text-secondary"> • {{ $p->tipo==='cancelacion'?'Cancelación':'Convenio' }}</span>
+                          <span class="text-secondary"> • {{ $p->tipo === 'cancelacion' ? 'Cancelación' : 'Convenio' }}</span>
                         </div>
                         <div class="notif-sub">
-                          {{ $p->operacion ?: '—' }} — {{ optional($p->fecha_promesa)->format('Y-m-d') }}
+                          {{ $p->operacion ?: '—' }} — {{ \Carbon\Carbon::parse($p->fecha_promesa)->format('Y-m-d') }}
                           • <b>S/ {{ number_format($p->monto_mostrar,2) }}</b>
                         </div>
                       </div>
@@ -253,6 +354,7 @@
               </ul>
             </section>
 
+            {{-- CNA por aprobar --}}
             <section class="notif-group">
               <div class="notif-title">
                 <div class="icon"><i class="bi bi-file-earmark-text"></i></div>
@@ -281,6 +383,7 @@
               </ul>
             </section>
 
+            {{-- Próximos vencimientos --}}
             <section class="notif-group">
               <div class="notif-title">
                 <div class="icon"><i class="bi bi-calendar-event"></i></div>
@@ -297,7 +400,9 @@
                           <span class="fw-semibold">{{ \Carbon\Carbon::parse($v->fecha)->format('d/m') }}</span>
                           <span class="text-secondary"> • DNI {{ $v->dni }}</span>
                         </div>
-                        <div class="notif-sub">{{ $v->operacion ?: '—' }} — {{ $v->tipo==='cancelacion'?'Cancelación':'Convenio' }} #{{ $v->nro }}</div>
+                        <div class="notif-sub">
+                          {{ $v->operacion ?: '—' }} — {{ $v->tipo === 'cancelacion' ? 'Cancelación' : 'Convenio' }} #{{ $v->nro }}
+                        </div>
                       </div>
                       <span class="notif-cta">S/ {{ number_format((float)$v->monto,2) }}</span>
                     </div>
@@ -321,7 +426,6 @@
 </div>
 @endsection
 
-
 @push('scripts')
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1"></script>
 <script>
@@ -330,9 +434,7 @@
     const frm   = document.getElementById('frmQuickDni');
     const input = document.getElementById('inpQuickDni');
     if (!frm || !input) return;
-
     const SHOW_URL = @json(route('clientes.show','__DNI__'));
-
     frm.addEventListener('submit', (e) => {
       e.preventDefault();
       const dni = (input.value || '').replace(/\D/g,'').slice(0,12);
@@ -354,10 +456,8 @@
     const el = document.getElementById('chartPagos');
     if(!el) return;
     const payload = (()=>{ try{ return JSON.parse(el.dataset.chart||'{}'); }catch(_){ return {}; }})();
-
     const labels = payload.labels || [];
     const data   = payload.data   || [];
-
     const ctx = el.getContext('2d');
     new Chart(ctx, {
       type: 'bar',
@@ -367,8 +467,7 @@
           label: 'S/ por día',
           data,
           borderWidth: 2,
-          borderColor: getComputedStyle(document.documentElement)
-                          .getPropertyValue('--bs-danger') || '#c62828',
+          borderColor: getComputedStyle(document.documentElement).getPropertyValue('--bs-danger') || '#c62828',
           backgroundColor: 'rgba(220, 53, 69, .15)',
           hoverBackgroundColor: 'rgba(220, 53, 69, .25)',
           borderRadius: 6
@@ -380,18 +479,11 @@
         animation: { duration: 250 },
         scales: {
           x: { grid: { display:false } },
-          y: {
-            beginAtZero:true,
-            ticks: { callback:(v)=>'S/ '+Number(v).toLocaleString() }
-          }
+          y: { beginAtZero:true, ticks: { callback:(v)=>'S/ '+Number(v).toLocaleString() } }
         },
         plugins: {
           legend: { display:false },
-          tooltip: {
-            callbacks: {
-              label: (ctx)=> 'S/ ' + Number(ctx.parsed.y ?? 0).toLocaleString(undefined,{minimumFractionDigits:2, maximumFractionDigits:2})
-            }
-          }
+          tooltip: { callbacks: { label: (ctx)=> 'S/ ' + Number(ctx.parsed.y ?? 0).toLocaleString(undefined,{minimumFractionDigits:2, maximumFractionDigits:2}) } }
         }
       }
     });
