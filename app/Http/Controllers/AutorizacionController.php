@@ -255,7 +255,8 @@ class AutorizacionController extends Controller
             'rechazado_at'    => now(),
             'nota_rechazo'    => substr((string)$req->input('nota_estado'), 0, 500),
         ]);
-
+        
+        WorkflowMailer::promesaRechazadaSup($promesa, $req->input('nota_estado'));
         return back()->with('ok', 'Promesa rechazada por supervisor.');
     }
     // ===== ADMIN =====

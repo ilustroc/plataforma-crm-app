@@ -75,7 +75,7 @@ class CnaController extends Controller
             ]);
         });
 
-        WorkflowMailer::cnaSolicitada($solicitud, Auth::user());
+        WorkflowMailer::cnaPendiente($solicitud);
         return back()->with('ok', "Solicitud de CNA enviada. N.º {$solicitud->nro_carta}");
     }
 
@@ -121,7 +121,7 @@ class CnaController extends Controller
             'motivo_rechazo'  => substr((string)$request->input('nota_estado',''), 0, 500),
         ]);
 
-        WorkflowMailer::cnaResuelta($cna, false, $req->input('nota_estado'));
+        WorkflowMailer::cnaRechazadaSup($cna, $req->input('nota_estado'));
         return back()->with('ok', 'CNA rechazada por supervisor.');
     }
 
