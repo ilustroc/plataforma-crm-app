@@ -103,7 +103,10 @@ class PromesaPago extends Model
     {
         return $this->belongsTo(\App\Models\User::class,'rechazado_por');
     }
-
+    public function user()
+    {
+        return $this->belongsTo(\App\Models\User::class, 'user_id');
+    }
     /* -------------------------------- Scopes -------------------------------- */
 
     public function scopeWithDecisionRefs(Builder $q): Builder
