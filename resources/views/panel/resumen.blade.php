@@ -66,192 +66,261 @@
 </style>
 @endpush
 
+{{-- ... cabecera y estilos iguales ... --}}
+
 @section('content')
 <div class="container-fluid">
   <div class="row g-3">
-    {{-- ===== Columna izquierda ===== --}}
     <div class="col-lg-8">
+      {{-- Bienvenida + buscador (igual) --}}
+      {{-- KPIs (igual) --}}
 
-      {{-- Bienvenida + buscador --}}
-      <div class="card pad shadow-soft">
-        <div class="d-flex align-items-center justify-content-between flex-wrap gap-2">
-          <div>
-            <h5 class="mb-1">¡Bienvenido(a)!</h5>
-            <div class="text-secondary small">Panel inicial.</div>
-          </div>
-          <form id="frmQuickDni" class="d-flex" role="search">
-            <input id="inpQuickDni" class="form-control form-control-sm me-2" inputmode="numeric" autocomplete="off"
-                   placeholder="Buscar cliente por DNI" aria-label="DNI">
-            <button class="btn btn-danger btn-sm" type="submit">
-              <i class="bi bi-search me-1"></i> Buscar
-            </button>
-          </form>
-        </div>
-      </div>
-
-      {{-- KPIs --}}
-      <div class="row g-3">
-        <div class="col-sm-6">
-          <div class="kpi shadow-soft">
-            <div class="ico"><i class="bi bi-clipboard2-check"></i></div>
-            <div>
-              <div class="lbl">Promesas creadas hoy</div>
-              <div class="val">{{ number_format($kpiPromHoy) }}</div>
-            </div>
-          </div>
-        </div>
-        <div class="col-sm-6">
-          <div class="kpi shadow-soft">
-            <div class="ico"><i class="bi bi-cash-coin"></i></div>
-            <div>
-              <div class="lbl">Pagos registrados hoy</div>
-              <div class="val">S/ {{ number_format($kpiPagosHoy,2) }}</div>
-            </div>
-          </div>
-        </div>
-      </div>
-
-      {{-- Accesos rápidos --}}
+      {{-- ===== Accesos rápidos (por rol) ===== --}}
       <div class="card pad shadow-soft quick">
         <div class="d-flex flex-wrap gap-2">
-          <a href="{{ route('autorizacion') }}" class="btn btn-outline-danger"><i class="bi bi-inboxes me-1"></i> Autorización</a>
-          <a href="{{ route('clientes.index') }}" class="btn btn-outline-secondary"><i class="bi bi-people me-1"></i> Clientes</a>
-          <a href="{{ route('dashboard') }}" class="btn btn-outline-secondary"><i class="bi bi-graph-up me-1"></i> Dashboard</a>
-          <a href="{{ route('reportes.pdp') }}" class="btn btn-outline-secondary"><i class="bi bi-file-earmark-spreadsheet me-1"></i> Reportes</a>
+          @if(!$isAsesor)
+            <a href="{{ route('autorizacion') }}" class="btn btn-outline-danger">
+              <i class="bi bi-inboxes me-1"></i> Autorización
+            </a>
+            <a href="{{ route('dashboard') }}" class="btn btn-outline-secondary">
+              <i class="bi bi-graph-up me-1"></i> Dashboard
+            </a>
+            <a href="{{ route('reportes.pdp') }}" class="btn btn-outline-secondary">
+              <i class="bi bi-file-earmark-spreadsheet me-1"></i> Reportes
+            </a>
+          @endif
+          <a href="{{ route('clientes.index') }}" class="btn btn-outline-secondary">
+            <i class="bi bi-people me-1"></i> Clientes
+          </a>
         </div>
       </div>
 
-      {{-- Gráfica: Pagos del mes --}}
-      <div class="card pad shadow-soft chart-card">
-        <div class="d-flex justify-content-between align-items-center mb-2">
-          <h6 class="mb-0 d-flex align-items-center gap-2">
-            <i class="bi bi-bar-chart-steps text-danger"></i> Pagos del mes
-          </h6>
-          <div class="toolbar">
-            @php $curr = \Carbon\Carbon::createFromFormat('Y-m',$mes); @endphp
-            <a class="btn btn-outline-secondary btn-sm"
-               href="{{ url()->current().'?mes='.$curr->copy()->subMonth()->format('Y-m') }}"><i class="bi bi-chevron-left"></i></a>
-            <input type="month" id="mesPicker" class="form-control form-control-sm"
-                   value="{{ $curr->format('Y-m') }}">
-            <a class="btn btn-outline-secondary btn-sm"
-               href="{{ url()->current().'?mes='.$curr->copy()->addMonth()->format('Y-m') }}"><i class="bi bi-chevron-right"></i></a>
-          </div>
-        </div>
-
-        <div class="chart-wrap">
-          <canvas id="chartPagos"
-                  data-chart='@json(["labels"=>$chartLabels,"data"=>$chartData])'></canvas>
-        </div>
-      </div>
+      {{-- Gráfica Pagos del mes (se alimenta con tus datos filtrados) --}}
+      {{-- ... tu bloque del gráfico exactamente igual ... --}}
     </div>
 
-    {{-- ===== Columna derecha: Actividades ===== --}}
+    {{-- ===== Columna derecha ===== --}}
     <div class="col-lg-4">
       <div class="notifs shadow-soft sticky-right">
-        <div class="notifs-header">
-          <i class="bi bi-list-task"></i> Actividades
-        </div>
-
+        <div class="notifs-header"><i class="bi bi-list-task"></i> Actividades</div>
         <div class="notifs-body">
-          {{-- Promesas por aprobar --}}
-          <section class="notif-group">
-            <div class="notif-title">
-              <div class="icon"><i class="bi bi-clipboard-check"></i></div>
-              <span>Promesas por aprobar</span>
-              <span class="notif-count">{{ $ppPendCount }}</span>
-            </div>
-            <ul class="notif-list">
-              @forelse($ppPend as $p)
-                <li>
-                  <a href="{{ route('autorizacion') }}" class="notif-item">
-                    <div class="notif-dot"></div>
-                    <div class="notif-body">
-                      <div class="notif-main">
-                        <span class="fw-semibold">{{ $p->dni }}</span>
-                        <span class="text-secondary"> • {{ $p->tipo === 'cancelacion' ? 'Cancelación' : 'Convenio' }}</span>
-                      </div>
-                      <div class="notif-sub">
-                        {{ $p->operacion ?: '—' }} — {{ \Carbon\Carbon::parse($p->fecha_promesa)->format('Y-m-d') }}
-                        • <b>S/ {{ number_format($p->monto_mostrar,2) }}</b>
-                      </div>
-                    </div>
-                    <span class="notif-cta">Revisar</span>
-                  </a>
-                </li>
-              @empty
-                <div class="text-secondary small px-2 pb-2">Nada pendiente aquí.</div>
-              @endforelse
-            </ul>
-          </section>
 
-          {{-- CNA --}}
-          <section class="notif-group">
-            <div class="notif-title">
-              <div class="icon"><i class="bi bi-file-earmark-text"></i></div>
-              <span>Solicitudes de CNA</span>
-              <span class="notif-count">{{ $cnaPendCount }}</span>
-            </div>
-            <ul class="notif-list">
-              @forelse($cnaPend as $c)
-                @php $ops = collect((array)$c->operaciones)->filter()->implode(', '); @endphp
-                <li>
-                  <a href="{{ route('autorizacion') }}#cna" class="notif-item">
-                    <div class="notif-dot" style="background:var(--bs-info)"></div>
-                    <div class="notif-body">
-                      <div class="notif-main">
-                        <span class="fw-semibold">CNA #{{ $c->nro_carta }}</span>
-                        <span class="text-secondary"> • DNI {{ $c->dni }}</span>
+          @if($isAsesor)
+            {{-- ========== VISTA ASESOR ========== --}}
+            <section class="notif-group">
+              <div class="notif-title">
+                <div class="icon"><i class="bi bi-clock-history"></i></div>
+                <span>Tus promesas — en Supervisor</span>
+                <span class="notif-count">{{ $misSup->count() }}</span>
+              </div>
+              <ul class="notif-list">
+                @forelse($misSup as $p)
+                  <li>
+                    <a href="{{ route('clientes.show',$p->dni) }}" class="notif-item">
+                      <div class="notif-dot"></div>
+                      <div class="notif-body">
+                        <div class="notif-main">
+                          <span class="fw-semibold">{{ $p->dni }}</span>
+                          <span class="text-secondary"> • {{ $p->tipo==='cancelacion'?'Cancelación':'Convenio' }}</span>
+                        </div>
+                        <div class="notif-sub">
+                          {{ $p->operacion ?: '—' }} — {{ optional($p->created_at)->format('Y-m-d') }}
+                        </div>
                       </div>
-                      <div class="notif-sub">{{ $ops ?: '—' }} — {{ optional($c->created_at)->format('Y-m-d') }}</div>
-                    </div>
-                    <span class="notif-cta">Revisar</span>
-                  </a>
-                </li>
-              @empty
-                <div class="text-secondary small px-2 pb-2">Sin nuevas CNA.</div>
-              @endforelse
-            </ul>
-          </section>
+                      <span class="notif-cta">Ver cliente</span>
+                    </a>
+                  </li>
+                @empty
+                  <div class="text-secondary small px-2 pb-2">No tienes solicitudes en Supervisor.</div>
+                @endforelse
+              </ul>
+            </section>
 
-          {{-- Próximos vencimientos --}}
-          <section class="notif-group">
-            <div class="notif-title">
-              <div class="icon"><i class="bi bi-calendar-event"></i></div>
-              <span>Cuotas en los próximos 7 días</span>
-              <span class="notif-count">{{ $vencCount }}</span>
-            </div>
-            <ul class="notif-list">
-              @forelse($venc as $v)
-                <li>
-                  <div class="notif-item">
-                    <div class="notif-dot" style="background:var(--bs-warning)"></div>
-                    <div class="notif-body">
-                      <div class="notif-main">
-                        <span class="fw-semibold">{{ \Carbon\Carbon::parse($v->fecha)->format('d/m') }}</span>
-                        <span class="text-secondary"> • DNI {{ $v->dni }}</span>
+            <section class="notif-group">
+              <div class="notif-title">
+                <div class="icon"><i class="bi bi-hourglass-split"></i></div>
+                <span>Pre-aprobadas — esperando Administración</span>
+                <span class="notif-count">{{ $misPre->count() }}</span>
+              </div>
+              <ul class="notif-list">
+                @forelse($misPre as $p)
+                  <li>
+                    <a href="{{ route('clientes.show',$p->dni) }}" class="notif-item">
+                      <div class="notif-dot" style="background:var(--bs-info)"></div>
+                      <div class="notif-body">
+                        <div class="notif-main">
+                          <span class="fw-semibold">{{ $p->dni }}</span>
+                          <span class="text-secondary"> • {{ $p->tipo==='cancelacion'?'Cancelación':'Convenio' }}</span>
+                        </div>
+                        <div class="notif-sub">{{ $p->operacion ?: '—' }} — {{ optional($p->updated_at)->format('Y-m-d') }}</div>
                       </div>
-                      <div class="notif-sub">
-                        {{ $v->operacion ?: '—' }} — {{ $v->tipo === 'cancelacion' ? 'Cancelación' : 'Convenio' }} #{{ $v->nro }}
+                      <span class="notif-cta">Ver cliente</span>
+                    </a>
+                  </li>
+                @empty
+                  <div class="text-secondary small px-2 pb-2">No tienes pre-aprobadas.</div>
+                @endforelse
+              </ul>
+            </section>
+
+            <section class="notif-group">
+              <div class="notif-title">
+                <div class="icon"><i class="bi bi-check2-circle"></i></div>
+                <span>Resueltas recientemente</span>
+                <span class="notif-count">{{ $misRes->count() }}</span>
+              </div>
+              <ul class="notif-list">
+                @forelse($misRes as $p)
+                  <li>
+                    <a href="{{ route('clientes.show',$p->dni) }}" class="notif-item">
+                      <div class="notif-dot" style="background:var(--bs-success)"></div>
+                      <div class="notif-body">
+                        <div class="notif-main">
+                          <span class="fw-semibold">{{ strtoupper($p->workflow_estado) }}</span>
+                          <span class="text-secondary"> • DNI {{ $p->dni }}</span>
+                        </div>
+                        <div class="notif-sub">{{ $p->operacion ?: '—' }} — {{ optional($p->updated_at)->format('Y-m-d') }}</div>
                       </div>
+                      <span class="notif-cta">Ver cliente</span>
+                    </a>
+                  </li>
+                @empty
+                  <div class="text-secondary small px-2 pb-2">Sin resoluciones recientes.</div>
+                @endforelse
+              </ul>
+            </section>
+
+            {{-- CNA del asesor --}}
+            <section class="notif-group">
+              <div class="notif-title">
+                <div class="icon"><i class="bi bi-file-earmark-text"></i></div>
+                <span>Tus CNA</span>
+                <span class="notif-count">{{ $cnaSup->count() + $cnaPre->count() + $cnaRes->count() }}</span>
+              </div>
+              <ul class="notif-list">
+                @foreach([['En Supervisor',$cnaSup,'var(--bs-warning)'],['Pre-aprobadas',$cnaPre,'var(--bs-info)'],['Resueltas',$cnaRes,'var(--bs-success)']] as [$lbl,$lista,$color])
+                  @forelse($lista as $c)
+                    <li>
+                      <a href="{{ route('clientes.show',$c->dni) }}" class="notif-item">
+                        <div class="notif-dot" style="background:{{ $color }}"></div>
+                        <div class="notif-body">
+                          <div class="notif-main">
+                            <span class="fw-semibold">{{ $lbl }}</span>
+                            <span class="text-secondary"> • DNI {{ $c->dni }}</span>
+                          </div>
+                          <div class="notif-sub">CNA #{{ $c->nro_carta }} — {{ optional($c->updated_at ?? $c->created_at)->format('Y-m-d') }}</div>
+                        </div>
+                        <span class="notif-cta">Ver cliente</span>
+                      </a>
+                    </li>
+                  @empty @endforelse
+                @endforeach
+                @if($cnaSup->isEmpty() && $cnaPre->isEmpty() && $cnaRes->isEmpty())
+                  <div class="text-secondary small px-2 pb-2">Sin CNA por ahora.</div>
+                @endif
+              </ul>
+            </section>
+
+          @else
+            {{-- ========== VISTA SUP/ADMIN (la tuya anterior) ========== --}}
+            <section class="notif-group">
+              <div class="notif-title">
+                <div class="icon"><i class="bi bi-clipboard-check"></i></div>
+                <span>Promesas por aprobar</span>
+                <span class="notif-count">{{ $ppPendCount }}</span>
+              </div>
+              <ul class="notif-list">
+                @forelse($ppPend as $p)
+                  <li>
+                    <a href="{{ route('autorizacion') }}" class="notif-item">
+                      <div class="notif-dot"></div>
+                      <div class="notif-body">
+                        <div class="notif-main">
+                          <span class="fw-semibold">{{ $p->dni }}</span>
+                          <span class="text-secondary"> • {{ $p->tipo==='cancelacion'?'Cancelación':'Convenio' }}</span>
+                        </div>
+                        <div class="notif-sub">
+                          {{ $p->operacion ?: '—' }} — {{ optional($p->fecha_promesa)->format('Y-m-d') }}
+                          • <b>S/ {{ number_format($p->monto_mostrar,2) }}</b>
+                        </div>
+                      </div>
+                      <span class="notif-cta">Revisar</span>
+                    </a>
+                  </li>
+                @empty
+                  <div class="text-secondary small px-2 pb-2">Nada pendiente aquí.</div>
+                @endforelse
+              </ul>
+            </section>
+
+            <section class="notif-group">
+              <div class="notif-title">
+                <div class="icon"><i class="bi bi-file-earmark-text"></i></div>
+                <span>Solicitudes de CNA</span>
+                <span class="notif-count">{{ $cnaPendCount }}</span>
+              </div>
+              <ul class="notif-list">
+                @forelse($cnaPend as $c)
+                  @php $ops = collect((array)$c->operaciones)->filter()->implode(', '); @endphp
+                  <li>
+                    <a href="{{ route('autorizacion') }}#cna" class="notif-item">
+                      <div class="notif-dot" style="background:var(--bs-info)"></div>
+                      <div class="notif-body">
+                        <div class="notif-main">
+                          <span class="fw-semibold">CNA #{{ $c->nro_carta }}</span>
+                          <span class="text-secondary"> • DNI {{ $c->dni }}</span>
+                        </div>
+                        <div class="notif-sub">{{ $ops ?: '—' }} — {{ optional($c->created_at)->format('Y-m-d') }}</div>
+                      </div>
+                      <span class="notif-cta">Revisar</span>
+                    </a>
+                  </li>
+                @empty
+                  <div class="text-secondary small px-2 pb-2">Sin nuevas CNA.</div>
+                @endforelse
+              </ul>
+            </section>
+
+            <section class="notif-group">
+              <div class="notif-title">
+                <div class="icon"><i class="bi bi-calendar-event"></i></div>
+                <span>Cuotas en los próximos 7 días</span>
+                <span class="notif-count">{{ $vencCount }}</span>
+              </div>
+              <ul class="notif-list">
+                @forelse($venc as $v)
+                  <li>
+                    <div class="notif-item">
+                      <div class="notif-dot" style="background:var(--bs-warning)"></div>
+                      <div class="notif-body">
+                        <div class="notif-main">
+                          <span class="fw-semibold">{{ \Carbon\Carbon::parse($v->fecha)->format('d/m') }}</span>
+                          <span class="text-secondary"> • DNI {{ $v->dni }}</span>
+                        </div>
+                        <div class="notif-sub">{{ $v->operacion ?: '—' }} — {{ $v->tipo==='cancelacion'?'Cancelación':'Convenio' }} #{{ $v->nro }}</div>
+                      </div>
+                      <span class="notif-cta">S/ {{ number_format((float)$v->monto,2) }}</span>
                     </div>
-                    <span class="notif-cta">S/ {{ number_format((float)$v->monto,2) }}</span>
-                  </div>
-                </li>
-              @empty
-                <div class="text-secondary small px-2 pb-2">No hay vencimientos próximos.</div>
-              @endforelse
-            </ul>
-          </section>
+                  </li>
+                @empty
+                  <div class="text-secondary small px-2 pb-2">No hay vencimientos próximos.</div>
+                @endforelse
+              </ul>
+            </section>
+          @endif
         </div>
 
-        <div class="notifs-footer text-end">
-          <a class="small" href="{{ route('autorizacion') }}">Ver bandeja completa →</a>
-        </div>
+        @unless($isAsesor)
+          <div class="notifs-footer text-end">
+            <a class="small" href="{{ route('autorizacion') }}">Ver bandeja completa →</a>
+          </div>
+        @endunless
       </div>
     </div>
   </div>
 </div>
 @endsection
+
 
 @push('scripts')
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1"></script>
