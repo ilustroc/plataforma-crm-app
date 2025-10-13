@@ -5,6 +5,7 @@ namespace App\Http\Controllers;
 use App\Models\CnaSolicitud;
 use Carbon\Carbon;
 use Illuminate\Http\Request;
+use App\Support\WorkflowMailer;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
@@ -74,6 +75,7 @@ class CnaController extends Controller
             ]);
         });
 
+        WorkflowMailer::cnaSolicitada($solicitud, Auth::user());
         return back()->with('ok', "Solicitud de CNA enviada. N.º {$solicitud->nro_carta}");
     }
 
@@ -82,6 +84,7 @@ class CnaController extends Controller
      * ======================================================= */
 
     // ── Supervisor
+
     public function preaprobar(CnaSolicitud $cna)
     {
         $this->authorizeRole('supervisor');
@@ -99,6 +102,7 @@ class CnaController extends Controller
             'motivo_rechazo'  => null,
         ]);
 
+        WorkflowMailer::cnaPreaprobada($cna);
         return back()->with('ok', 'CNA pre-aprobada.');
     }
 
@@ -117,6 +121,7 @@ class CnaController extends Controller
             'motivo_rechazo'  => substr((string)$request->input('nota_estado',''), 0, 500),
         ]);
 
+        WorkflowMailer::cnaResuelta($cna, false, $req->input('nota_estado'));
         return back()->with('ok', 'CNA rechazada por supervisor.');
     }
 
@@ -138,6 +143,7 @@ class CnaController extends Controller
         // Generar DOCX + PDF desde plantilla
         $this->generateOutputsFromTemplate($cna);
 
+        WorkflowMailer::cnaResuelta($cna, true, $req->input('nota_estado'));
         return back()->with('ok', 'CNA aprobada y archivos generados.');
     }
 
@@ -156,6 +162,7 @@ class CnaController extends Controller
             'motivo_rechazo'  => substr((string)$request->input('nota_estado',''), 0, 500),
         ]);
 
+        WorkflowMailer::cnaResuelta($cna, false, $req->input('nota_estado'));
         return back()->with('ok', 'CNA rechazada por administrador.');
     }
 

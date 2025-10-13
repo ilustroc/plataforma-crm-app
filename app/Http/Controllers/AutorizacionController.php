@@ -12,6 +12,7 @@ use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
+use App\Support\WorkflowMailer;
 
 class AutorizacionController extends Controller
 {
@@ -237,6 +238,7 @@ class AutorizacionController extends Controller
             'nota_rechazo'        => null,
         ]);
 
+        WorkflowMailer::promesaPreaprobada($promesa);
         return back()->with('ok', 'Promesa pre-aprobada.');
     }
     public function rechazarSup(Request $req, PromesaPago $promesa)
@@ -275,6 +277,7 @@ class AutorizacionController extends Controller
             'nota_rechazo'       => null,
         ]);
 
+        WorkflowMailer::promesaResuelta($promesa, true, $req->input('nota_estado'));
         return back()->with('ok', 'Promesa APROBADA.');
     }
     public function rechazarAdmin(Request $req, PromesaPago $promesa)
@@ -292,6 +295,7 @@ class AutorizacionController extends Controller
             'nota_rechazo'    => substr((string)$req->input('nota_estado'), 0, 500),
         ]);
 
+        WorkflowMailer::promesaResuelta($promesa, false, $req->input('nota_estado'));
         return back()->with('ok', 'Promesa rechazada por administrador.');
     }
     private function authorizeActionFor(string $role)

@@ -6,6 +6,7 @@ use Carbon\Carbon;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Schema;
 use Illuminate\Support\Facades\DB;
+use App\Support\WorkflowMailer;
 use App\Models\PromesaPago;
 use App\Models\PromesaOperacion;
 use App\Models\PromesaCuota;
@@ -365,6 +366,7 @@ class ClientsControllers extends Controller
             }
 
             DB::commit();
+            WorkflowMailer::promesaPreaprobada($promesa);
             return back()->with('ok', 'Propuesta registrada y enviada para autorización.');
         } catch (\Throwable $e) {
             DB::rollBack();

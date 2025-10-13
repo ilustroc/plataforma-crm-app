@@ -42,5 +42,6 @@ class User extends Authenticatable
     // Scopes
     public function scopeSupervisores($q){ return $q->where('role','supervisor'); }
     public function scopeAsesores($q){ return $q->where('role','asesor'); }
+    
 }
 
