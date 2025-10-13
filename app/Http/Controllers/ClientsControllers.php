@@ -366,7 +366,8 @@ class ClientsControllers extends Controller
             }
 
             DB::commit();
-            WorkflowMailer::promesaPreaprobada($promesa);
+            
+            WorkflowMailer::promesaPendiente($promesa);
             return back()->with('ok', 'Propuesta registrada y enviada para autorización.');
         } catch (\Throwable $e) {
             DB::rollBack();
