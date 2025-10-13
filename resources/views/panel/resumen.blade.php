@@ -1,492 +1,315 @@
 {{-- resources/views/panel/resumen.blade.php --}}
 @extends('layouts.app')
-@section('title','Panel')
-@section('crumb','Resumen')
+@section('title','Administración')
+@section('crumb','Administración')
 
 @push('head')
 <style>
-  .card.pad{ background:#fff }
-  .shadow-soft{ box-shadow:0 6px 20px rgba(15,23,42,.06) }
+  h5{font-size:1.05rem; margin-bottom:.75rem}
+  .card.pad{padding:10px 12px}
+  .chip .s{font-size:.88rem}
+  .helper{color:var(--muted); font-size:.82rem}
 
-  .kpi{ display:flex; align-items:center; gap:.75rem; border:1px solid var(--bs-border-color);
-        border-radius:14px; padding:.9rem 1rem; background:#fff }
-  .kpi .ico{ width:44px;height:44px;border-radius:50%; display:flex;align-items:center;justify-content:center;
-             background: color-mix(in oklab, var(--bs-danger) 12%, #fff); color: var(--bs-danger) }
-  .kpi .lbl{ font-size:.86rem; color:var(--bs-secondary-color) }
-  .kpi .val{ font-weight:800; font-size:1.15rem; line-height:1 }
+  .table thead th{font-size:.88rem}
+  .table tbody td{font-size:.92rem}
+  .table> :not(caption)>*>*{padding:.55rem .75rem}
 
-  .quick a{ border-radius:12px }
+  .form-control,.form-select{background:var(--surface); border-color:var(--border)}
+  .form-control::placeholder{color:var(--muted)}
+  .form-control:focus,.form-select:focus{
+    background:var(--surface);
+    border-color: color-mix(in oklab, var(--brand) 52%, var(--border));
+    box-shadow: 0 0 0 .25rem color-mix(in oklab, var(--brand) 22%, transparent);
+  }
 
-  .chart-card .toolbar{ display:flex; align-items:center; gap:.5rem }
-  .chart-wrap{ position:relative; width:100%; height:280px }
+  .badge-soft{background:color-mix(in oklab, var(--brand) 10%, transparent); color:var(--brand); border:1px solid color-mix(in oklab, var(--brand) 22%, transparent)}
+  [data-theme="dark"] .badge-soft{background:color-mix(in oklab, var(--brand) 18%, transparent); color:var(--brand)}
 
-  .notifs{ border:1px solid var(--bs-border-color); border-radius:16px; overflow:hidden; background:#fff }
-  .notifs-header{ background: var(--bs-danger); color:#fff; font-weight:700; padding:.7rem .95rem;
-                  display:flex; align-items:center; gap:.55rem }
-  .notifs-body{ padding:.6rem .6rem .2rem; max-height:70vh; overflow:auto; background:#fff }
-  .notif-group{ padding:.25rem .25rem .6rem }
-  .notif-title{ display:flex; align-items:center; gap:.5rem; padding:.25rem .15rem; font-weight:600 }
-  .notif-title .icon{ width:28px;height:28px;border-radius:8px;display:flex;align-items:center;justify-content:center;
-                      background: color-mix(in oklab, var(--bs-danger) 12%, #fff); color: var(--bs-danger) }
-  .notif-count{ margin-left:auto; font-weight:700; font-size:.8rem; background:#fff; color:var(--bs-danger);
-                border:1px solid color-mix(in oklab, var(--bs-danger) 35%, #fff); border-radius:999px; padding:.15rem .55rem }
-  .notif-list{ list-style:none; padding-left:0; margin:0 }
-  .notif-item{ display:flex; align-items:center; gap:.7rem; padding:.6rem; border-radius:12px; text-decoration:none; color:inherit;
-               border:1px solid transparent; background:#fff; transition:.15s }
-  .notif-item:hover{ background:var(--bs-tertiary-bg); border-color:var(--bs-border-color) }
-  .notif-dot{ width:9px;height:9px;border-radius:50%; background:var(--bs-danger) }
-  .notif-body .notif-main{ white-space:nowrap; overflow:hidden; text-overflow:ellipsis }
-  .notif-body .notif-sub{ font-size:.85rem; color:var(--bs-secondary-color); white-space:nowrap; overflow:hidden; text-overflow:ellipsis }
-  .notif-cta{ font-size:.75rem; border:1px solid var(--bs-border-color); background:#fff; border-radius:999px; padding:.18rem .55rem; white-space:nowrap }
-  .notifs-footer{ border-top:1px dashed var(--bs-border-color); padding:.5rem .6rem .6rem; background:#fff }
+  /* Estado */
+  .dot{width:8px;height:8px;border-radius:50%;display:inline-block;margin-right:.35rem}
+  .on{background:#16a34a}
+  .off{background:#b91c1c}
+  .badge-state{border-radius:999px;padding:.15rem .55rem;border:1px solid var(--border);font-weight:600}
+  .badge-state.on{color:#166534; background:rgba(22,163,52,.1)}
+  .badge-state.off{color:#991b1b; background:rgba(185,28,28,.08)}
+
+  /* Sección estructura: mejoras light/dark */
+  .struct .table thead th{ color: var(--muted); background: color-mix(in oklab, var(--surface-2) 55%, transparent); }
+  [data-theme="dark"] .struct .table thead th{ background: color-mix(in oklab, var(--surface-2) 40%, transparent); }
+  .struct .table tbody tr:nth-child(odd) td{ background: color-mix(in oklab, var(--surface-2) 35%, transparent); }
+  [data-theme="dark"] .struct .table tbody tr:nth-child(odd) td{ background: color-mix(in oklab, var(--surface-2) 20%, transparent); }
 </style>
 @endpush
 
 @section('content')
-@php
-  // Fallback por si aún no cambiaste el controller
-  $role  = $role  ?? strtolower(auth()->user()->role ?? '');
-  $isAsesor = $isAsesor ?? ($role==='asesor');
-  $isSupervisor = $isSupervisor ?? ($role==='supervisor');
-  $isAdmin = $isAdmin ?? in_array($role,['administrador','sistemas']);
+  {{-- ALERTAS --}}
+  @if(session('ok'))
+    <div class="alert alert-success d-flex align-items-center" role="alert">
+      <i class="bi bi-check-circle me-2"></i>
+      <div>{{ session('ok') }}</div>
+    </div>
+  @endif
+  @if($errors->any())
+    <div class="alert alert-danger d-flex align-items-center" role="alert">
+      <i class="bi bi-exclamation-triangle me-2"></i>
+      <div>{{ $errors->first() }}</div>
+    </div>
+  @endif
 
-  // Colecciones para asesor (evita errores si no existen)
-  $misSup = $misSup ?? collect();
-  $misPre = $misPre ?? collect();
-  $misRes = $misRes ?? collect();
-  $cnaSup = $cnaSup ?? collect();
-  $cnaPre = $cnaPre ?? collect();
-  $cnaRes = $cnaRes ?? collect();
-@endphp
-
-<div class="container-fluid">
-  <div class="row g-3">
-    {{-- ===== Izquierda ===== --}}
-    <div class="col-lg-8">
-
-      {{-- Bienvenida + buscador --}}
-      <div class="card pad shadow-soft">
-        <div class="d-flex align-items-center justify-content-between flex-wrap gap-2">
-          <div>
-            <h5 class="mb-1">¡Bienvenido(a)!</h5>
-            <div class="text-secondary small">Panel inicial.</div>
-          </div>
-          <form id="frmQuickDni" class="d-flex" role="search">
-            <input id="inpQuickDni" class="form-control form-control-sm me-2" inputmode="numeric" autocomplete="off"
-                   placeholder="Buscar cliente por DNI" aria-label="DNI">
-            <button class="btn btn-danger btn-sm" type="submit">
-              <i class="bi bi-search me-1"></i> Buscar
-            </button>
-          </form>
-        </div>
-      </div>
-
-      {{-- KPIs --}}
-      <div class="row g-3">
-        <div class="col-sm-6">
-          <div class="kpi shadow-soft">
-            <div class="ico"><i class="bi bi-clipboard2-check"></i></div>
-            <div>
-              <div class="lbl">Promesas creadas hoy</div>
-              <div class="val">{{ number_format($kpiPromHoy) }}</div>
-            </div>
-          </div>
-        </div>
-        <div class="col-sm-6">
-          <div class="kpi shadow-soft">
-            <div class="ico"><i class="bi bi-cash-coin"></i></div>
-            <div>
-              <div class="lbl">Pagos registrados hoy</div>
-              <div class="val">S/ {{ number_format($kpiPagosHoy,2) }}</div>
-            </div>
-          </div>
-        </div>
-      </div>
-
-      {{-- Accesos rápidos (ocultos para asesor) --}}
-      @unless($isAsesor)
-      <div class="card pad shadow-soft quick">
-        <div class="d-flex flex-wrap gap-2">
-          <a href="{{ route('autorizacion') }}" class="btn btn-outline-danger"><i class="bi bi-inboxes me-1"></i> Autorización</a>
-          <a href="{{ route('clientes.index') }}" class="btn btn-outline-secondary"><i class="bi bi-people me-1"></i> Clientes</a>
-          <a href="{{ route('dashboard') }}" class="btn btn-outline-secondary"><i class="bi bi-graph-up me-1"></i> Dashboard</a>
-          <a href="{{ route('reportes.pdp') }}" class="btn btn-outline-secondary"><i class="bi bi-file-earmark-spreadsheet me-1"></i> Reportes</a>
-        </div>
-      </div>
-      @endunless
-
-      {{-- Gráfica: Pagos del mes --}}
-      <div class="card pad shadow-soft chart-card">
-        <div class="d-flex justify-content-between align-items-center mb-2">
-          <h6 class="mb-0 d-flex align-items-center gap-2">
-            <i class="bi bi-bar-chart-steps text-danger"></i> Pagos del mes
-          </h6>
-          <div class="toolbar">
-            @php $curr = \Carbon\Carbon::createFromFormat('Y-m',$mes); @endphp
-            <a class="btn btn-outline-secondary btn-sm"
-               href="{{ url()->current().'?mes='.$curr->copy()->subMonth()->format('Y-m') }}"><i class="bi bi-chevron-left"></i></a>
-            <input type="month" id="mesPicker" class="form-control form-control-sm" value="{{ $curr->format('Y-m') }}">
-            <a class="btn btn-outline-secondary btn-sm"
-               href="{{ url()->current().'?mes='.$curr->copy()->addMonth()->format('Y-m') }}"><i class="bi bi-chevron-right"></i></a>
-          </div>
-        </div>
-        <div class="chart-wrap">
-          <canvas id="chartPagos" data-chart='@json(["labels"=>$chartLabels,"data"=>$chartData])'></canvas>
-        </div>
+  {{-- KPIs rápidos --}}
+  <div class="row g-3 mb-1">
+    <div class="col-sm-6 col-lg-3">
+      <div class="chip">
+        <div class="t"><i class="bi bi-person-gear"></i><span>Supervisores</span></div>
+        <div class="value fw-bold fs-5">{{ $supervisores->count() }}</div>
+        <div class="s">Usuarios con rol de Supervisor</div>
       </div>
     </div>
-
-    {{-- ===== Derecha: Actividades ===== --}}
-    <div class="col-lg-4">
-      <div class="notifs shadow-soft sticky-right">
-        <div class="notifs-header">
-          <i class="bi bi-list-task"></i>
-          {{ $isAsesor ? 'Tus actividades' : 'Actividades' }}
-        </div>
-
-        <div class="notifs-body">
-
-          {{-- ========== VISTA ASESOR ========== --}}
-          @if($isAsesor)
-            {{-- Promesas del asesor --}}
-            <section class="notif-group">
-              <div class="notif-title">
-                <div class="icon"><i class="bi bi-clipboard-check"></i></div>
-                <span>Promesas — En Supervisor</span>
-                <span class="notif-count">{{ $misSup->count() }}</span>
-              </div>
-              <ul class="notif-list">
-                @forelse($misSup as $p)
-                  <li>
-                    <a href="{{ route('clientes.show',$p->dni) }}" class="notif-item">
-                      <div class="notif-dot"></div>
-                      <div class="notif-body">
-                        <div class="notif-main">
-                          <span class="fw-semibold">{{ $p->dni }}</span>
-                          <span class="text-secondary"> • {{ $p->tipo === 'cancelacion' ? 'Cancelación' : 'Convenio' }}</span>
-                        </div>
-                        <div class="notif-sub">
-                          {{ $p->operacion ?: '—' }} — Pendiente de Supervisor
-                        </div>
-                      </div>
-                      <span class="notif-cta">Ver cliente</span>
-                    </a>
-                  </li>
-                @empty
-                  <div class="text-secondary small px-2 pb-2">Sin pendientes con Supervisor.</div>
-                @endforelse
-              </ul>
-            </section>
-
-            <section class="notif-group">
-              <div class="notif-title">
-                <div class="icon"><i class="bi bi-hourglass-split"></i></div>
-                <span>Promesas — Pre-aprobadas</span>
-                <span class="notif-count">{{ $misPre->count() }}</span>
-              </div>
-              <ul class="notif-list">
-                @forelse($misPre as $p)
-                  <li>
-                    <a href="{{ route('clientes.show',$p->dni) }}" class="notif-item">
-                      <div class="notif-dot" style="background:var(--bs-info)"></div>
-                      <div class="notif-body">
-                        <div class="notif-main">
-                          <span class="fw-semibold">{{ $p->dni }}</span>
-                          <span class="text-secondary"> • {{ $p->tipo === 'cancelacion' ? 'Cancelación' : 'Convenio' }}</span>
-                        </div>
-                        <div class="notif-sub">
-                          {{ $p->operacion ?: '—' }} — Pre-aprobada (esperando Administración)
-                        </div>
-                      </div>
-                      <span class="notif-cta">Ver cliente</span>
-                    </a>
-                  </li>
-                @empty
-                  <div class="text-secondary small px-2 pb-2">No hay pre-aprobadas.</div>
-                @endforelse
-              </ul>
-            </section>
-
-            <section class="notif-group">
-              <div class="notif-title">
-                <div class="icon"><i class="bi bi-check2-circle"></i></div>
-                <span>Promesas — Resueltas</span>
-                <span class="notif-count">{{ $misRes->count() }}</span>
-              </div>
-              <ul class="notif-list">
-                @forelse($misRes as $p)
-                  @php
-                    $estado = strtoupper($p->workflow_estado);
-                    $badgeC = 'var(--bs-success)';
-                    if ($estado==='RECHAZADA' || $estado==='RECHAZADA_SUP') $badgeC = 'var(--bs-danger)';
-                  @endphp
-                  <li>
-                    <a href="{{ route('clientes.show',$p->dni) }}" class="notif-item">
-                      <div class="notif-dot" style="background:{{ $badgeC }}"></div>
-                      <div class="notif-body">
-                        <div class="notif-main">
-                          <span class="fw-semibold">{{ $p->dni }}</span>
-                          <span class="text-secondary"> • {{ ucfirst($p->workflow_estado) }}</span>
-                        </div>
-                        <div class="notif-sub">{{ $p->operacion ?: '—' }}</div>
-                      </div>
-                      <span class="notif-cta">Ver cliente</span>
-                    </a>
-                  </li>
-                @empty
-                  <div class="text-secondary small px-2 pb-2">Aún no hay resoluciones.</div>
-                @endforelse
-              </ul>
-            </section>
-
-            {{-- CNA del asesor --}}
-            <section class="notif-group">
-              <div class="notif-title">
-                <div class="icon"><i class="bi bi-file-earmark-text"></i></div>
-                <span>CNA — En Supervisor</span>
-                <span class="notif-count">{{ $cnaSup->count() }}</span>
-              </div>
-              <ul class="notif-list">
-                @forelse($cnaSup as $c)
-                  <li>
-                    <a href="{{ route('clientes.show',$c->dni) }}" class="notif-item">
-                      <div class="notif-dot"></div>
-                      <div class="notif-body">
-                        <div class="notif-main"><span class="fw-semibold">DNI {{ $c->dni }}</span></div>
-                        <div class="notif-sub">Pendiente de Supervisor</div>
-                      </div>
-                      <span class="notif-cta">Ver cliente</span>
-                    </a>
-                  </li>
-                @empty
-                  <div class="text-secondary small px-2 pb-2">Sin CNA en supervisor.</div>
-                @endforelse
-              </ul>
-            </section>
-
-            <section class="notif-group">
-              <div class="notif-title">
-                <div class="icon"><i class="bi bi-hourglass-split"></i></div>
-                <span>CNA — Pre-aprobadas</span>
-                <span class="notif-count">{{ $cnaPre->count() }}</span>
-              </div>
-              <ul class="notif-list">
-                @forelse($cnaPre as $c)
-                  <li>
-                    <a href="{{ route('clientes.show',$c->dni) }}" class="notif-item">
-                      <div class="notif-dot" style="background:var(--bs-info)"></div>
-                      <div class="notif-body">
-                        <div class="notif-main"><span class="fw-semibold">DNI {{ $c->dni }}</span></div>
-                        <div class="notif-sub">Pre-aprobada (esperando Administración)</div>
-                      </div>
-                      <span class="notif-cta">Ver cliente</span>
-                    </a>
-                  </li>
-                @empty
-                  <div class="text-secondary small px-2 pb-2">Sin CNA pre-aprobadas.</div>
-                @endforelse
-              </ul>
-            </section>
-
-            <section class="notif-group">
-              <div class="notif-title">
-                <div class="icon"><i class="bi bi-check2-circle"></i></div>
-                <span>CNA — Resueltas</span>
-                <span class="notif-count">{{ $cnaRes->count() }}</span>
-              </div>
-              <ul class="notif-list">
-                @forelse($cnaRes as $c)
-                  @php
-                    $estado = strtoupper($c->workflow_estado);
-                    $badgeC = 'var(--bs-success)';
-                    if ($estado==='RECHAZADA' || $estado==='RECHAZADA_SUP') $badgeC = 'var(--bs-danger)';
-                  @endphp
-                  <li>
-                    <a href="{{ route('clientes.show',$c->dni) }}" class="notif-item">
-                      <div class="notif-dot" style="background:{{ $badgeC }}"></div>
-                      <div class="notif-body">
-                        <div class="notif-main">
-                          <span class="fw-semibold">DNI {{ $c->dni }}</span>
-                          <span class="text-secondary"> • {{ ucfirst($c->workflow_estado) }}</span>
-                        </div>
-                        <div class="notif-sub">—</div>
-                      </div>
-                      <span class="notif-cta">Ver cliente</span>
-                    </a>
-                  </li>
-                @empty
-                  <div class="text-secondary small px-2 pb-2">Sin CNA resueltas.</div>
-                @endforelse
-              </ul>
-            </section>
-
-          @else
-          {{-- ========== VISTA SUPERVISOR / ADMIN ========== --}}
-
-            {{-- Promesas por aprobar --}}
-            <section class="notif-group">
-              <div class="notif-title">
-                <div class="icon"><i class="bi bi-clipboard-check"></i></div>
-                <span>Promesas por aprobar</span>
-                <span class="notif-count">{{ $ppPendCount }}</span>
-              </div>
-              <ul class="notif-list">
-                @forelse($ppPend as $p)
-                  <li>
-                    <a href="{{ route('autorizacion') }}" class="notif-item">
-                      <div class="notif-dot"></div>
-                      <div class="notif-body">
-                        <div class="notif-main">
-                          <span class="fw-semibold">{{ $p->dni }}</span>
-                          <span class="text-secondary"> • {{ $p->tipo === 'cancelacion' ? 'Cancelación' : 'Convenio' }}</span>
-                        </div>
-                        <div class="notif-sub">
-                          {{ $p->operacion ?: '—' }} — {{ \Carbon\Carbon::parse($p->fecha_promesa)->format('Y-m-d') }}
-                          • <b>S/ {{ number_format($p->monto_mostrar,2) }}</b>
-                        </div>
-                      </div>
-                      <span class="notif-cta">Revisar</span>
-                    </a>
-                  </li>
-                @empty
-                  <div class="text-secondary small px-2 pb-2">Nada pendiente aquí.</div>
-                @endforelse
-              </ul>
-            </section>
-
-            {{-- CNA por aprobar --}}
-            <section class="notif-group">
-              <div class="notif-title">
-                <div class="icon"><i class="bi bi-file-earmark-text"></i></div>
-                <span>Solicitudes de CNA</span>
-                <span class="notif-count">{{ $cnaPendCount }}</span>
-              </div>
-              <ul class="notif-list">
-                @forelse($cnaPend as $c)
-                  @php $ops = collect((array)$c->operaciones)->filter()->implode(', '); @endphp
-                  <li>
-                    <a href="{{ route('autorizacion') }}#cna" class="notif-item">
-                      <div class="notif-dot" style="background:var(--bs-info)"></div>
-                      <div class="notif-body">
-                        <div class="notif-main">
-                          <span class="fw-semibold">CNA #{{ $c->nro_carta }}</span>
-                          <span class="text-secondary"> • DNI {{ $c->dni }}</span>
-                        </div>
-                        <div class="notif-sub">{{ $ops ?: '—' }} — {{ optional($c->created_at)->format('Y-m-d') }}</div>
-                      </div>
-                      <span class="notif-cta">Revisar</span>
-                    </a>
-                  </li>
-                @empty
-                  <div class="text-secondary small px-2 pb-2">Sin nuevas CNA.</div>
-                @endforelse
-              </ul>
-            </section>
-
-            {{-- Próximos vencimientos --}}
-            <section class="notif-group">
-              <div class="notif-title">
-                <div class="icon"><i class="bi bi-calendar-event"></i></div>
-                <span>Cuotas en los próximos 7 días</span>
-                <span class="notif-count">{{ $vencCount }}</span>
-              </div>
-              <ul class="notif-list">
-                @forelse($venc as $v)
-                  <li>
-                    <div class="notif-item">
-                      <div class="notif-dot" style="background:var(--bs-warning)"></div>
-                      <div class="notif-body">
-                        <div class="notif-main">
-                          <span class="fw-semibold">{{ \Carbon\Carbon::parse($v->fecha)->format('d/m') }}</span>
-                          <span class="text-secondary"> • DNI {{ $v->dni }}</span>
-                        </div>
-                        <div class="notif-sub">
-                          {{ $v->operacion ?: '—' }} — {{ $v->tipo === 'cancelacion' ? 'Cancelación' : 'Convenio' }} #{{ $v->nro }}
-                        </div>
-                      </div>
-                      <span class="notif-cta">S/ {{ number_format((float)$v->monto,2) }}</span>
-                    </div>
-                  </li>
-                @empty
-                  <div class="text-secondary small px-2 pb-2">No hay vencimientos próximos.</div>
-                @endforelse
-              </ul>
-            </section>
-          @endif
-        </div>
-
-        @unless($isAsesor)
-          <div class="notifs-footer text-end">
-            <a class="small" href="{{ route('autorizacion') }}">Ver bandeja completa →</a>
-          </div>
-        @endunless
+    <div class="col-sm-6 col-lg-3">
+      <div class="chip">
+        <div class="t"><i class="bi bi-people"></i><span>Asesores</span></div>
+        <div class="value fw-bold fs-5">{{ $supervisores->sum('asesores_count') }}</div>
+        <div class="s">Total de asesores registrados</div>
       </div>
     </div>
   </div>
-</div>
+
+  <div class="row g-3">
+    {{-- Crear Supervisor --}}
+    <div class="col-lg-6">
+      <div class="card pad">
+        <h5 class="mb-3 d-flex align-items-center gap-2">
+          <i class="bi bi-person-gear"></i> <span>Crear Supervisor</span>
+        </h5>
+        <form method="POST" action="{{ route('administracion.supervisores.store') }}" class="vstack gap-3" autocomplete="off">
+          @csrf
+          <div>
+            <label class="form-label">Nombre</label>
+            <input name="name" class="form-control" value="{{ old('name') }}" required placeholder="Ej: Ana Pérez">
+            @error('name')<div class="text-danger small mt-1">{{ $message }}</div>@enderror
+          </div>
+          <div>
+            <label class="form-label">Email</label>
+            <input name="email" type="email" class="form-control" value="{{ old('email') }}" required placeholder="supervisor@empresa.com">
+            @error('email')<div class="text-danger small mt-1">{{ $message }}</div>@enderror
+          </div>
+          <div>
+            <label class="form-label">Contraseña</label>
+            <input name="password" type="password" class="form-control" required minlength="6" placeholder="Mínimo 6 caracteres">
+            <div class="helper">Se enviará al usuario o cámbiala luego desde Administración.</div>
+            @error('password')<div class="text-danger small mt-1">{{ $message }}</div>@enderror
+          </div>
+          <div class="d-grid d-sm-block">
+            <button class="btn btn-primary"><i class="bi bi-plus-lg me-1"></i> Crear Supervisor</button>
+          </div>
+        </form>
+      </div>
+    </div>
+
+    {{-- Crear Asesor --}}
+    <div class="col-lg-6">
+      <div class="card pad">
+        <h5 class="mb-3 d-flex align-items-center gap-2">
+          <i class="bi bi-person-plus"></i> <span>Crear Asesor</span>
+        </h5>
+        <form method="POST" action="{{ route('administracion.asesores.store') }}" class="vstack gap-3" autocomplete="off">
+          @csrf
+          <div>
+            <label class="form-label">Nombre</label>
+            <input name="name" class="form-control" value="{{ old('name') }}" required placeholder="Ej: Carlos López">
+            @error('name')<div class="text-danger small mt-1">{{ $message }}</div>@enderror
+          </div>
+          <div>
+            <label class="form-label">Email</label>
+            <input name="email" type="email" class="form-control" value="{{ old('email') }}" required placeholder="asesor@empresa.com">
+            @error('email')<div class="text-danger small mt-1">{{ $message }}</div>@enderror
+          </div>
+          <div>
+            <label class="form-label">Contraseña</label>
+            <input name="password" type="password" class="form-control" required minlength="6" placeholder="Mínimo 6 caracteres">
+            @error('password')<div class="text-danger small mt-1">{{ $message }}</div>@enderror
+          </div>
+          <div>
+            <label class="form-label">Supervisor</label>
+            <select name="supervisor_id" class="form-select" required>
+              <option value="">Selecciona…</option>
+              @foreach($supervisores as $sup)
+                <option value="{{ $sup->id }}" @selected(old('supervisor_id')==$sup->id)>
+                  {{ $sup->name }} — {{ $sup->email }}
+                </option>
+              @endforeach
+            </select>
+            @error('supervisor_id')<div class="text-danger small mt-1">{{ $message }}</div>@enderror
+          </div>
+          <div class="d-grid d-sm-block">
+            <button class="btn btn-primary"><i class="bi bi-plus-lg me-1"></i> Crear Asesor</button>
+          </div>
+        </form>
+      </div>
+    </div>
+  </div>
+
+  {{-- Estructura: Supervisores y Asesores --}}
+  <div class="card pad mt-3 struct">
+    <h5 class="mb-3 d-flex align-items-center gap-2">
+      <i class="bi bi-diagram-3"></i> <span>Estructura</span>
+    </h5>
+
+    @if($supervisores->isEmpty())
+      <div class="text-secondary">Aún no hay supervisores creados.</div>
+    @else
+      <div class="table-responsive">
+        <table class="table align-middle">
+          <thead>
+            <tr>
+              <th>Supervisor</th>
+              <th>Email</th>
+              <th>Estado</th>
+              <th class="text-center"># Asesores</th>
+              <th>Asesores (reasignables)</th>
+              <th class="text-end">Acciones</th>
+            </tr>
+          </thead>
+          <tbody>
+            @foreach($supervisores as $sup)
+              <tr>
+                <td class="fw-semibold">{{ $sup->name }}</td>
+                <td class="text-secondary">{{ $sup->email }}</td>
+                <td>
+                  <span class="badge-state {{ $sup->is_active ? 'on' : 'off' }}">
+                    <span class="dot {{ $sup->is_active ? 'on' : 'off' }}"></span>
+                    {{ $sup->is_active ? 'Activo' : 'Inactivo' }}
+                  </span>
+                </td>
+                <td class="text-center">
+                  <span class="badge badge-soft" style="border-radius:20px">{{ $sup->asesores_count }}</span>
+                </td>
+                <td>
+                  @if($sup->asesores->isEmpty())
+                    <span class="text-secondary">—</span>
+                  @else
+                    <div class="vstack gap-2">
+                      @foreach($sup->asesores as $asesor)
+                        <div class="d-flex flex-wrap align-items-center gap-2 py-1">
+                          <i class="bi bi-person-badge text-secondary"></i>
+                          <span class="me-2">
+                            {{ $asesor->name }}
+                            <span class="text-secondary">({{ $asesor->email }})</span>
+                            <span class="badge-state {{ $asesor->is_active ? 'on' : 'off' }} ms-1">
+                              <span class="dot {{ $asesor->is_active ? 'on' : 'off' }}"></span>
+                              {{ $asesor->is_active ? 'Activo' : 'Inactivo' }}
+                            </span>
+                          </span>
+
+                          {{-- Reasignar --}}
+                          <form method="POST" action="{{ route('administracion.asesores.reassign', $asesor->id) }}" class="d-flex gap-2 ms-auto">
+                            @csrf @method('PATCH')
+                            <select name="supervisor_id" class="form-select form-select-sm" style="width:auto; min-width: 180px">
+                              @foreach($todosSupervisores as $sid => $sname)
+                                <option value="{{ $sid }}" @selected($asesor->supervisor_id == $sid)>{{ $sname }}</option>
+                              @endforeach
+                            </select>
+                            <button class="btn btn-sm btn-outline-primary" title="Reasignar" onclick="return confirm('¿Reasignar a este asesor?')">
+                              <i class="bi bi-arrow-repeat"></i><span class="d-none d-md-inline ms-1">Reasignar</span>
+                            </button>
+                          </form>
+
+                          {{-- Activar/Desactivar asesor --}}
+                          <form method="POST" action="{{ route('administracion.usuarios.toggle', $asesor) }}" onsubmit="return confirm('¿Seguro?')">
+                            @csrf @method('PATCH')
+                            <button class="btn btn-sm {{ $asesor->is_active ? 'btn-outline-danger' : 'btn-outline-success' }}">
+                              <i class="bi {{ $asesor->is_active ? 'bi-slash-circle' : 'bi-check-circle' }}"></i>
+                              <span class="d-none d-md-inline ms-1">{{ $asesor->is_active ? 'Desactivar' : 'Activar' }}</span>
+                            </button>
+                          </form>
+
+                          {{-- Cambiar password asesor (modal) --}}
+                          <button class="btn btn-sm btn-outline-secondary" data-bs-toggle="modal" data-bs-target="#pw-usr-{{ $asesor->id }}">
+                            <i class="bi bi-key"></i><span class="d-none d-md-inline ms-1">Contraseña</span>
+                          </button>
+                        </div>
+
+                        {{-- Modal password asesor --}}
+                        <div class="modal fade" id="pw-usr-{{ $asesor->id }}" tabindex="-1" aria-hidden="true">
+                          <div class="modal-dialog">
+                            <form method="POST" action="{{ route('administracion.usuarios.password', $asesor) }}" class="modal-content">
+                              @csrf @method('PATCH')
+                              <div class="modal-header">
+                                <h6 class="modal-title"><i class="bi bi-key me-1"></i> Cambiar contraseña — {{ $asesor->name }}</h6>
+                                <button class="btn-close" data-bs-dismiss="modal" aria-label="Cerrar"></button>
+                              </div>
+                              <div class="modal-body">
+                                <div class="mb-2">
+                                  <label class="form-label">Nueva contraseña</label>
+                                  <input type="password" name="password" class="form-control" minlength="6" required>
+                                </div>
+                                <div>
+                                  <label class="form-label">Confirmar contraseña</label>
+                                  <input type="password" name="password_confirmation" class="form-control" minlength="6" required>
+                                </div>
+                              </div>
+                              <div class="modal-footer">
+                                <button class="btn btn-outline-secondary" data-bs-dismiss="modal" type="button">Cancelar</button>
+                                <button class="btn btn-primary" type="submit"><i class="bi bi-check2-circle me-1"></i> Guardar</button>
+                              </div>
+                            </form>
+                          </div>
+                        </div>
+                      @endforeach
+                    </div>
+                  @endif
+                </td>
+
+                {{-- Acciones supervisor --}}
+                <td class="text-end">
+                  <div class="d-inline-flex gap-2">
+                    {{-- Activar/Desactivar supervisor --}}
+                    <form method="POST" action="{{ route('administracion.usuarios.toggle', $sup) }}" onsubmit="return confirm('¿Seguro?')">
+                      @csrf @method('PATCH')
+                      <button class="btn btn-sm {{ $sup->is_active ? 'btn-outline-danger' : 'btn-outline-success' }}">
+                        <i class="bi {{ $sup->is_active ? 'bi-slash-circle' : 'bi-check-circle' }}"></i>
+                        <span class="d-none d-md-inline ms-1">{{ $sup->is_active ? 'Desactivar' : 'Activar' }}</span>
+                      </button>
+                    </form>
+
+                    {{-- Cambiar password supervisor --}}
+                    <button class="btn btn-sm btn-outline-secondary" data-bs-toggle="modal" data-bs-target="#pw-usr-{{ $sup->id }}">
+                      <i class="bi bi-key"></i><span class="d-none d-md-inline ms-1">Contraseña</span>
+                    </button>
+                  </div>
+
+                  {{-- Modal password supervisor --}}
+                  <div class="modal fade" id="pw-usr-{{ $sup->id }}" tabindex="-1" aria-hidden="true">
+                    <div class="modal-dialog">
+                      <form method="POST" action="{{ route('administracion.usuarios.password', $sup) }}" class="modal-content">
+                        @csrf @method('PATCH')
+                        <div class="modal-header">
+                          <h6 class="modal-title"><i class="bi bi-key me-1"></i> Cambiar contraseña — {{ $sup->name }}</h6>
+                          <button class="btn-close" data-bs-dismiss="modal" aria-label="Cerrar"></button>
+                        </div>
+                        <div class="modal-body">
+                          <div class="mb-2">
+                            <label class="form-label">Nueva contraseña</label>
+                            <input type="password" name="password" class="form-control" minlength="6" required>
+                          </div>
+                          <div>
+                            <label class="form-label">Confirmar contraseña</label>
+                            <input type="password" name="password_confirmation" class="form-control" minlength="6" required>
+                          </div>
+                        </div>
+                        <div class="modal-footer">
+                          <button class="btn btn-outline-secondary" data-bs-dismiss="modal" type="button">Cancelar</button>
+                          <button class="btn btn-primary" type="submit"><i class="bi bi-check2-circle me-1"></i> Guardar</button>
+                        </div>
+                      </form>
+                    </div>
+                  </div>
+                </td>
+              </tr>
+            @endforeach
+          </tbody>
+        </table>
+      </div>
+    @endif
+  </div>
 @endsection
-
-@push('scripts')
-<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1"></script>
-<script>
-  // Buscar por DNI -> /clientes/{dni}
-  (() => {
-    const frm   = document.getElementById('frmQuickDni');
-    const input = document.getElementById('inpQuickDni');
-    if (!frm || !input) return;
-    const SHOW_URL = @json(route('clientes.show','__DNI__'));
-    frm.addEventListener('submit', (e) => {
-      e.preventDefault();
-      const dni = (input.value || '').replace(/\D/g,'').slice(0,12);
-      if (!dni) { input.focus(); return; }
-      window.location.assign(SHOW_URL.replace('__DNI__', encodeURIComponent(dni)));
-    });
-  })();
-
-  // Selector de mes
-  document.getElementById('mesPicker')?.addEventListener('change', (e)=>{
-    const ym = e.target.value || '';
-    const url = new URL(window.location.href);
-    url.searchParams.set('mes', ym);
-    window.location.assign(url.toString());
-  });
-
-  // Gráfica de pagos del mes
-  (()=>{
-    const el = document.getElementById('chartPagos');
-    if(!el) return;
-    const payload = (()=>{ try{ return JSON.parse(el.dataset.chart||'{}'); }catch(_){ return {}; }})();
-    const labels = payload.labels || [];
-    const data   = payload.data   || [];
-    const ctx = el.getContext('2d');
-    new Chart(ctx, {
-      type: 'bar',
-      data: {
-        labels,
-        datasets: [{
-          label: 'S/ por día',
-          data,
-          borderWidth: 2,
-          borderColor: getComputedStyle(document.documentElement).getPropertyValue('--bs-danger') || '#c62828',
-          backgroundColor: 'rgba(220, 53, 69, .15)',
-          hoverBackgroundColor: 'rgba(220, 53, 69, .25)',
-          borderRadius: 6
-        }]
-      },
-      options: {
-        responsive: true,
-        maintainAspectRatio: false,
-        animation: { duration: 250 },
-        scales: {
-          x: { grid: { display:false } },
-          y: { beginAtZero:true, ticks: { callback:(v)=>'S/ '+Number(v).toLocaleString() } }
-        },
-        plugins: {
-          legend: { display:false },
-          tooltip: { callbacks: { label: (ctx)=> 'S/ ' + Number(ctx.parsed.y ?? 0).toLocaleString(undefined,{minimumFractionDigits:2, maximumFractionDigits:2}) } }
-        }
-      }
-    });
-  })();
-</script>
-@endpush

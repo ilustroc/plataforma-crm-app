@@ -148,10 +148,13 @@ Route::middleware('auth')->group(function () {
         Route::get('/integracion/pagos/template/cusco-extrajudicial', [PlaceholdersPagosController::class, 'templateCajaCuscoExtrajudicial'])->name('integracion.pagos.template.cusco_extrajudicial');
         Route::post('/integracion/pagos/import/cusco-extrajudicial',  [PlaceholdersPagosController::class, 'importCajaCuscoExtrajudicial'])->name('integracion.pagos.import.cusco_extrajudicial');
 
+        // Administración de usuarios
         Route::get('/administracion',                           [AdminUsersController::class, 'index'])->name('administracion');
         Route::post('/administracion/supervisores',             [AdminUsersController::class, 'storeSupervisor'])->name('administracion.supervisores.store');
         Route::post('/administracion/asesores',                 [AdminUsersController::class, 'storeAsesor'])->name('administracion.asesores.store');
         Route::patch('/administracion/asesores/{id}/reasignar', [AdminUsersController::class, 'reassignAsesor'])->name('administracion.asesores.reassign');
+        Route::patch('/administracion/usuarios/{user}/toggle',   [AdminUsersController::class,'toggleActive'])->name('administracion.usuarios.toggle');
+        Route::patch('/administracion/usuarios/{user}/password', [AdminUsersController::class,'updatePassword'])->name('administracion.usuarios.password');
     });
 
     // Zonas por rol (opcional)

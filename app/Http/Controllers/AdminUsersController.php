@@ -11,15 +11,14 @@ class AdminUsersController extends Controller
 {
     public function index(Request $r)
     {
-        $supervisores = User::supervisores()
+        $supervisores = User::where('role', 'supervisor')
             ->withCount('asesores')
-            ->with(['asesores' => fn($q)=>$q->orderBy('name')])
+            ->with(['asesores' => fn($q) => $q->orderBy('name')])
             ->orderBy('name')
             ->get();
-    
+
         $todosSupervisores = $supervisores->pluck('name','id');
-    
-        // FALTABA pasar variables a la vista:
+
         return view('placeholders.administracion', compact('supervisores','todosSupervisores'));
     }
 
@@ -32,11 +31,12 @@ class AdminUsersController extends Controller
         ]);
 
         User::create([
-            'name'  => $data['name'],
-            'email' => $data['email'],
-            'password' => Hash::make($data['password']),
-            'role'  => 'supervisor',
+            'name'        => $data['name'],
+            'email'       => $data['email'],
+            'password'    => Hash::make($data['password']),
+            'role'        => 'supervisor',
             'supervisor_id' => null,
+            'is_active'   => true,
         ]);
 
         return back()->with('ok','Supervisor creado correctamente.');
@@ -52,11 +52,12 @@ class AdminUsersController extends Controller
         ]);
 
         User::create([
-            'name'  => $data['name'],
-            'email' => $data['email'],
-            'password' => Hash::make($data['password']),
-            'role'  => 'asesor',
+            'name'          => $data['name'],
+            'email'         => $data['email'],
+            'password'      => Hash::make($data['password']),
+            'role'          => 'asesor',
             'supervisor_id' => $data['supervisor_id'],
+            'is_active'     => true,
         ]);
 
         return back()->with('ok','Asesor creado y asignado correctamente.');
@@ -64,7 +65,6 @@ class AdminUsersController extends Controller
 
     public function reassignAsesor(Request $r, User $id)
     {
-        // $id es el asesor (route model binding)
         abort_unless($id->role === 'asesor', 404);
 
         $data = $r->validate([
@@ -74,5 +74,28 @@ class AdminUsersController extends Controller
         $id->update(['supervisor_id' => $data['supervisor_id']]);
 
         return back()->with('ok','Asesor reasignado correctamente.');
+    }
+
+    /** Activar/Desactivar (toggle) */
+    public function toggleActive(User $user)
+    {
+        $user->is_active = ! (bool) $user->is_active;
+        $user->save();
+
+        $msg = $user->is_active ? 'Usuario activado.' : 'Usuario desactivado.';
+        return back()->with('ok', $msg);
+    }
+
+    /** Cambiar contraseña */
+    public function updatePassword(Request $r, User $user)
+    {
+        $data = $r->validate([
+            'password' => ['required','string','min:6','confirmed'],
+        ]);
+
+        $user->password = Hash::make($data['password']);
+        $user->save();
+
+        return back()->with('ok', 'Contraseña actualizada correctamente.');
     }
 }
