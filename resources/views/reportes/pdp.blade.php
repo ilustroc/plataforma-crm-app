@@ -63,40 +63,50 @@
         <table class="table align-middle">
           <thead>
             <tr>
-              <th>DNI</th>
-              <th>Operaciones</th>
-              <th>Fecha promesa</th>
-              <th class="text-end">Monto prometido</th>
-              <th>Estado</th>
-              <th>Gestor</th>
-              <th>Acciones</th>
+              <th>DOCUMENTO</th>
+              <th>CLIENTE</th>
+              <th>NIVEL 3</th>
+              <th>CONTACTO</th>
+              <th>AGENTE</th>
+              <th>OPERACION</th>
+              <th>ENTIDAD</th>
+              <th>CARTERA</th>
+              <th>FECHA GESTION</th>
+              <th>FECHA CITA</th>
+              <th>TELEFONO</th>
+              <th>OBSERVACION</th>
+              <th class="text-end">MONTO PROMESA</th>
+              <th class="text-end">NRO CUOTAS</th>
+              <th>FECHA PROMESA</th>
+              <th>PROCEDENCIA LLAMADA</th>
+              <th>GESTOR</th>
+              <th>CARTERA</th>
             </tr>
           </thead>
           <tbody>
-          @forelse($rows as $p)
-            @php
-              $ops = $p->operaciones;
-              if (is_string($ops) && str_starts_with($ops,'[')) {
-                $ops = implode(', ', json_decode($ops,true) ?: []);
-              }
-            @endphp
+          @forelse($rows as $r)
             <tr>
-              <td class="text-nowrap">{{ $p->dni }}</td>
-              <td class="text-nowrap">{{ is_array($ops) ? implode(', ', $ops) : ($ops ?? '') }}</td>
-              <td class="text-nowrap">{{ $p->fecha }}</td>
-              <td class="text-end">{{ $p->monto!==null ? number_format((float)$p->monto,2) : '—' }}</td>
-              <td class="text-nowrap">{{ $p->estado ?? '—' }}</td>
-              <td class="text-nowrap">{{ $p->gestor ?? '—' }}</td>
-              <td class="text-nowrap">
-                @if(Route::has('promesas.acuerdo'))
-                  <a href="{{ route('promesas.acuerdo', $p->id) }}" class="btn btn-sm btn-outline-secondary">
-                    <i class="bi bi-filetype-pdf"></i> PDF
-                  </a>
-                @endif
-              </td>
+              <td class="text-nowrap">{{ $r->documento }}</td>
+              <td class="text-nowrap">{{ $r->cliente }}</td>
+              <td>Compromiso de pago</td>
+              <td>CONTACTO</td>
+              <td class="text-nowrap">{{ $r->agente }}</td>
+              <td class="text-nowrap">{{ $r->operacion }}</td>
+              <td class="text-nowrap">{{ $r->entidad }}</td>
+              <td class="text-nowrap">{{ $r->cartera_agente }}</td>
+              <td class="text-nowrap">{{ \Carbon\Carbon::parse($r->fecha_gestion)->format('Y-m-d H:i:s') }}</td>
+              <td></td>
+              <td></td>
+              <td class="text-nowrap">{{ $r->observacion }}</td>
+              <td class="text-end">{{ $r->monto_promesa!==null ? number_format((float)$r->monto_promesa,2) : '' }}</td>
+              <td class="text-end">{{ $r->nro_cuotas!==null ? $r->nro_cuotas : '' }}</td>
+              <td class="text-nowrap">{{ $r->fecha_promesa }}</td>
+              <td>Web/&gt;</td>
+              <td class="text-nowrap">{{ $r->gestor }}</td>
+              <td class="text-nowrap">{{ $r->cartera_final }}</td>
             </tr>
           @empty
-            <tr><td colspan="7" class="text-secondary">Sin resultados.</td></tr>
+            <tr><td colspan="18" class="text-secondary">Sin resultados.</td></tr>
           @endforelse
           </tbody>
         </table>
