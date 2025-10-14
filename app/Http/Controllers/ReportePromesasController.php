@@ -119,7 +119,7 @@ class ReportePromesasController extends Controller
             COALESCE(cc.agente, '')                                      as cartera_agente,   -- CARTERA (1)
             DATE_FORMAT(p.created_at, '%Y-%m-%d %H:%i:%s')               as fecha_gestion,
             COALESCE(p.nota, '')                                         as observacion,
-            CASE WHEN IFNULL(p.monto,0) > 0 THEN p.monto ELSE NULL END   as monto_promesa,
+            CASE WHEN p.monto > 0 THEN p.monto WHEN p.tipo = 'convenio' THEN p.monto_convenio ELSE NULL END AS monto_promesa,
             CASE WHEN IFNULL(p.nro_cuotas,0) > 0 THEN p.nro_cuotas ELSE NULL END as nro_cuotas,
             DATE_FORMAT(COALESCE(p.fecha_pago, p.fecha_promesa), '%Y-%m-%d') as fecha_promesa,
             COALESCE(su.name, '')                                        as gestor,
