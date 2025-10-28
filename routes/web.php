@@ -9,6 +9,7 @@ use App\Http\Controllers\ReporteGestionesController;
 use App\Http\Controllers\ReportePagosController;
 use App\Http\Controllers\AdminUsersController;
 use App\Http\Controllers\PlaceholdersPagosController;
+use App\Http\Controllers\PlaceholdersGestionesController;
 use App\Http\Controllers\DashboardController;
 use App\Http\Controllers\ClientesCargaController;
 use App\Http\Controllers\AutorizacionController;
@@ -147,6 +148,11 @@ Route::middleware('auth')->group(function () {
 
         Route::get('/integracion/pagos/template/cusco-extrajudicial', [PlaceholdersPagosController::class, 'templateCajaCuscoExtrajudicial'])->name('integracion.pagos.template.cusco_extrajudicial');
         Route::post('/integracion/pagos/import/cusco-extrajudicial',  [PlaceholdersPagosController::class, 'importCajaCuscoExtrajudicial'])->name('integracion.pagos.import.cusco_extrajudicial');
+
+        // ===== Integración ▸ Gestiones (PROPIA) – NUEVO =====
+        Route::get('/integracion/gestiones',                     [PlaceholdersGestionesController::class,'index'])->name('integracion.gestiones');
+        Route::get('/integracion/gestiones/template/propia',     [PlaceholdersGestionesController::class,'templatePropia'])->name('integracion.gestiones.template.propia');
+        Route::post('/integracion/gestiones/import/propia',      [PlaceholdersGestionesController::class,'importPropia'])->name('integracion.gestiones.import.propia');
 
         // Administración de usuarios
         Route::get('/administracion',                           [AdminUsersController::class, 'index'])->name('administracion');

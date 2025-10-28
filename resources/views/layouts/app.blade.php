@@ -246,11 +246,29 @@
           @endif
 
           @php($role = strtolower(trim(auth()->user()->role ?? '')))
-          @if(in_array($role,['administrador','sistemas']))
+          @if(in_array($role, ['administrador','sistemas']))
             <div class="lab">ADMIN / SOPORTE</div>
-            <a class="{{ request()->is('integracion/pagos') ? 'active' : '' }}" href="{{ url('/integracion/pagos') }}"><i class="bi bi-upload"></i><span>Integración ▸ Subir Pagos</span></a>
-            <a class="{{ request()->is('integracion/data') ? 'active' : '' }}" href="{{ url('/integracion/data') }}"><i class="bi bi-cloud-upload"></i><span>Integración ▸ Subir Data</span></a>
-            <a class="{{ request()->is('administracion') ? 'active' : '' }}" href="{{ url('/administracion') }}"><i class="bi bi-gear"></i><span>Administración</span></a>
+
+            <a class="{{ request()->is('integracion/pagos') ? 'active' : '' }}"
+              href="{{ url('/integracion/pagos') }}">
+              <i class="bi bi-upload"></i><span>Integración ▸ Subir Pagos</span>
+            </a>
+
+            {{-- NUEVO: Integración ▸ Subir Gestiones (PROPIA) --}}
+            <a class="{{ request()->is('integracion/gestiones*') ? 'active' : '' }}"
+              href="{{ url('/integracion/gestiones') }}">
+              <i class="bi bi-clipboard2-data"></i><span>Integración ▸ Subir Gestiones</span>
+            </a>
+
+            <a class="{{ request()->is('integracion/data') ? 'active' : '' }}"
+              href="{{ url('/integracion/data') }}">
+              <i class="bi bi-cloud-upload"></i><span>Integración ▸ Subir Data</span>
+            </a>
+
+            <a class="{{ request()->is('administracion') ? 'active' : '' }}"
+              href="{{ url('/administracion') }}">
+              <i class="bi bi-gear"></i><span>Administración</span>
+            </a>
           @endif
 
           <div class="lab">CUENTA</div>

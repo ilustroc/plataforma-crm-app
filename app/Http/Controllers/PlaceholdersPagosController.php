@@ -12,7 +12,6 @@ use Illuminate\Support\Facades\Storage;
 
 class PlaceholdersPagosController extends Controller
 {
-    // GET /integracion/pagos
     public function index()
     {
         // PROPIA
@@ -46,7 +45,6 @@ class PlaceholdersPagosController extends Controller
         ));
     }
 
-    // ================== PROPIA ==================
     public function template()
     {
         $headers = [
@@ -83,7 +81,6 @@ class PlaceholdersPagosController extends Controller
             ->with('warn', implode("\n", array_slice($errores, 0, 5)));
     }
 
-    // ================== CUSCO CASTIGADA ==================
     public function templateCajaCuscoCastigada()
     {
         $headers = [
@@ -120,8 +117,6 @@ class PlaceholdersPagosController extends Controller
             ->with('warn', implode("\n", array_slice($errores, 0, 5)));
     }
 
-    // ================== CUSCO EXTRAJUDICIAL (NUEVO) ==================
-    // GET /integracion/pagos/template/cusco-extrajudicial
     public function templateCajaCuscoExtrajudicial()
     {
         $headers = [
@@ -139,7 +134,6 @@ class PlaceholdersPagosController extends Controller
         ]);
     }
 
-    // POST /integracion/pagos/import/cusco-extrajudicial
     public function importCajaCuscoExtrajudicial(Request $r)
     {
         $r->validate(['archivo' => ['required','file','mimes:csv,txt','max:20480']]);
@@ -162,7 +156,6 @@ class PlaceholdersPagosController extends Controller
             ->with('warn', implode("\n", array_slice($errores, 0, 5)));
     }
 
-    // ================== HELPERS COMUNES ==================
     private function detectDelimiter(string $firstLine): string {
         return (substr_count($firstLine, ';') > substr_count($firstLine, ',')) ? ';' : ',';
     }
@@ -208,24 +201,6 @@ class PlaceholdersPagosController extends Controller
         return preg_replace('/[\x00-\x1F\x7F]/u', '', $s);
     }
     
-    // ======================================================
-    // [PROPIA] Importación desde CSV
-    // ======================================================
-    
-    /**
-     * Importa pagos de la cartera PROPIA desde un CSV.
-     *
-     * ETIQUETAS DE PASOS:
-     *  (A) Abrir archivo y detectar delimitador
-     *  (B) Leer/normalizar encabezados y armar mapa
-     *  (C) Mapeo esperado -> columnas BD
-     *  (D) Recorrer filas, parsear valores y validar mínimos
-     *  (E) Insertar y acumular métricas
-     *
-     * @param  string  $filepath  Ruta física del CSV
-     * @param  int     $loteId    ID del lote asociado
-     * @return array   [ok, skip, errores[]]
-     */
     private function importCsvPropia(string $filepath, int $loteId): array
     {
         // (A) Abrir y detectar delimitador
@@ -315,25 +290,6 @@ class PlaceholdersPagosController extends Controller
         return [$ok, $skip, $err];
     }
 
-
-    // ======================================================
-    // [CAJA CUSCO ▸ CASTIGADA] Importación desde CSV
-    // ======================================================
-    
-    /**
-     * Importa pagos de CAJA CUSCO ▸ CASTIGADA desde un CSV.
-     *
-     * ETIQUETAS DE PASOS:
-     *  (A) Abrir archivo y detectar delimitador
-     *  (B) Leer/normalizar encabezados y armar mapa
-     *  (C) Mapeo esperado -> columnas BD
-     *  (D) Recorrer filas, parsear valores y validar mínimos
-     *  (E) Insertar y acumular métricas
-     *
-     * @param  string  $filepath
-     * @param  int     $loteId
-     * @return array   [ok, skip, errores[]]
-     */
     private function importCsvCajaCusco(string $filepath, int $loteId): array
     {
         // (A) Abrir y detectar delimitador
@@ -429,8 +385,6 @@ class PlaceholdersPagosController extends Controller
         return [$ok, $skip, $err];
     }
 
-
-    // Import CAJA CUSCO EXTRAJUDICIAL (nuevo)
     private function importCsvCajaCuscoExtrajudicial(string $filepath, int $loteId): array
     {
         $fh = fopen($filepath, 'r'); if(!$fh) return [0,0,['No se pudo abrir el archivo']];
@@ -514,6 +468,4 @@ class PlaceholdersPagosController extends Controller
         fclose($fh);
         return [$ok,$skip,$err];
     }
-
-
 }
