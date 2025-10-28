@@ -20,10 +20,10 @@ class PromesaPdfController extends Controller
 
         try {
             // 0) Validar iLovePDF
-            $pub = env('ILOVEPDF_PUBLIC_KEY');
-            $sec = env('ILOVEPDF_SECRET_KEY');
+            $pub = config('services.ilovepdf.public');
+            $sec = config('services.ilovepdf.secret');
             if (!$pub || !$sec) {
-                throw new \RuntimeException('Faltan ILOVEPDF_PUBLIC_KEY/ILOVEPDF_SECRET_KEY en .env');
+                abort(500, 'Faltan claves iLovePDF en config/services.php (services.ilovepdf.public/secret).');
             }
 
             // 1) Plantilla
