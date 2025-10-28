@@ -6,7 +6,8 @@ use App\Models\PromesaPago;
 use Carbon\Carbon;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
-use Ilovepdf\Ilovepdf;                 // ⬅️  iLovePDF
+use Illuminate\Support\Facades\Storage;
+use Ilovepdf\Ilovepdf;
 use PhpOffice\PhpWord\TemplateProcessor;
 use Throwable;
 
@@ -15,28 +16,28 @@ class PromesaPdfController extends Controller
     public function acuerdo(PromesaPago $promesa)
     {
         $docxOut = null;
+        $pdfOut  = null;
 
         try {
-            // ── 0) Validar credenciales iLovePDF ───────────────────────────────
+            // 0) Validar iLovePDF
             $pub = env('ILOVEPDF_PUBLIC_KEY');
             $sec = env('ILOVEPDF_SECRET_KEY');
             if (!$pub || !$sec) {
-                abort(500, 'Faltan ILOVEPDF_PUBLIC_KEY o ILOVEPDF_SECRET_KEY en .env');
+                throw new \RuntimeException('Faltan ILOVEPDF_PUBLIC_KEY/ILOVEPDF_SECRET_KEY en .env');
             }
 
-            // ── 1) Plantilla DOCX (intenta por-DNI y luego genérica) ──────────
+            // 1) Plantilla
             $tplPerDni = storage_path('app/templates/Acuerdo_de_Pago_DNI_'.$promesa->dni.'.docx');
             $tplGener  = storage_path('app/templates/Acuerdo_de_Pago.docx');
             $tpl       = is_file($tplPerDni) ? $tplPerDni : $tplGener;
-
             if (!is_file($tpl)) {
-                abort(404, 'No se encontró la plantilla DOCX en: '.$tplPerDni.' ni '.$tplGener);
+                throw new \RuntimeException('No existe plantilla: '.$tplPerDni.' ni '.$tplGener);
             }
 
-            // Carga relaciones
+            // Cargar relaciones
             $promesa->loadMissing(['operaciones', 'cuotas']);
 
-            // ── 2) Datos base (clientes_cuentas) ───────────────────────────────
+            // 2) Datos base (clientes_cuentas) — proteger null
             $ops = [];
             if ($promesa->relationLoaded('operaciones') && $promesa->operaciones->count()) {
                 $ops = $promesa->operaciones->pluck('operacion')->filter()->values()->all();
@@ -48,12 +49,12 @@ class PromesaPdfController extends Controller
             if (!empty($ops)) $q->whereIn('operacion', $ops);
             $cc = $q->orderByDesc('saldo_capital')->first();
 
-            $titular       = $cc->cliente        ?? $cc->nombre_cliente ?? $cc->titular ?? '—';
-            $entidad       = $cc->entidad        ?? '—';
+            $titular       = $cc->cliente        ?? $cc->nombre_cliente ?? $cc->titular ?? $promesa->titular ?? '—';
+            $entidad       = $cc->entidad        ?? $promesa->entidad   ?? '—';
             $saldoCapital  = (float)($cc->saldo_capital ?? 0);
             $operacionText = $ops ? implode(', ', $ops) : ($promesa->operacion ?? '—');
 
-            // ── 3) Filas de cuotas ────────────────────────────────────────────
+            // 3) Filas de cuotas
             $rows = [];
             $fmtMoney = function ($v) {
                 $v = (float)$v;
@@ -80,8 +81,8 @@ class PromesaPdfController extends Controller
                         ];
                     }
                 } else {
-                    $n     = max(1, (int)($promesa->nro_cuotas ?? 1));
-                    $first = Carbon::parse($promesa->fecha_pago ?? $promesa->fecha_promesa ?? now());
+                    $n      = max(1, (int)($promesa->nro_cuotas ?? 1));
+                    $first  = Carbon::parse($promesa->fecha_pago ?? $promesa->fecha_promesa ?? now());
                     $mCuota = (float)($promesa->monto_cuota ?? 0);
                     if ($mCuota <= 0 && (float)($promesa->monto_convenio ?? 0) > 0) {
                         $mCuota = ((float)$promesa->monto_convenio) / $n;
@@ -97,7 +98,7 @@ class PromesaPdfController extends Controller
                 }
             }
 
-            // ── 4) Llenar DOCX ────────────────────────────────────────────────
+            // 4) Llenar DOCX
             $doc = new TemplateProcessor($tpl);
             $doc->setValue('titular',       $titular);
             $doc->setValue('dni',           $promesa->dni);
@@ -115,7 +116,7 @@ class PromesaPdfController extends Controller
                 }
             }
 
-            $tmpDir  = storage_path('app/tmp');
+            $tmpDir   = storage_path('app/tmp');
             if (!is_dir($tmpDir)) @mkdir($tmpDir, 0775, true);
 
             $baseName = "Acuerdo_{$promesa->dni}_{$promesa->id}";
@@ -123,10 +124,9 @@ class PromesaPdfController extends Controller
             $pdfOut   = $tmpDir . "/{$baseName}.pdf";
             $doc->saveAs($docxOut);
 
-            // ── 5) Convertir DOCX→PDF con iLovePDF ────────────────────────────
+            // 5) DOCX -> PDF (iLovePDF)
             $ilovepdf = new Ilovepdf($pub, $sec);
-            $task     = $ilovepdf->newTask('officepdf');     // tipo de tarea: Office → PDF
-            // si la lib soporta desempaquetar directo:
+            $task     = $ilovepdf->newTask('officepdf');
             if (method_exists($task, 'setPackaged')) $task->setPackaged(false);
             if (method_exists($task, 'setOutputFilename')) $task->setOutputFilename($baseName.'.pdf');
 
@@ -134,34 +134,44 @@ class PromesaPdfController extends Controller
             $task->execute();
             $task->download($tmpDir);
 
-            // Asegurar ruta del PDF resultante
             if (!is_file($pdfOut)) {
-                // fallback: buscar el PDF descargado si la lib lo nombra distinto
                 $candidates = glob($tmpDir.'/*.pdf');
                 if ($candidates) { $pdfOut = $candidates[0]; }
             }
-
             if (!is_file($pdfOut)) {
                 throw new \RuntimeException('No se encontró el PDF generado por iLovePDF.');
             }
 
+            // 6) GUARDAR PDF en storage/public y actualizar la Promesa
+            $destRel = "promesas/{$promesa->dni}/{$baseName}.pdf"; // relativo en disco 'public'
+            Storage::disk('public')->put($destRel, file_get_contents($pdfOut));
+
+            // Asegúrate de tener estas columnas en la tabla (ver migración abajo)
+            $promesa->update([
+                'pdf_path'         => $destRel,
+                'estado'           => $promesa->estado ?? 'generada',
+                'fecha_generacion' => now(),
+            ]);
+
+            // 7) Devolver el PDF (stream) y que quede guardado para descargar luego
             return response()->file($pdfOut, [
                 'Content-Type'  => 'application/pdf',
                 'Cache-Control' => 'private, max-age=0, no-store, no-cache, must-revalidate',
             ]);
+
         } catch (Throwable $e) {
             Log::error('Error generando Acuerdo PDF', [
                 'promesa_id' => $promesa->id ?? null,
                 'msg'        => $e->getMessage(),
-                'trace'      => $e->getTraceAsString(),
+                'line'       => $e->getLine(),
+                'file'       => $e->getFile(),
             ]);
 
-            // Si al menos tenemos el DOCX, lo ofrecemos de descarga
             if (!empty($docxOut) && is_file($docxOut)) {
                 return response()->download($docxOut, "Acuerdo_{$promesa->dni}.docx");
             }
 
-            abort(500, 'No se pudo generar el PDF del acuerdo.');
+            abort(500, 'No se pudo generar o guardar el PDF del acuerdo.');
         }
     }
 }
