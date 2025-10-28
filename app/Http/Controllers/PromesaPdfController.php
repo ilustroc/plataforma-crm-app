@@ -9,8 +9,8 @@ use Illuminate\Support\Facades\Log;
 use Ilovepdf\Ilovepdf;                 // ⬅️  iLovePDF
 use PhpOffice\PhpWord\TemplateProcessor;
 use PhpOffice\PhpWord\IOFactory;
-use PhpOffice\PhpWord\Settings;
 use RuntimeException;
+use PhpOffice\PhpWord\Settings;
 use ZipArchive;
 use Throwable;
 
