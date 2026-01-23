@@ -1,0 +1,46 @@
+@import "tailwindcss";
+
+@theme {
+  --color-brand: #6F2661;
+  --animate-slide-in: slideIn 0.4s cubic-bezier(0.2, 0.8, 0.2, 1) forwards;
+  @keyframes slideIn {
+    0% { opacity: 0; transform: translateX(20px) scale(0.95); }
+    100% { opacity: 1; transform: translateX(0) scale(1); }
+  }
+}
+
+@layer components {
+  /* Específico del Login */
+  .glass-card {
+    @apply rounded-[2rem] border border-white/60 bg-white/80 backdrop-blur-2xl p-8 sm:p-10 shadow-2xl;
+    box-shadow: 0 25px 50px -12px rgba(111, 38, 97, 0.15);
+  }
+
+  .label { @apply block text-xs font-bold text-slate-600 uppercase tracking-wide ml-1; }
+  
+  .input {
+    @apply w-full rounded-xl border border-slate-200 bg-slate-50/50 px-4 py-3.5 text-slate-900 outline-none transition-all duration-200
+           focus:bg-white focus:border-brand focus:ring-4 focus:ring-brand/10;
+  }
+
+  .btn-brand {
+    @apply inline-flex w-full items-center justify-center rounded-xl px-4 py-3.5 text-sm font-bold text-white transition-all duration-300
+           focus:outline-none focus:ring-4 focus:ring-brand/20 disabled:opacity-70;
+    background: linear-gradient(135deg, #6F2661 0%, #4a1941 100%);
+  }
+  .btn-brand:hover {
+    @apply -translate-y-0.5 shadow-lg;
+    background: linear-gradient(135deg, #7e2b6e 0%, #5B1F50 100%);
+  }
+
+  /* Toasts (Estilos necesarios aquí también) */
+  .toast {
+    @apply flex items-center gap-4 rounded-2xl p-4 shadow-lg bg-white border border-slate-100 backdrop-blur-md transition-all duration-300;
+  }
+  .toast-icon-bg { @apply flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-slate-50 border border-slate-100; }
+  .toast-close { @apply rounded-lg p-1.5 text-slate-400 hover:bg-slate-100 hover:text-slate-600; }
+  .toast--error { @apply border-l-4 border-l-red-500; }
+  .toast--error .toast-icon-bg { @apply bg-red-50 text-red-600; }
+  .toast--ok { @apply border-l-4 border-l-emerald-500; }
+  .toast--ok .toast-icon-bg { @apply bg-emerald-50 text-emerald-600; }
+}

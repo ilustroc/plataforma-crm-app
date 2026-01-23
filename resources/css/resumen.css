@@ -1,0 +1,104 @@
+@import "tailwindcss";
+
+@theme {
+    --color-brand: #6F2661;
+    --color-brand-50: #fdf4fc;
+    --color-brand-100: #fae8f9;
+}
+
+@layer components {
+    /* --- FONDO --- */
+    body {
+        @apply bg-[#F8FAFC]; 
+    }
+
+    /* --- TARJETAS --- */
+    .dashboard-card {
+        @apply bg-white rounded-[1.5rem] border border-slate-100 shadow-[0_8px_30px_rgb(0,0,0,0.04)] p-6 transition-all duration-300;
+    }
+    .dashboard-card:hover {
+        @apply shadow-[0_8px_30px_rgb(0,0,0,0.08)];
+    }
+
+    /* --- HEADER BANNER --- */
+    .welcome-banner {
+        @apply relative overflow-hidden rounded-[1.5rem] bg-gradient-to-r from-[#6F2661] to-[#4a1941] p-6 text-white shadow-lg;
+    }
+    .welcome-pattern {
+        @apply absolute top-0 right-0 h-full w-1/2 opacity-10;
+        background-image: radial-gradient(circle at center, white 1px, transparent 1px);
+        background-size: 20px 20px;
+    }
+
+    /* --- INPUT BUSCADOR --- */
+    .search-pill {
+        @apply w-full rounded-full border-0 bg-white/20 py-2.5 pl-11 pr-4 text-sm text-white placeholder-white/70 outline-none backdrop-blur-sm transition-all;
+    }
+    .search-pill:focus {
+        @apply bg-white text-brand placeholder-slate-400 ring-2 ring-white/50;
+    }
+
+    /* --- KPIs --- */
+    /* IMPORTANTE: Aquí NO debe estar la palabra 'group' en el @apply */
+    .kpi-box {
+        @apply flex items-center gap-4 rounded-2xl bg-white px-5 py-4 border border-slate-100 shadow-sm
+                hover:shadow-md transition-all duration-300 relative overflow-hidden;
+    }
+    
+    .kpi-box::after {
+        content: '';
+        @apply absolute top-0 right-0 w-20 h-20 bg-brand/5 rounded-full -mr-10 -mt-10
+                transition-transform duration-500 scale-100;
+    }
+    
+    /* Detectamos el hover desde el HTML */
+    .group:hover .kpi-box::after, 
+    .kpi-box.group:hover::after {
+        @apply scale-150;
+    }
+
+    .kpi-icon-wrap {
+        @apply h-9 w-9 rounded-xl flex items-center justify-center text-xl z-10 shrink-0;
+    }
+
+    .kpi-title {
+        @apply text-slate-500 text-sm font-medium leading-tight truncate;
+    }
+
+    .kpi-value {
+        @apply text-2xl sm:text-3xl font-bold text-slate-800 leading-none mt-1;
+    }
+
+    /* --- ACTION CARDS --- */
+    /* IMPORTANTE: Aquí tampoco debe estar 'group' */
+    .action-card {
+        @apply flex flex-col items-center justify-center gap-2 rounded-2xl border border-slate-100 bg-white p-4 text-center transition-all duration-200 hover:-translate-y-1 hover:border-brand/30 hover:shadow-lg hover:shadow-brand/5 cursor-pointer;
+    }
+    .action-icon {
+        @apply h-10 w-10 rounded-full bg-slate-50 text-slate-500 flex items-center justify-center transition-colors;
+    }
+    
+    .action-card:hover .action-icon {
+        @apply bg-brand text-white;
+    }
+
+    /* --- TIMELINE --- */
+    .timeline-container {
+        @apply bg-white rounded-[1.5rem] border border-slate-100 shadow-[0_8px_30px_rgb(0,0,0,0.04)] h-full overflow-hidden flex flex-col;
+    }
+    .timeline-header {
+        @apply px-6 py-5 border-b border-slate-50 flex items-center justify-between bg-white sticky top-0 z-10;
+    }
+    .timeline-item {
+        @apply relative flex gap-4 px-6 py-4 hover:bg-slate-50 transition-colors border-l-2 border-transparent hover:border-brand;
+    }
+    .timeline-line {
+        @apply absolute left-[2.25rem] top-10 bottom-0 w-px bg-slate-100;
+    }
+    
+    /* SCROLLBAR */
+    .custom-scroll::-webkit-scrollbar { width: 5px; }
+    .custom-scroll::-webkit-scrollbar-track { background: transparent; }
+    .custom-scroll::-webkit-scrollbar-thumb { @apply bg-slate-200 rounded-full; }
+    .custom-scroll::-webkit-scrollbar-thumb:hover { @apply bg-slate-300; }
+}

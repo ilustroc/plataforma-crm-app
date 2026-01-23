@@ -4,206 +4,165 @@
   <meta charset="utf-8" />
   <title>Ingreso | IMPULSE GO</title>
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
-  <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.css" rel="stylesheet">
-
-  <style>
-    :root{
-      --brand:#cc3024;      /* rojo de marca */
-      --brand-700:#b02a21;  /* hover */
-      --bg:#f7f8fc;         /* fondo súper claro */
-      --surface:#ffffff;    /* tarjetas */
-      --ink:#1f2328;        /* texto */
-      --muted:#6d7b8a;      /* texto secundario */
-      --border:#e9edf3;     /* bordes */
-      --ring:0 0 0 4px rgba(204,48,36,.16);
-    }
-
-    html,body{height:100%}
-    body{
-      background:
-        radial-gradient(900px 500px at -10% -10%, rgba(204,48,36,.05), transparent 60%),
-        radial-gradient(700px 400px at 120% 0%, rgba(204,48,36,.04), transparent 60%),
-        linear-gradient(#fbfcff,#f7f8fc);
-      color:var(--ink);
-      display:flex; align-items:center; justify-content:center;
-      padding:24px;
-    }
-
-    .wrap{
-      width:min(1120px, 100%);
-      border-radius:22px;
-      background:var(--surface);
-      border:1px solid var(--border);
-      box-shadow:0 18px 60px rgba(15,23,42,.06);
-      overflow:hidden;
-    }
-
-    /* Lado ilustración, bien claro */
-    .side{
-      background:
-        linear-gradient(180deg,#fff, #fff),
-        radial-gradient(60% 60% at 40% 30%, rgba(204,48,36,.08), transparent 70%);
-      padding:34px;
-    }
-    .brand img{height:36px}
-    .side-hero{
-      display:grid; place-items:center; text-align:center;
-      margin:16px 0 8px;
-    }
-    .illus{
-      max-height:300px; width:auto; border-radius:14px;
-      filter: drop-shadow(0 14px 24px rgba(0,0,0,.06));
-    }
-    .side p{ color:var(--muted) }
-
-    /* Panel de formulario */
-    .panel{
-      padding:34px;
-      background:var(--surface);
-    }
-    .card-soft{
-      background:var(--surface);
-      border:1px solid var(--border);
-      border-radius:16px;
-      box-shadow:0 8px 28px rgba(15,23,42,.05);
-      padding:28px;
-    }
-    .form-control{
-      background:#fff; color:var(--ink); border:1px solid var(--border);
-    }
-    .form-control:focus{ border-color:var(--brand); box-shadow:var(--ring); }
-    .input-group-text{ background:#fff; border-left:none }
-    .input-group .form-control{ border-right:none }
-
-    .btn-brand{
-      background:var(--brand); color:#fff; border:none; border-radius:999px;
-      padding:.9rem 1rem; font-weight:600;
-    }
-    .btn-brand:hover{ background:var(--brand-700) }
-    .link{ color:var(--brand); text-decoration:none }
-    .link:hover{ text-decoration:underline }
-    .help{ color:var(--muted) }
-    .caps{ color:#b54708 }
-  </style>
+  <link rel="icon" type="image/png" href="{{ asset('img/logotipo.png') }}">
+  @vite(['resources/css/login.css', 'resources/js/login.js'])
 </head>
-<body>
 
-  <div class="wrap row g-0">
-    <!-- LADO IZQUIERDO (claro) -->
-    <div class="side col-12 col-lg-6 d-flex flex-column">
-      <div class="d-flex align-items-center justify-content-between">
-        <a href="/" class="brand d-inline-flex align-items-center gap-2">
-          <img src="{{ asset('assets/img/logo.png') }}" alt="IMPULSE GO">
-        </a>
-      </div>
-
-      <div class="side-hero flex-grow-1">
-        <img class="illus img-fluid" src="{{ asset('assets/img/login-illustration.png') }}" alt="Ilustración">
-        <p class="mt-3 mb-0">Bienvenido a Consorcio de Abogados del Perú.</p>
-      </div>
-
-      <div class="help small">&copy; {{ date('Y') }} Consorcio de Abogados del Perú</div>
-    </div>
-
-    <!-- LADO DERECHO (form) -->
-    <div class="col-12 col-lg-6 panel d-flex align-items-center">
-      <div class="card-soft w-100">
-        <h1 class="h3 mb-1 fw-semibold">Iniciar sesión</h1>
-        <p class="help mb-4">Ingresa tus credenciales para continuar.</p>
-
-        @if ($errors->any())
-          <div class="alert alert-danger py-2">{{ $errors->first() }}</div>
-        @endif
-
-        <form id="login-form" method="POST" action="{{ route('login.post') }}" class="vstack gap-3" novalidate>
-          @csrf
-
-          <div>
-            <label for="email" class="form-label">Correo</label>
-            <input id="email" type="email" name="email" class="form-control" placeholder="tucorreo@empresa.com"
-                   value="{{ old('email') }}" required autocomplete="username" inputmode="email">
-            <div class="invalid-feedback">Ingresa un correo válido.</div>
-          </div>
-
-          <div>
-            <label for="password" class="form-label d-flex justify-content-between align-items-center">
-              <span>Contraseña</span>
-              <span id="caps" class="small d-none"><i class="bi bi-exclamation-triangle-fill me-1"></i><span class="caps">Bloq Mayús activado</span></span>
-            </label>
-            <div class="input-group">
-              <input id="password" type="password" name="password" class="form-control" placeholder="••••••••" required autocomplete="current-password">
-              <button class="input-group-text" type="button" id="togglePwd" aria-label="Mostrar contraseña">
-                <i class="bi bi-eye"></i>
-              </button>
-            </div>
-            <div class="invalid-feedback">Ingresa tu contraseña.</div>
-          </div>
-
-          <div class="d-flex justify-content-between align-items-center">
-            <div class="form-check">
-              <input class="form-check-input" type="checkbox" id="remember" name="remember">
-              <label class="form-check-label" for="remember">Recordarme</label>
-            </div>
-            <a href="#" class="small link">¿Olvidaste tu contraseña?</a>
-          </div>
-
-          <button id="submitBtn" class="btn btn-brand w-100 mt-2">
-            <span class="btn-text">Ingresar</span>
-            <span class="spinner-border spinner-border-sm ms-2 d-none" role="status" aria-hidden="true"></span>
-          </button>
-        </form>
-
-        <div class="mt-4 d-flex justify-content-between small">
-          <a class="link" href="mailto:impulse.conciliacion-cobranza@mgi-go.com">Soporte</a>
-        </div>
-      </div>
-    </div>
+<body class="min-h-screen bg-slate-50 font-sans selection:bg-brand/10 selection:text-brand-700">
+  
+  <div class="fixed inset-0 -z-10 overflow-hidden">
+    <div class="absolute inset-0 bg-[radial-gradient(900px_450px_at_10%_10%,rgba(111,38,97,.08),transparent_60%),radial-gradient(700px_420px_at_95%_0%,rgba(111,38,97,.05),transparent_60%)]"></div>
+    <div class="absolute inset-0 bg-gradient-to-b from-white to-slate-50/80"></div>
   </div>
 
+  <main class="min-h-screen flex items-center justify-center px-4 py-8 relative">
+    
+    {{-- SISTEMA DE NOTIFICACIONES --}}
+    <div id="toastContainer" class="fixed top-6 right-6 z-50 flex flex-col gap-3 w-full max-w-sm pointer-events-none">
+        
+        @if ($errors->any())
+        <div class="toast toast--error animate-slide-in pointer-events-auto">
+            <div class="toast-icon-bg">
+                <img src="{{ asset('img/logotipo.png') }}" alt="Logo" class="h-5 w-5 object-contain opacity-90">
+            </div>
+            <div class="flex-1 min-w-0">
+                <h3 class="text-sm font-semibold text-slate-900">Acceso denegado</h3>
+                <p class="text-sm text-slate-600 mt-0.5">{{ $errors->first() }}</p>
+            </div>
+            <button type="button" class="toast-close">
+                <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12" /></svg>
+            </button>
+        </div>
+        @endif
+
+        @if (session('ok'))
+        <div class="toast toast--ok animate-slide-in pointer-events-auto" data-autoclose="5000">
+            <div class="toast-icon-bg">
+                 <img src="{{ asset('img/logotipo.png') }}" alt="Logo" class="h-5 w-5 object-contain opacity-90">
+            </div>
+            <div class="flex-1 min-w-0">
+                <h3 class="text-sm font-semibold text-slate-900">¡Listo!</h3>
+                <p class="text-sm text-slate-600 mt-0.5">{{ session('ok') }}</p>
+            </div>
+            <button type="button" class="toast-close">
+                <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12" /></svg>
+            </button>
+        </div>
+        @endif
+
+    </div>
+
+    {{-- CARD LOGIN --}}
+    <div class="w-full max-w-[420px]">
+      <section class="glass-card">
+        {{-- LOGO PRINCIPAL --}}
+        <div class="flex flex-col items-center justify-center">
+          <img src="{{ asset('img/logo.png') }}" alt="IMPULSE GO"
+               class="h-16 w-auto object-contain drop-shadow-sm transition-transform hover:scale-105 duration-500">
+        </div>
+
+        <div class="mt-8 text-center">
+          <h1 class="text-2xl font-bold tracking-tight text-slate-900">Bienvenido de nuevo</h1>
+          <p class="mt-2 text-sm text-slate-500 font-medium">Ingresa a tu cuenta Impulse Go</p>
+        </div>
+
+        <form id="login-form" method="POST" action="{{ route('login.post') }}" class="mt-8 space-y-5" novalidate>
+          @csrf
+
+          <div class="space-y-1.5">
+            <label for="email" class="label">Correo electrónico</label>
+            <input id="email" type="email" name="email" value="{{ old('email') }}"
+                   required autocomplete="username" inputmode="email"
+                   class="input" placeholder="nombre@impulse.local">
+          </div>
+
+          <div class="space-y-1.5">
+            <div class="flex items-center justify-between">
+              <label for="password" class="label">Contraseña</label>
+              <span id="capsHint" class="hidden text-[10px] font-bold tracking-wider text-amber-600 uppercase bg-amber-50 px-2 py-0.5 rounded">Mayúsculas activas</span>
+            </div>
+
+            <div class="relative group">
+              <input id="password" type="password" name="password" required autocomplete="current-password"
+                     class="input pr-12" placeholder="••••••••">
+
+              <button type="button" id="togglePwd"
+                      class="absolute inset-y-0 right-0 flex items-center pr-3 text-slate-400 hover:text-brand transition-colors cursor-pointer"
+                      aria-label="Mostrar contraseña">
+                <svg id="eyeIcon" xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                  <path d="M2 12s3-7 10-7 10 7 10 7-3 7-10 7S2 12 2 12Z"/>
+                  <circle cx="12" cy="12" r="3"/>
+                </svg>
+              </button>
+            </div>
+          </div>
+
+          <div class="pt-2">
+            <button id="submitBtn" type="submit" class="btn-brand shadow-lg shadow-brand/20">
+              <span class="btn-text">Iniciar sesión</span>
+              <svg class="spinner hidden h-5 w-5 animate-spin ml-2" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+                <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v4a4 4 0 00-4 4H4z"></path>
+              </svg>
+            </button>
+          </div>
+        </form>
+      </section>
+      
+      <p class="text-center text-xs text-slate-400 mt-6 font-medium opacity-60">
+        &copy; {{ date('Y') }} Impulse Group. Todos los derechos reservados.
+      </p>
+
+    </div>
+  </main>
+
+  {{-- Scripts simples para funcionalidad UI --}}
   <script>
-    // Validación + bloqueo doble envío
-    (function(){
-      const form = document.getElementById('login-form');
-      const btn  = document.getElementById('submitBtn');
-      const spn  = btn.querySelector('.spinner-border');
-      const txt  = btn.querySelector('.btn-text');
+    document.addEventListener('DOMContentLoaded', () => {
+        // 1. Auto-cerrar Toasts
+        const autoToasts = document.querySelectorAll('[data-autoclose]');
+        autoToasts.forEach(toast => {
+            const time = toast.getAttribute('data-autoclose') || 5000;
+            setTimeout(() => {
+                toast.style.opacity = '0';
+                toast.style.transform = 'translateX(100%)';
+                setTimeout(() => toast.remove(), 300);
+            }, time);
+        });
 
-      form.addEventListener('submit', function(e){
-        if(!form.checkValidity()){
-          e.preventDefault(); e.stopPropagation();
-        }else{
-          btn.disabled = true; spn.classList.remove('d-none'); txt.textContent = 'Ingresando...';
+        // 2. Toggle Password
+        const toggleBtn = document.getElementById('togglePwd');
+        const pwdInput = document.getElementById('password');
+        
+        if(toggleBtn && pwdInput) {
+            toggleBtn.addEventListener('click', () => {
+                const type = pwdInput.getAttribute('type') === 'password' ? 'text' : 'password';
+                pwdInput.setAttribute('type', type);
+                toggleBtn.classList.toggle('text-brand');
+            });
         }
-        form.classList.add('was-validated');
-      });
-    })();
 
-    // Toggle password
-    (function(){
-      const pwd = document.getElementById('password');
-      const tgl = document.getElementById('togglePwd');
-      tgl.addEventListener('click', ()=>{
-        const show = pwd.type === 'password';
-        pwd.type = show ? 'text' : 'password';
-        tgl.firstElementChild.className = show ? 'bi bi-eye-slash' : 'bi bi-eye';
-        tgl.setAttribute('aria-label', show ? 'Ocultar contraseña' : 'Mostrar contraseña');
-        pwd.focus();
-      });
-    })();
+        // 3. Loading state
+        const form = document.getElementById('login-form');
+        const btn = document.getElementById('submitBtn');
+        if(form && btn) {
+            form.addEventListener('submit', () => {
+                btn.disabled = true;
+                btn.querySelector('.btn-text').textContent = 'Ingresando...';
+                btn.querySelector('.spinner').classList.remove('hidden');
+            });
+        }
 
-    // Aviso Caps Lock
-    (function(){
-      const pwd = document.getElementById('password');
-      const caps = document.getElementById('caps');
-      function setCaps(e){
-        const on = e.getModifierState && e.getModifierState('CapsLock');
-        caps.classList.toggle('d-none', !on);
-      }
-      pwd.addEventListener('keyup', setCaps);
-      pwd.addEventListener('keydown', setCaps);
-    })();
+        // 4. Detectar Bloq Mayus
+        const capsHint = document.getElementById('capsHint');
+        pwdInput?.addEventListener('keyup', (e) => {
+            if (e.getModifierState('CapsLock')) {
+                capsHint.classList.remove('hidden');
+            } else {
+                capsHint.classList.add('hidden');
+            }
+        });
+    });
   </script>
 </body>
 </html>
-

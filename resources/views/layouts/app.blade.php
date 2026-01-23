@@ -1,332 +1,203 @@
 <!DOCTYPE html>
-<html lang="es" data-theme="light">
+<html lang="es">
 <head>
-  <meta charset="utf-8">
-  <title>@yield('title','CONSORCIO DE ABOGADOS DEL PERU')</title>
-  <meta name="viewport" content="width=device-width, initial-scale=1">
-  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
-  <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.css" rel="stylesheet">
-  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
-
-  <style>
-    /* ======= TOKENS (marca rojo sobrio) ======= */
-    :root{
-      --brand:#cc3024;            /* principal */
-      --brand-ink:#a32820;        /* hover/ink */
-      --brand-tint:#fde6e3;       /* tint suave */
-      --radius:14px; --radius-sm:10px;
-      --shadow:0 12px 36px rgba(15,23,42,.08);
-      --shadow-sm:0 8px 22px rgba(15,23,42,.06);
-      --font:Inter, system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, "Noto Sans", sans-serif;
-      --content-max:1220px; /* un poco más compacto */
-    }
-
-    /* ======= ESCALA GLOBAL (similar a 90-94% de zoom) ======= */
-    html{ font-size:15px; }           /* 15px ≈ 93.75% del 16px default */
-    @media (min-width: 1600px){ html{ font-size:14.5px; } } /* pantallas grandes ≈ 90% */
-
-    [data-theme="light"]{
-      --bg:#f7f8fc; --surface:#ffffff; --surface-2:#f3f6fb; --border:#e8ecf3;
-      --ink:#151a23; --muted:#6d7b8a;
-
-      --bs-body-bg:var(--bg); --bs-body-color:var(--ink); --bs-heading-color:var(--ink);
-      --bs-secondary-color:var(--muted); --bs-border-color:var(--border);
-      --bs-card-bg:var(--surface); --bs-card-border-color:var(--border);
-    }
-    [data-theme="dark"]{
-      --bg:#0b1016; --surface:#0f141b; --surface-2:#0c1218; --border:#1a232e;
-      --ink:#eaf0f6; --muted:#97a6b7;
-
-      --bs-body-bg:var(--bg); --bs-body-color:var(--ink); --bs-heading-color:var(--ink);
-      --bs-secondary-color:var(--muted); --bs-border-color:var(--border);
-      --bs-card-bg:var(--surface); --bs-card-border-color:var(--border);
-    }
-
-    html,body{height:100%}
-    body{margin:0; background:var(--bg); color:var(--ink); font-family:var(--font)}
-
-    /* ======= SHELL ======= */
-    .shell{display:flex; min-height:100vh;}
-
-    /* Sidebar */
-    .rail{
-      width:240px; flex:0 0 240px; height:100vh; position:sticky; top:0;
-      background:
-        radial-gradient(900px 500px at -10% -10%, color-mix(in oklab, var(--brand) 6%, transparent), transparent 60%),
-        linear-gradient(180deg, var(--surface-2), var(--surface));
-      border-right:1px solid var(--border);
-      display:flex; flex-direction:column;
-    }
-    [data-theme="dark"] .rail{
-      background:
-        radial-gradient(900px 500px at -10% -10%, color-mix(in oklab, var(--brand) 10%, transparent), transparent 60%),
-        linear-gradient(180deg, var(--surface-2), var(--surface));
-    }
-
-    .brand{ display:flex; gap:12px; align-items:center; padding:14px 16px; border-bottom:1px solid var(--border) }
-    .brand .mark{
-      width:40px; height:40px; border-radius:12px; display:grid; place-items:center;
-      background: color-mix(in oklab, var(--brand) 12%, transparent);
-      color:var(--brand);
-      flex:0 0 40px;
-      font-size:1.05rem;
-    }
-    /* LOGO: más compacto y swap por tema */
-    .logo { display:flex; align-items:center; gap:10px }
-    .logo img{ height:36px; width:auto; display:block }
-    .logo .logo-light{ display:inline-block }
-    .logo .logo-dark{ display:none }
-    [data-theme="dark"] .logo .logo-light{ display:none }
-    [data-theme="dark"] .logo .logo-dark{ display:inline-block }
-
-    .who{padding:10px 16px; border-bottom:1px solid var(--border)}
-    .who .n{font-weight:700}
-    .who .r{font-size:.78rem; color:var(--muted); text-transform:uppercase; letter-spacing:.5px}
-
-    .navy{padding:8px; overflow:auto}
-    .navy .lab{font-size:.72rem; color:var(--muted); padding:8px 10px 6px}
-    .navy a{
-      position:relative;
-      display:flex; align-items:center; gap:.6rem;
-      padding:8px 10px; border-radius:12px;
-      color:inherit; text-decoration:none; border:1px solid transparent; font-size:.98rem;
-    }
-    .navy a i{
-      color:var(--brand);
-      background: color-mix(in oklab, var(--brand) 14%, transparent);
-      width:32px; height:32px; border-radius:10px; display:grid; place-items:center;
-      font-size:1rem;
-    }
-    .navy a:hover{
-      background: color-mix(in oklab, var(--brand) 8%, transparent);
-      border-color: color-mix(in oklab, var(--brand) 20%, transparent);
-    }
-    .navy a.active{
-      background: color-mix(in oklab, var(--brand) 12%, transparent);
-      border-color: color-mix(in oklab, var(--brand) 32%, transparent);
-      font-weight:600;
-    }
-    .navy a.active::before{
-      content:""; position:absolute; left:-10px; top:8px; bottom:8px; width:4px;
-      background: linear-gradient(180deg, var(--brand), var(--brand-ink)); border-radius:8px;
-    }
-    [data-theme="dark"] .navy a:hover{
-      background: color-mix(in oklab, var(--brand) 14%, transparent);
-      border-color: color-mix(in oklab, var(--brand) 38%, transparent);
-    }
-
-    .rail-foot{margin-top:auto; padding:12px; border-top:1px solid var(--border)}
-    .theme-btn{
-      width:100%; height:40px; border-radius:12px; border:1px solid var(--border);
-      background:var(--surface); display:flex; align-items:center; justify-content:center; gap:8px;
-      color:var(--ink); font-weight:500; font-size:.96rem;
-    }
-    .theme-btn .sun{display:inline} .theme-btn .moon{display:none}
-    [data-theme="dark"] .theme-btn .sun{display:none} [data-theme="dark"] .theme-btn .moon{display:inline}
-
-    /* ======= MAIN ======= */
-    .main{flex:1; min-width:0; display:flex; flex-direction:column;}
-    .appbar{
-      position:sticky; top:0; z-index:10;
-      background:var(--surface); border-bottom:1px solid var(--border);
-      box-shadow:0 4px 16px rgba(15,23,42,.03);
-    }
-    .appbar-in{
-      margin:0 auto; max-width:var(--content-max);
-      padding:10px 20px; display:flex; align-items:center; gap:12px;
-    }
-    .appbar .crumb{ font-weight:700; letter-spacing:.2px; font-size:1.05rem }
-
-    .content{flex:1}
-    .content-in{
-      margin:0 auto; max-width:var(--content-max);
-      padding:18px 20px 16px; display:flex; flex-direction:column; gap:16px;
-    }
-
-    .card{background:var(--surface); border:1px solid var(--border); border-radius:var(--radius); box-shadow:var(--shadow-sm)}
-    .card.pad{padding:12px 14px}
-
-    .chip{
-      background:var(--surface); border:1px solid var(--border); border-radius:12px;
-      padding:12px 14px; height:100%; transition:transform .06s, box-shadow .12s;
-      display:flex; flex-direction:column; gap:6px;
-    }
-    .chip:hover{transform:translateY(-1px); box-shadow:var(--shadow)}
-    .chip .t{display:flex; align-items:center; gap:10px; font-weight:600}
-    .chip .t i{
-      color:var(--brand); background:color-mix(in oklab, var(--brand) 16%, transparent);
-      width:32px; height:32px; border-radius:10px; display:grid; place-items:center;
-      font-size:1rem;
-    }
-    .chip .s{color:var(--muted); font-size:.9rem}
-
-    .kpi{position:relative; background:var(--surface); border:1px solid var(--border);
-      border-radius:12px; padding:14px; height:100%; display:flex; flex-direction:column; justify-content:center; gap:6px;}
-    .kpi::before{
-      content:""; position:absolute; left:0; top:0; bottom:0; width:4px;
-      background:linear-gradient(180deg, var(--brand), var(--brand-ink)); opacity:.95;
-      border-top-left-radius:12px; border-bottom-left-radius:12px;
-    }
-    .kpi .label{color:var(--muted); font-size:.88rem}
-    .kpi .value{font-weight:800; font-size:1.7rem; line-height:1}
-
-    .footer{margin-top:auto; padding:12px 0; color:var(--muted)}
-
-    :focus-visible{
-      outline:3px solid color-mix(in oklab, var(--brand) 50%, transparent);
-      outline-offset:2px; border-radius:10px;
-    }
-
-    /* ======= Tablas / formularios más compactos ======= */
-    .table> :not(caption)>*>*{ padding:.55rem .75rem; }
-    .form-control,.form-select{ background:var(--surface); border-color:var(--border); }
-    .form-control::placeholder{ color:var(--muted) }
-    .form-control:focus,.form-select:focus{
-      background:var(--surface);
-      border-color: color-mix(in oklab, var(--brand) 52%, var(--border));
-      box-shadow: 0 0 0 .25rem color-mix(in oklab, var(--brand) 22%, transparent);
-    }
-    [data-theme="dark"] .form-control,[data-theme="dark"] .form-select{ color:var(--ink) }
-
-    /* ======= Botones globales en rojo marca (sustituye azul bootstrap) ======= */
-    .btn-primary{ background:var(--brand); border-color:var(--brand); }
-    .btn-primary:hover{ background:var(--brand-ink); border-color:var(--brand-ink); }
-    .btn-primary:focus{ box-shadow:0 0 0 .25rem color-mix(in oklab, var(--brand) 28%, transparent) }
-
-    .btn-outline-primary{ color:var(--brand); border-color:var(--brand); }
-    .btn-outline-primary:hover{ color:var(--brand-ink); border-color:var(--brand-ink); background:color-mix(in oklab, var(--brand) 12%, transparent) }
-    .btn-outline-primary:focus{ box-shadow:0 0 0 .25rem color-mix(in oklab, var(--brand) 20%, transparent) }
-
-    /* ======= Scrollbar ======= */
-    ::-webkit-scrollbar{ width:10px; height:10px }
-    ::-webkit-scrollbar-thumb{ background: color-mix(in oklab, var(--brand) 22%, transparent); border-radius:10px }
-    ::-webkit-scrollbar-track{ background: transparent }
-
-    @media (max-width: 992px){
-      .rail{position:fixed; left:-240px; z-index:1050; transition:left .2s}
-      .rail.show{left:0}
-      .backdrop{position:fixed; inset:0; background:rgba(0,0,0,.35); display:none; z-index:1040}
-      .backdrop.show{display:block}
-      .appbar-in,.content-in{padding-left:16px; padding-right:16px}
-    }
-  </style>
-  @stack('head')
+    <meta charset="utf-8">
+    <title>@yield('title', 'IMPULSE GO')</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    
+    @vite(['resources/css/app.css', 'resources/js/app.js'])
+    @stack('head')
 </head>
-<body>
-  <div class="shell">
-    <!-- Sidebar -->
-    <aside id="rail" class="rail">
-      <div class="brand">
-        <div class="mark"><i class="bi bi-building"></i></div>
-        <div class="logo">
-          {{-- Usa estos dos assets: negro para claro, blanco para oscuro --}}
-          <img class="logo-light" src="{{ asset('assets/img/logo.png') }}" alt="Logo">
-          <img class="logo-dark"  src="{{ asset('assets/img/logo-blanco.png') }}" alt="Logo">
+<body class="bg-slate-50 font-sans text-slate-900 antialiased selection:bg-brand/10 selection:text-brand-700">
+
+    {{-- 1. TOAST CONTAINER (Mismo del Login para que funcionen las notificaciones) --}}
+    <div id="toastContainer" class="fixed top-6 right-6 z-[60] flex flex-col gap-3 w-full max-w-sm pointer-events-none">
+        @if (session('ok'))
+        <div class="toast toast--ok animate-slide-in pointer-events-auto" data-autoclose="5000">
+            <div class="toast-icon-bg">
+                <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M5 13l4 4L19 7" /></svg>
+            </div>
+            <div class="flex-1 min-w-0">
+                <h3 class="text-sm font-semibold text-slate-900">Éxito</h3>
+                <p class="text-sm text-slate-600 mt-0.5">{{ session('ok') }}</p>
+            </div>
+            <button type="button" class="toast-close">
+                <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12" /></svg>
+            </button>
         </div>
-      </div>
+        @endif
 
-      <div class="who">
-        <div class="n">{{ auth()->user()->name ?? 'Usuario' }}</div>
-        <div class="r">{{ auth()->user()->role ?? '' }}</div>
-      </div>
-
-      <nav class="navy">
-        <div class="lab">GENERAL</div>
-        <a href="{{ route('panel') }}" class="{{ request()->routeIs('panel') ? 'active' : '' }}"><i class="bi bi-grid"></i><span>Resumen</span></a>
-        <a href="{{ route('clientes.index') }}" class="{{ request()->routeIs('clientes.index') ? 'active' : '' }}"><i class="bi bi-search"></i><span>Buscar Cliente</span></a>
-        <a href="{{ route('dashboard') }}" class="{{ request()->routeIs('dashboard') ? 'active' : '' }}"><i class="bi bi-graph-up"></i><span>Estadísticas</span></a>
-
-        @auth
-          @if(in_array(auth()->user()->role,['supervisor','administrador','sistemas']))
-            <div class="lab">SUPERVISOR</div>
-            <a class="{{ request()->is('reportes/pagos') ? 'active' : '' }}" href="{{ url('/reportes/pagos') }}"><i class="bi bi-cash-coin"></i><span>Reporte de Pagos</span></a>
-            <a class="{{ request()->is('reportes/gestiones') ? 'active' : '' }}" href="{{ url('/reportes/gestiones') }}"><i class="bi bi-chat-dots"></i><span>Reporte de Gestiones</span></a>
-            <a class="{{ request()->is('reportes/pdp') ? 'active' : '' }}" href="{{ url('/reportes/pdp') }}"><i class="bi bi-flag"></i><span>Reporte de Promesas</span></a>
-            <a class="{{ request()->is('autorizacion') ? 'active' : '' }}" href="{{ url('/autorizacion') }}"><i class="bi bi-check2-square"></i><span>Autorización</span></a>
-          @endif
-
-          @php($role = strtolower(trim(auth()->user()->role ?? '')))
-          @if(in_array($role, ['administrador','sistemas']))
-            <div class="lab">ADMIN / SOPORTE</div>
-
-            <a class="{{ request()->is('integracion/pagos') ? 'active' : '' }}"
-              href="{{ url('/integracion/pagos') }}">
-              <i class="bi bi-upload"></i><span>Integración ▸ Subir Pagos</span>
-            </a>
-
-            {{-- NUEVO: Integración ▸ Subir Gestiones (PROPIA) --}}
-            <a class="{{ request()->is('integracion/gestiones*') ? 'active' : '' }}"
-              href="{{ url('/integracion/gestiones') }}">
-              <i class="bi bi-clipboard2-data"></i><span>Integración ▸ Subir Gestiones</span>
-            </a>
-
-            <a class="{{ request()->is('integracion/data') ? 'active' : '' }}"
-              href="{{ url('/integracion/data') }}">
-              <i class="bi bi-cloud-upload"></i><span>Integración ▸ Subir Data</span>
-            </a>
-
-            <a class="{{ request()->is('administracion') ? 'active' : '' }}"
-              href="{{ url('/administracion') }}">
-              <i class="bi bi-gear"></i><span>Administración</span>
-            </a>
-          @endif
-
-          <div class="lab">CUENTA</div>
-          <form method="POST" action="{{ route('logout') }}" class="px-2">
-            @csrf
-            <button class="btn btn-outline-secondary w-100"><i class="bi bi-box-arrow-right me-1"></i> Salir</button>
-          </form>
-        @endauth
-      </nav>
-
-      <div class="rail-foot">
-        <button class="theme-btn js-theme">
-          <i class="bi bi-sun sun"></i><i class="bi bi-moon moon"></i> Cambiar tema
-        </button>
-      </div>
-    </aside>
-
-    <!-- Backdrop móvil -->
-    <div id="backdrop" class="backdrop" onclick="toggleRail()"></div>
-
-    <!-- Main -->
-    <main class="main">
-      <div class="appbar">
-        <div class="appbar-in">
-          <button class="btn btn-outline-secondary d-lg-none" onclick="toggleRail()"><i class="bi bi-list"></i></button>
-          <div class="crumb">@yield('crumb','')</div>
+        @if ($errors->any())
+        <div class="toast toast--error animate-slide-in pointer-events-auto">
+            <div class="toast-icon-bg">
+                <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" /></svg>
+            </div>
+            <div class="flex-1 min-w-0">
+                <h3 class="text-sm font-semibold text-slate-900">Atención</h3>
+                <p class="text-sm text-slate-600 mt-0.5">{{ $errors->first() }}</p>
+            </div>
+            <button type="button" class="toast-close">
+                <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12" /></svg>
+            </button>
         </div>
-      </div>
+        @endif
+    </div>
 
-      <div class="content">
-        <div class="content-in">
-          @yield('content')
-          <div class="footer small">© {{ date('Y') }} CONSORCIO DE ABOGADOS DEL PERU</div>
-        </div>
-      </div>
-    </main>
-  </div>
+    <div class="flex min-h-screen">
 
-  <script>
-    function toggleRail(){
-      document.getElementById('rail').classList.toggle('show');
-      document.getElementById('backdrop').classList.toggle('show');
-    }
+        {{-- 2. BACKDROP MÓVIL (Oscurece el fondo cuando abres menú en celular) --}}
+        <div id="sidebarBackdrop" class="fixed inset-0 z-40 hidden bg-slate-900/50 backdrop-blur-sm transition-opacity lg:hidden" onclick="toggleSidebar()"></div>
 
-    // Tema: guarda preferencia y realiza swap CSS-only (logos cambian solos)
-    const THEME_KEY='impulse.theme';
-    const prefersDark = window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches;
-    const initial = localStorage.getItem(THEME_KEY) || (prefersDark ? 'dark' : 'light');
-    document.documentElement.setAttribute('data-theme', initial);
+        {{-- 3. SIDEBAR (RAIL) --}}
+        <aside id="sidebar" class="fixed inset-y-0 left-0 z-50 flex w-64 -translate-x-full flex-col border-r border-slate-200 bg-white transition-transform duration-300 lg:static lg:translate-x-0">
+            
+            {{-- Header Sidebar: Logo --}}
+            <div class="flex h-16 shrink-0 items-center justify-center border-b border-slate-100 px-6">
+                <img src="{{ asset('img/logo.png') }}" alt="IMPULSE GO" class="h-8 w-auto object-contain">
+            </div>
 
-    document.querySelector('.js-theme')?.addEventListener('click',()=>{
-      const current = document.documentElement.getAttribute('data-theme');
-      const next = current === 'dark' ? 'light' : 'dark';
-      document.documentElement.setAttribute('data-theme', next);
-      localStorage.setItem(THEME_KEY, next);
-    });
-  </script>
-  <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
-  @stack('scripts')
+            {{-- === NUEVO: BUSCADOR GLOBAL EN SIDEBAR === --}}
+            <div class="px-4 pt-4 pb-2">
+                <form id="globalSearchForm" data-url="{{ route('clientes.show','__DNI__') }}" class="relative">
+                    <span class="absolute inset-y-0 left-0 flex items-center pl-3 text-slate-400">
+                        <svg class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+                            <path stroke-linecap="round" stroke-linejoin="round" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"/>
+                        </svg>
+                    </span>
+                    <input id="globalSearchInput" 
+                           type="text" 
+                           inputmode="numeric" 
+                           autocomplete="off"
+                           placeholder="Buscar DNI..." 
+                           class="w-full rounded-xl border border-slate-200 bg-slate-50 py-2 pl-9 pr-3 text-sm text-slate-700 outline-none transition-all placeholder:text-slate-400 focus:border-brand focus:bg-white focus:ring-1 focus:ring-brand">
+                </form>
+            </div>
+
+            {{-- Navegación (Scrollable) --}}
+            <nav class="flex-1 overflow-y-auto px-4 pb-4 space-y-1">
+                
+                {{-- Sección: GENERAL --}}
+                <div class="mt-2 px-2 text-xs font-bold uppercase tracking-wider text-slate-400">General</div>
+                <a href="{{ route('panel') }}" class="nav-item {{ request()->routeIs('panel') ? 'active' : '' }}">
+                    <svg class="nav-icon" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M4 6a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2V6zM14 6a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2V6zM4 16a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2v-2zM14 16a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2v-2z" /></svg>
+                    Resumen
+                </a>
+                <a href="{{ route('dashboard') }}" class="nav-item {{ request()->routeIs('dashboard') ? 'active' : '' }}">
+                    <svg class="nav-icon" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M7 12l3-3 3 3 4-4M8 21l4-4 4 4M3 4h18M4 4h16v12a1 1 0 01-1 1H5a1 1 0 01-1-1V4z" /></svg>
+                    Estadísticas
+                </a>
+
+                @auth
+                    {{-- Sección: SUPERVISOR --}}
+                    @if(in_array(auth()->user()->role,['supervisor','administrador','sistemas']))
+                        <div class="mt-6 px-2 text-xs font-bold uppercase tracking-wider text-slate-400">Gestión</div>
+                        
+                        <a href="{{ url('/reportes/pagos') }}" class="nav-item {{ request()->is('reportes/pagos') ? 'active' : '' }}">
+                            <svg class="nav-icon" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
+                            Reporte de Pagos
+                        </a>
+                        <a href="{{ url('/reportes/gestiones') }}" class="nav-item {{ request()->is('reportes/gestiones') ? 'active' : '' }}">
+                            <svg class="nav-icon" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M8 10h.01M12 10h.01M16 10h.01M9 16H5a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v8a2 2 0 01-2 2h-5l-5 5v-5z" /></svg>
+                            Reporte de Gestiones
+                        </a>
+                        <a href="{{ url('/reportes/pdp') }}" class="nav-item {{ request()->is('reportes/pdp') ? 'active' : '' }}">
+                            <svg class="nav-icon" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" /></svg>
+                            Reporte de Promesas
+                        </a>
+                        <a href="{{ url('/autorizacion') }}" class="nav-item {{ request()->is('autorizacion') ? 'active' : '' }}">
+                            <svg class="nav-icon" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
+                            Autorización
+                        </a>
+                    @endif
+
+                    {{-- Sección: ADMIN --}}
+                    @php($role = strtolower(trim(auth()->user()->role ?? '')))
+                    @if(in_array($role, ['administrador','sistemas']))
+                        <div class="mt-6 px-2 text-xs font-bold uppercase tracking-wider text-slate-400">Admin / Soporte</div>
+
+                        <a href="{{ url('/integracion/pagos') }}" class="nav-item {{ request()->is('integracion/pagos') ? 'active' : '' }}">
+                            <svg class="nav-icon" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12" /></svg>
+                            Cargar Pagos
+                        </a>
+                        <a href="{{ url('/integracion/gestiones') }}" class="nav-item {{ request()->is('integracion/gestiones*') ? 'active' : '' }}">
+                            <svg class="nav-icon" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-3 7h3m-3 4h3m-6-4h.01M9 16h.01" /></svg>
+                            Cargar Gestiones
+                        </a>
+                        <a href="{{ url('/integracion/data') }}" class="nav-item {{ request()->is('integracion/data') ? 'active' : '' }}">
+                            <svg class="nav-icon" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M4 7v10c0 2.21 3.582 4 8 4s8-1.79 8-4V7M4 7c0 2.21 3.582 4 8 4s8-1.79 8-4M4 7c0-2.21 3.582-4 8-4s8 1.79 8 4m0 5c0 2.21-3.582 4-8 4s-8-1.79-8-4" /></svg>
+                            Cargar Data
+                        </a>
+                        <a href="{{ url('/administracion') }}" class="nav-item {{ request()->is('administracion') ? 'active' : '' }}">
+                            <svg class="nav-icon" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" /><path stroke-linecap="round" stroke-linejoin="round" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" /></svg>
+                            Administración
+                        </a>
+                    @endif
+                @endauth
+            </nav>
+
+            {{-- Footer Sidebar: Salir --}}
+            <div class="border-t border-slate-100 p-4">
+                <form method="POST" action="{{ route('logout') }}">
+                    @csrf
+                    <button class="flex w-full items-center justify-center gap-2 rounded-xl border border-slate-200 bg-slate-50 px-4 py-2.5 text-sm font-medium text-slate-600 transition-colors hover:bg-slate-100 hover:text-slate-900 focus:outline-none focus:ring-2 focus:ring-slate-200">
+                        <svg class="h-4 w-4" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" /></svg>
+                        <span>Cerrar sesión</span>
+                    </button>
+                </form>
+            </div>
+        </aside>
+
+        {{-- 4. CONTENIDO PRINCIPAL --}}
+        <main class="flex flex-1 flex-col min-w-0 transition-all duration-300">
+            
+            {{-- Header Superior --}}
+            <header class="sticky top-0 z-30 flex h-16 items-center justify-between border-b border-slate-200 bg-white/80 px-4 backdrop-blur-xl sm:px-6 lg:px-8">
+                <div class="flex items-center gap-4">
+                    {{-- Botón Hamburger (Móvil) --}}
+                    <button type="button" class="lg:hidden text-slate-500 hover:text-slate-700" onclick="toggleSidebar()">
+                        <svg class="h-6 w-6" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M4 6h16M4 12h16M4 18h16" /></svg>
+                    </button>
+                    
+                    {{-- Breadcrumb / Título --}}
+                    <h1 class="text-lg font-bold text-slate-800">
+                        @yield('crumb', 'Dashboard')
+                    </h1>
+                </div>
+
+                {{-- Espacio derecho (opcional para avatar mini o notificaciones) --}}
+                <div class="flex items-center gap-3"></div>
+            </header>
+
+            {{-- Contenido inyectado --}}
+            <div class="flex-1 p-4 sm:p-6 lg:p-8">
+                {{-- Contenedor ancho máximo para que no se estire demasiado en monitores gigantes --}}
+                <div class="mx-auto max-w-7xl">
+                    @yield('content')
+                </div>
+            </div>
+
+            {{-- Footer --}}
+            <footer class="py-6 text-center text-xs font-medium text-slate-400">
+                © {{ date('Y') }} Impulse Go. Todos los derechos reservados.
+            </footer>
+        </main>
+    </div>
+    
+    {{-- Script inline mínimo para el toggle del sidebar en móvil --}}
+    <script>
+        function toggleSidebar() {
+            const sidebar = document.getElementById('sidebar');
+            const backdrop = document.getElementById('sidebarBackdrop');
+            const isClosed = sidebar.classList.contains('-translate-x-full');
+            
+            if (isClosed) {
+                sidebar.classList.remove('-translate-x-full');
+                backdrop.classList.remove('hidden');
+            } else {
+                sidebar.classList.add('-translate-x-full');
+                backdrop.classList.add('hidden');
+            }
+        }
+    </script>
 </body>
 </html>

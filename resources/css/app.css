@@ -1,0 +1,37 @@
+@import "tailwindcss";
+
+@theme {
+  --color-brand: #6F2661;
+  /* Animación para Toasts en el dashboard */
+  --animate-slide-in: slideIn 0.4s cubic-bezier(0.2, 0.8, 0.2, 1) forwards;
+  @keyframes slideIn {
+    0% { opacity: 0; transform: translateX(20px) scale(0.95); }
+    100% { opacity: 1; transform: translateX(0) scale(1); }
+  }
+}
+
+@layer components {
+  /* Específico del Dashboard */
+  .nav-item {
+      @apply flex items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-medium text-slate-500 transition-all duration-200 hover:bg-slate-50 hover:text-slate-900;
+  }
+  .nav-item.active {
+      @apply bg-brand/5 text-brand font-semibold;
+  }
+  .nav-icon {
+      @apply h-5 w-5 transition-colors duration-200 text-slate-400;
+  }
+  .nav-item:hover .nav-icon { @apply text-slate-600; }
+  .nav-item.active .nav-icon { @apply text-brand; }
+
+  /* Toasts (Repetimos clases o usamos un archivo shared.css si prefieres no duplicar, pero así queda aislado) */
+  .toast {
+    @apply flex items-center gap-4 rounded-2xl p-4 shadow-lg bg-white border border-slate-100 backdrop-blur-md transition-all duration-300;
+  }
+  .toast-icon-bg { @apply flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-slate-50 border border-slate-100; }
+  .toast-close { @apply rounded-lg p-1.5 text-slate-400 hover:bg-slate-100 hover:text-slate-600; }
+  .toast--error { @apply border-l-4 border-l-red-500; }
+  .toast--error .toast-icon-bg { @apply bg-red-50 text-red-600; }
+  .toast--ok { @apply border-l-4 border-l-emerald-500; }
+  .toast--ok .toast-icon-bg { @apply bg-emerald-50 text-emerald-600; }
+}

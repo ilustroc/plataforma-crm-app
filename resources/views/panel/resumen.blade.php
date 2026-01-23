@@ -1,492 +1,183 @@
-{{-- resources/views/panel/resumen.blade.php --}}
 @extends('layouts.app')
-@section('title','Panel')
+@section('title','Panel General')
 @section('crumb','Resumen')
 
 @push('head')
-<style>
-  .card.pad{ background:#fff }
-  .shadow-soft{ box-shadow:0 6px 20px rgba(15,23,42,.06) }
-
-  .kpi{ display:flex; align-items:center; gap:.75rem; border:1px solid var(--bs-border-color);
-        border-radius:14px; padding:.9rem 1rem; background:#fff }
-  .kpi .ico{ width:44px;height:44px;border-radius:50%; display:flex;align-items:center;justify-content:center;
-             background: color-mix(in oklab, var(--bs-danger) 12%, #fff); color: var(--bs-danger) }
-  .kpi .lbl{ font-size:.86rem; color:var(--bs-secondary-color) }
-  .kpi .val{ font-weight:800; font-size:1.15rem; line-height:1 }
-
-  .quick a{ border-radius:12px }
-
-  .chart-card .toolbar{ display:flex; align-items:center; gap:.5rem }
-  .chart-wrap{ position:relative; width:100%; height:280px }
-
-  .notifs{ border:1px solid var(--bs-border-color); border-radius:16px; overflow:hidden; background:#fff }
-  .notifs-header{ background: var(--bs-danger); color:#fff; font-weight:700; padding:.7rem .95rem;
-                  display:flex; align-items:center; gap:.55rem }
-  .notifs-body{ padding:.6rem .6rem .2rem; max-height:70vh; overflow:auto; background:#fff }
-  .notif-group{ padding:.25rem .25rem .6rem }
-  .notif-title{ display:flex; align-items:center; gap:.5rem; padding:.25rem .15rem; font-weight:600 }
-  .notif-title .icon{ width:28px;height:28px;border-radius:8px;display:flex;align-items:center;justify-content:center;
-                      background: color-mix(in oklab, var(--bs-danger) 12%, #fff); color: var(--bs-danger) }
-  .notif-count{ margin-left:auto; font-weight:700; font-size:.8rem; background:#fff; color:var(--bs-danger);
-                border:1px solid color-mix(in oklab, var(--bs-danger) 35%, #fff); border-radius:999px; padding:.15rem .55rem }
-  .notif-list{ list-style:none; padding-left:0; margin:0 }
-  .notif-item{ display:flex; align-items:center; gap:.7rem; padding:.6rem; border-radius:12px; text-decoration:none; color:inherit;
-               border:1px solid transparent; background:#fff; transition:.15s }
-  .notif-item:hover{ background:var(--bs-tertiary-bg); border-color:var(--bs-border-color) }
-  .notif-dot{ width:9px;height:9px;border-radius:50%; background:var(--bs-danger) }
-  .notif-body .notif-main{ white-space:nowrap; overflow:hidden; text-overflow:ellipsis }
-  .notif-body .notif-sub{ font-size:.85rem; color:var(--bs-secondary-color); white-space:nowrap; overflow:hidden; text-overflow:ellipsis }
-  .notif-cta{ font-size:.75rem; border:1px solid var(--bs-border-color); background:#fff; border-radius:999px; padding:.18rem .55rem; white-space:nowrap }
-  .notifs-footer{ border-top:1px dashed var(--bs-border-color); padding:.5rem .6rem .6rem; background:#fff }
-</style>
+    @vite(['resources/css/resumen.css', 'resources/js/resumen.js'])
 @endpush
 
 @section('content')
 @php
-  // Fallback por si aún no cambiaste el controller
-  $role  = $role  ?? strtolower(auth()->user()->role ?? '');
-  $isAsesor = $isAsesor ?? ($role==='asesor');
-  $isSupervisor = $isSupervisor ?? ($role==='supervisor');
-  $isAdmin = $isAdmin ?? in_array($role,['administrador','sistemas']);
-
-  // Colecciones para asesor (evita errores si no existen)
-  $misSup = $misSup ?? collect();
-  $misPre = $misPre ?? collect();
-  $misRes = $misRes ?? collect();
-  $cnaSup = $cnaSup ?? collect();
-  $cnaPre = $cnaPre ?? collect();
-  $cnaRes = $cnaRes ?? collect();
+  $role = $role ?? strtolower(auth()->user()->role ?? '');
+  $isAsesor = $isAsesor ?? ($role === 'asesor');
+  
+  $kpiPromHoy = $kpiPromHoy ?? 0;
+  $kpiPagosHoy = $kpiPagosHoy ?? 0;
 @endphp
 
-<div class="container-fluid">
-  <div class="row g-3">
-    {{-- ===== Izquierda ===== --}}
-    <div class="col-lg-8">
+<div class="grid grid-cols-1 lg:grid-cols-12 gap-8 items-start pb-10">
+    
+    {{-- ==================== COLUMNA IZQUIERDA (Principal) ==================== --}}
+    <div class="lg:col-span-8 space-y-8">
 
-      {{-- Bienvenida + buscador --}}
-      <div class="card pad shadow-soft">
-        <div class="d-flex align-items-center justify-content-between flex-wrap gap-2">
-          <div>
-            <h5 class="mb-1">¡Bienvenido(a)!</h5>
-            <div class="text-secondary small">Panel inicial.</div>
-          </div>
-          <form id="frmQuickDni" class="d-flex" role="search">
-            <input id="inpQuickDni" class="form-control form-control-sm me-2" inputmode="numeric" autocomplete="off"
-                   placeholder="Buscar cliente por DNI" aria-label="DNI">
-            <button class="btn btn-danger btn-sm" type="submit">
-              <i class="bi bi-search me-1"></i> Buscar
-            </button>
-          </form>
-        </div>
-      </div>
-
-      {{-- KPIs --}}
-      <div class="row g-3">
-        <div class="col-sm-6">
-          <div class="kpi shadow-soft">
-            <div class="ico"><i class="bi bi-clipboard2-check"></i></div>
-            <div>
-              <div class="lbl">Promesas creadas hoy</div>
-              <div class="val">{{ number_format($kpiPromHoy) }}</div>
+        {{-- 1. KPIs --}}
+        <div class="grid grid-cols-1 sm:grid-cols-2 gap-5">
+        {{-- KPI 1 --}}
+        <div class="kpi-box group">
+            <div class="kpi-icon-wrap bg-purple-50 text-purple-600">
+            <svg class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"/>
+            </svg>
             </div>
-          </div>
-        </div>
-        <div class="col-sm-6">
-          <div class="kpi shadow-soft">
-            <div class="ico"><i class="bi bi-cash-coin"></i></div>
-            <div>
-              <div class="lbl">Pagos registrados hoy</div>
-              <div class="val">S/ {{ number_format($kpiPagosHoy,2) }}</div>
+
+            <div class="min-w-0">
+            <div class="kpi-title">Promesas para hoy</div>
+            <div class="kpi-value">{{ number_format($kpiPromHoy) }}</div>
             </div>
-          </div>
-        </div>
-      </div>
-
-      {{-- Accesos rápidos (ocultos para asesor) --}}
-      @unless($isAsesor)
-      <div class="card pad shadow-soft quick">
-        <div class="d-flex flex-wrap gap-2">
-          <a href="{{ route('autorizacion') }}" class="btn btn-outline-danger"><i class="bi bi-inboxes me-1"></i> Autorización</a>
-          <a href="{{ route('clientes.index') }}" class="btn btn-outline-secondary"><i class="bi bi-people me-1"></i> Clientes</a>
-          <a href="{{ route('dashboard') }}" class="btn btn-outline-secondary"><i class="bi bi-graph-up me-1"></i> Dashboard</a>
-          <a href="{{ route('reportes.pdp') }}" class="btn btn-outline-secondary"><i class="bi bi-file-earmark-spreadsheet me-1"></i> Reportes</a>
-        </div>
-      </div>
-      @endunless
-
-      {{-- Gráfica: Pagos del mes --}}
-      <div class="card pad shadow-soft chart-card">
-        <div class="d-flex justify-content-between align-items-center mb-2">
-          <h6 class="mb-0 d-flex align-items-center gap-2">
-            <i class="bi bi-bar-chart-steps text-danger"></i> Pagos del mes
-          </h6>
-          <div class="toolbar">
-            @php $curr = \Carbon\Carbon::createFromFormat('Y-m',$mes); @endphp
-            <a class="btn btn-outline-secondary btn-sm"
-               href="{{ url()->current().'?mes='.$curr->copy()->subMonth()->format('Y-m') }}"><i class="bi bi-chevron-left"></i></a>
-            <input type="month" id="mesPicker" class="form-control form-control-sm" value="{{ $curr->format('Y-m') }}">
-            <a class="btn btn-outline-secondary btn-sm"
-               href="{{ url()->current().'?mes='.$curr->copy()->addMonth()->format('Y-m') }}"><i class="bi bi-chevron-right"></i></a>
-          </div>
-        </div>
-        <div class="chart-wrap">
-          <canvas id="chartPagos" data-chart='@json(["labels"=>$chartLabels,"data"=>$chartData])'></canvas>
-        </div>
-      </div>
-    </div>
-
-    {{-- ===== Derecha: Actividades ===== --}}
-    <div class="col-lg-4">
-      <div class="notifs shadow-soft sticky-right">
-        <div class="notifs-header">
-          <i class="bi bi-list-task"></i>
-          {{ $isAsesor ? 'Tus actividades' : 'Actividades' }}
         </div>
 
-        <div class="notifs-body">
+        {{-- KPI 2 --}}
+        <div class="kpi-box group">
+            <div class="kpi-icon-wrap bg-emerald-50 text-emerald-600">
+            <svg class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/>
+            </svg>
+            </div>
 
-          {{-- ========== VISTA ASESOR ========== --}}
-          @if($isAsesor)
-            {{-- Promesas del asesor --}}
-            <section class="notif-group">
-              <div class="notif-title">
-                <div class="icon"><i class="bi bi-clipboard-check"></i></div>
-                <span>Promesas — En Supervisor</span>
-                <span class="notif-count">{{ $misSup->count() }}</span>
-              </div>
-              <ul class="notif-list">
-                @forelse($misSup as $p)
-                  <li>
-                    <a href="{{ route('clientes.show',$p->dni) }}" class="notif-item">
-                      <div class="notif-dot"></div>
-                      <div class="notif-body">
-                        <div class="notif-main">
-                          <span class="fw-semibold">{{ $p->dni }}</span>
-                          <span class="text-secondary"> • {{ $p->tipo === 'cancelacion' ? 'Cancelación' : 'Convenio' }}</span>
-                        </div>
-                        <div class="notif-sub">
-                          {{ $p->operacion ?: '—' }} — Pendiente de Supervisor
-                        </div>
-                      </div>
-                      <span class="notif-cta">Ver cliente</span>
+            <div class="min-w-0">
+            <div class="kpi-title">Recaudo del día</div>
+            <div class="kpi-value">S/ {{ number_format($kpiPagosHoy, 2) }}</div>
+            </div>
+        </div>
+        </div>
+
+        {{-- 2. GRÁFICA --}}
+        <div class="dashboard-card">
+            <div class="flex items-center justify-between mb-6">
+                <div>
+                    <h3 class="text-lg font-bold text-slate-800">Evolución de Recaudo</h3>
+                    <p class="text-xs text-slate-400">Comparativa mensual de ingresos</p>
+                </div>
+                
+                <div class="flex items-center bg-slate-50 rounded-lg p-1 border border-slate-100">
+                    @php $curr = \Carbon\Carbon::createFromFormat('Y-m', $mes ?? date('Y-m')); @endphp
+                    
+                    <a href="{{ url()->current().'?mes='.$curr->copy()->subMonth()->format('Y-m') }}" 
+                       class="w-8 h-8 flex items-center justify-center rounded-md text-slate-400 hover:bg-white hover:text-brand hover:shadow-sm transition-all">
+                        <svg class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7"/></svg>
                     </a>
-                  </li>
-                @empty
-                  <div class="text-secondary small px-2 pb-2">Sin pendientes con Supervisor.</div>
-                @endforelse
-              </ul>
-            </section>
 
-            <section class="notif-group">
-              <div class="notif-title">
-                <div class="icon"><i class="bi bi-hourglass-split"></i></div>
-                <span>Promesas — Pre-aprobadas</span>
-                <span class="notif-count">{{ $misPre->count() }}</span>
-              </div>
-              <ul class="notif-list">
-                @forelse($misPre as $p)
-                  <li>
-                    <a href="{{ route('clientes.show',$p->dni) }}" class="notif-item">
-                      <div class="notif-dot" style="background:var(--bs-info)"></div>
-                      <div class="notif-body">
-                        <div class="notif-main">
-                          <span class="fw-semibold">{{ $p->dni }}</span>
-                          <span class="text-secondary"> • {{ $p->tipo === 'cancelacion' ? 'Cancelación' : 'Convenio' }}</span>
-                        </div>
-                        <div class="notif-sub">
-                          {{ $p->operacion ?: '—' }} — Pre-aprobada (esperando Administración)
-                        </div>
-                      </div>
-                      <span class="notif-cta">Ver cliente</span>
-                    </a>
-                  </li>
-                @empty
-                  <div class="text-secondary small px-2 pb-2">No hay pre-aprobadas.</div>
-                @endforelse
-              </ul>
-            </section>
-
-            <section class="notif-group">
-              <div class="notif-title">
-                <div class="icon"><i class="bi bi-check2-circle"></i></div>
-                <span>Promesas — Resueltas</span>
-                <span class="notif-count">{{ $misRes->count() }}</span>
-              </div>
-              <ul class="notif-list">
-                @forelse($misRes as $p)
-                  @php
-                    $estado = strtoupper($p->workflow_estado);
-                    $badgeC = 'var(--bs-success)';
-                    if ($estado==='RECHAZADA' || $estado==='RECHAZADA_SUP') $badgeC = 'var(--bs-danger)';
-                  @endphp
-                  <li>
-                    <a href="{{ route('clientes.show',$p->dni) }}" class="notif-item">
-                      <div class="notif-dot" style="background:{{ $badgeC }}"></div>
-                      <div class="notif-body">
-                        <div class="notif-main">
-                          <span class="fw-semibold">{{ $p->dni }}</span>
-                          <span class="text-secondary"> • {{ ucfirst($p->workflow_estado) }}</span>
-                        </div>
-                        <div class="notif-sub">{{ $p->operacion ?: '—' }}</div>
-                      </div>
-                      <span class="notif-cta">Ver cliente</span>
-                    </a>
-                  </li>
-                @empty
-                  <div class="text-secondary small px-2 pb-2">Aún no hay resoluciones.</div>
-                @endforelse
-              </ul>
-            </section>
-
-            {{-- CNA del asesor --}}
-            <section class="notif-group">
-              <div class="notif-title">
-                <div class="icon"><i class="bi bi-file-earmark-text"></i></div>
-                <span>CNA — En Supervisor</span>
-                <span class="notif-count">{{ $cnaSup->count() }}</span>
-              </div>
-              <ul class="notif-list">
-                @forelse($cnaSup as $c)
-                  <li>
-                    <a href="{{ route('clientes.show',$c->dni) }}" class="notif-item">
-                      <div class="notif-dot"></div>
-                      <div class="notif-body">
-                        <div class="notif-main"><span class="fw-semibold">DNI {{ $c->dni }}</span></div>
-                        <div class="notif-sub">Pendiente de Supervisor</div>
-                      </div>
-                      <span class="notif-cta">Ver cliente</span>
-                    </a>
-                  </li>
-                @empty
-                  <div class="text-secondary small px-2 pb-2">Sin CNA en supervisor.</div>
-                @endforelse
-              </ul>
-            </section>
-
-            <section class="notif-group">
-              <div class="notif-title">
-                <div class="icon"><i class="bi bi-hourglass-split"></i></div>
-                <span>CNA — Pre-aprobadas</span>
-                <span class="notif-count">{{ $cnaPre->count() }}</span>
-              </div>
-              <ul class="notif-list">
-                @forelse($cnaPre as $c)
-                  <li>
-                    <a href="{{ route('clientes.show',$c->dni) }}" class="notif-item">
-                      <div class="notif-dot" style="background:var(--bs-info)"></div>
-                      <div class="notif-body">
-                        <div class="notif-main"><span class="fw-semibold">DNI {{ $c->dni }}</span></div>
-                        <div class="notif-sub">Pre-aprobada (esperando Administración)</div>
-                      </div>
-                      <span class="notif-cta">Ver cliente</span>
-                    </a>
-                  </li>
-                @empty
-                  <div class="text-secondary small px-2 pb-2">Sin CNA pre-aprobadas.</div>
-                @endforelse
-              </ul>
-            </section>
-
-            <section class="notif-group">
-              <div class="notif-title">
-                <div class="icon"><i class="bi bi-check2-circle"></i></div>
-                <span>CNA — Resueltas</span>
-                <span class="notif-count">{{ $cnaRes->count() }}</span>
-              </div>
-              <ul class="notif-list">
-                @forelse($cnaRes as $c)
-                  @php
-                    $estado = strtoupper($c->workflow_estado);
-                    $badgeC = 'var(--bs-success)';
-                    if ($estado==='RECHAZADA' || $estado==='RECHAZADA_SUP') $badgeC = 'var(--bs-danger)';
-                  @endphp
-                  <li>
-                    <a href="{{ route('clientes.show',$c->dni) }}" class="notif-item">
-                      <div class="notif-dot" style="background:{{ $badgeC }}"></div>
-                      <div class="notif-body">
-                        <div class="notif-main">
-                          <span class="fw-semibold">DNI {{ $c->dni }}</span>
-                          <span class="text-secondary"> • {{ ucfirst($c->workflow_estado) }}</span>
-                        </div>
-                        <div class="notif-sub">—</div>
-                      </div>
-                      <span class="notif-cta">Ver cliente</span>
-                    </a>
-                  </li>
-                @empty
-                  <div class="text-secondary small px-2 pb-2">Sin CNA resueltas.</div>
-                @endforelse
-              </ul>
-            </section>
-
-          @else
-          {{-- ========== VISTA SUPERVISOR / ADMIN ========== --}}
-
-            {{-- Promesas por aprobar --}}
-            <section class="notif-group">
-              <div class="notif-title">
-                <div class="icon"><i class="bi bi-clipboard-check"></i></div>
-                <span>Promesas por aprobar</span>
-                <span class="notif-count">{{ $ppPendCount }}</span>
-              </div>
-              <ul class="notif-list">
-                @forelse($ppPend as $p)
-                  <li>
-                    <a href="{{ route('autorizacion') }}" class="notif-item">
-                      <div class="notif-dot"></div>
-                      <div class="notif-body">
-                        <div class="notif-main">
-                          <span class="fw-semibold">{{ $p->dni }}</span>
-                          <span class="text-secondary"> • {{ $p->tipo === 'cancelacion' ? 'Cancelación' : 'Convenio' }}</span>
-                        </div>
-                        <div class="notif-sub">
-                          {{ $p->operacion ?: '—' }} — {{ \Carbon\Carbon::parse($p->fecha_promesa)->format('Y-m-d') }}
-                          • <b>S/ {{ number_format($p->monto_mostrar,2) }}</b>
-                        </div>
-                      </div>
-                      <span class="notif-cta">Revisar</span>
-                    </a>
-                  </li>
-                @empty
-                  <div class="text-secondary small px-2 pb-2">Nada pendiente aquí.</div>
-                @endforelse
-              </ul>
-            </section>
-
-            {{-- CNA por aprobar --}}
-            <section class="notif-group">
-              <div class="notif-title">
-                <div class="icon"><i class="bi bi-file-earmark-text"></i></div>
-                <span>Solicitudes de CNA</span>
-                <span class="notif-count">{{ $cnaPendCount }}</span>
-              </div>
-              <ul class="notif-list">
-                @forelse($cnaPend as $c)
-                  @php $ops = collect((array)$c->operaciones)->filter()->implode(', '); @endphp
-                  <li>
-                    <a href="{{ route('autorizacion') }}#cna" class="notif-item">
-                      <div class="notif-dot" style="background:var(--bs-info)"></div>
-                      <div class="notif-body">
-                        <div class="notif-main">
-                          <span class="fw-semibold">CNA #{{ $c->nro_carta }}</span>
-                          <span class="text-secondary"> • DNI {{ $c->dni }}</span>
-                        </div>
-                        <div class="notif-sub">{{ $ops ?: '—' }} — {{ optional($c->created_at)->format('Y-m-d') }}</div>
-                      </div>
-                      <span class="notif-cta">Revisar</span>
-                    </a>
-                  </li>
-                @empty
-                  <div class="text-secondary small px-2 pb-2">Sin nuevas CNA.</div>
-                @endforelse
-              </ul>
-            </section>
-
-            {{-- Próximos vencimientos --}}
-            <section class="notif-group">
-              <div class="notif-title">
-                <div class="icon"><i class="bi bi-calendar-event"></i></div>
-                <span>Cuotas en los próximos 7 días</span>
-                <span class="notif-count">{{ $vencCount }}</span>
-              </div>
-              <ul class="notif-list">
-                @forelse($venc as $v)
-                  <li>
-                    <div class="notif-item">
-                      <div class="notif-dot" style="background:var(--bs-warning)"></div>
-                      <div class="notif-body">
-                        <div class="notif-main">
-                          <span class="fw-semibold">{{ \Carbon\Carbon::parse($v->fecha)->format('d/m') }}</span>
-                          <span class="text-secondary"> • DNI {{ $v->dni }}</span>
-                        </div>
-                        <div class="notif-sub">
-                          {{ $v->operacion ?: '—' }} — {{ $v->tipo === 'cancelacion' ? 'Cancelación' : 'Convenio' }} #{{ $v->nro }}
-                        </div>
-                      </div>
-                      <span class="notif-cta">S/ {{ number_format((float)$v->monto,2) }}</span>
+                    <div class="relative px-2">
+                        <input type="month" id="mesPicker" value="{{ $curr->format('Y-m') }}" 
+                               class="bg-transparent border-none text-sm font-bold text-slate-700 focus:ring-0 cursor-pointer text-center w-32">
                     </div>
-                  </li>
-                @empty
-                  <div class="text-secondary small px-2 pb-2">No hay vencimientos próximos.</div>
-                @endforelse
-              </ul>
-            </section>
-          @endif
-        </div>
 
-        @unless($isAsesor)
-          <div class="notifs-footer text-end">
-            <a class="small" href="{{ route('autorizacion') }}">Ver bandeja completa →</a>
-          </div>
-        @endunless
-      </div>
+                    <a href="{{ url()->current().'?mes='.$curr->copy()->addMonth()->format('Y-m') }}"
+                       class="w-8 h-8 flex items-center justify-center rounded-md text-slate-400 hover:bg-white hover:text-brand hover:shadow-sm transition-all">
+                        <svg class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/></svg>
+                    </a>
+                </div>
+            </div>
+
+            <div class="relative h-80 w-full">
+                <canvas id="chartPagos" data-chart='@json(["labels" => $chartLabels ?? [], "data" => $chartData ?? []])'></canvas>
+            </div>
+        </div>
     </div>
-  </div>
+
+
+    {{-- ==================== COLUMNA DERECHA (Timeline) ==================== --}}
+    <div class="lg:col-span-4 h-full min-h-[500px]">
+        <div class="sticky top-24 h-[calc(100vh-8rem)]">
+            <div class="timeline-container">
+                
+                <div class="timeline-header">
+                    <div class="flex items-center gap-2">
+                        <span class="flex h-8 w-8 items-center justify-center rounded-full bg-brand/10 text-brand">
+                            <i class="bi bi-bell-fill text-sm"></i>
+                        </span>
+                        <span class="font-bold text-slate-800">Actividades</span>
+                    </div>
+                    @if($isAsesor)
+                        <span class="text-xs font-semibold bg-brand text-white px-2 py-1 rounded-md">Tus tareas</span>
+                    @else
+                        <span class="text-xs font-semibold bg-slate-100 text-slate-500 px-2 py-1 rounded-md">General</span>
+                    @endif
+                </div>
+
+                <div class="flex-1 overflow-y-auto custom-scroll p-2">
+
+                    {{-- ASESOR --}}
+                    @if($isAsesor)
+                        <div class="px-4 py-2 text-xs font-bold uppercase tracking-wider text-slate-400 mt-2">Pendientes</div>
+                        @forelse($misSup as $p)
+                            <a href="{{ route('clientes.show', $p->dni) }}" class="timeline-item group">
+                                <div class="timeline-line"></div>
+                                <div class="relative z-10 mt-1 flex h-2.5 w-2.5 shrink-0 items-center justify-center rounded-full bg-amber-400 ring-4 ring-white"></div>
+                                <div class="flex-1">
+                                    <div class="flex justify-between items-start">
+                                        <p class="text-sm font-bold text-slate-800 group-hover:text-brand transition-colors">{{ $p->dni }}</p>
+                                        <span class="text-[10px] text-slate-400 bg-slate-100 px-1.5 py-0.5 rounded">Sup</span>
+                                    </div>
+                                    <p class="text-xs text-slate-500 mt-0.5">{{ $p->operacion ?: 'Gestión' }} • {{ $p->tipo }}</p>
+                                </div>
+                            </a>
+                        @empty
+                             <div class="p-6 text-center text-sm text-slate-400 italic">No tienes promesas pendientes.</div>
+                        @endforelse
+
+                    {{-- ADMIN/SUPERVISOR --}}
+                    @else
+                        <div class="px-4 py-2 text-xs font-bold uppercase tracking-wider text-slate-400 mt-2">Por Aprobar</div>
+                        @forelse($ppPend as $p)
+                            <a href="{{ route('autorizacion') }}" class="timeline-item group">
+                                <div class="timeline-line"></div>
+                                <div class="relative z-10 mt-1 flex h-2.5 w-2.5 shrink-0 items-center justify-center rounded-full bg-brand ring-4 ring-white animate-pulse"></div>
+                                <div class="flex-1">
+                                    <div class="flex justify-between items-start">
+                                        <p class="text-sm font-bold text-slate-800 group-hover:text-brand transition-colors">{{ $p->dni }}</p>
+                                        <span class="text-xs font-bold text-slate-700">S/ {{ number_format($p->monto_mostrar, 0) }}</span>
+                                    </div>
+                                    <p class="text-xs text-slate-500 mt-0.5">{{ $p->tipo === 'cancelacion' ? 'Cancelación' : 'Convenio' }}</p>
+                                </div>
+                            </a>
+                        @empty
+                            <div class="px-6 py-4 text-center text-sm text-slate-400 italic bg-slate-50/50 rounded-lg mx-4">
+                                🎉 Todo limpio por aquí
+                            </div>
+                        @endforelse
+
+                        <div class="px-4 py-2 text-xs font-bold uppercase tracking-wider text-slate-400 mt-4">Vencimientos (7 días)</div>
+                        @forelse($venc as $v)
+                            <div class="timeline-item">
+                                <div class="timeline-line"></div>
+                                <div class="relative z-10 mt-1 flex h-2.5 w-2.5 shrink-0 items-center justify-center rounded-full bg-amber-500 ring-4 ring-white"></div>
+                                <div class="flex-1">
+                                    <div class="flex justify-between items-start">
+                                        <p class="text-sm font-semibold text-slate-700">{{ $v->dni }}</p>
+                                        <span class="text-xs font-medium text-slate-500">{{ \Carbon\Carbon::parse($v->fecha)->format('d/m') }}</span>
+                                    </div>
+                                    <p class="text-xs text-slate-500 mt-0.5">S/ {{ number_format((float)$v->monto, 2) }}</p>
+                                </div>
+                            </div>
+                        @empty
+                            <div class="px-6 py-2 text-sm text-slate-400 italic">Sin vencimientos cercanos.</div>
+                        @endforelse
+                    @endif
+                </div>
+                
+                @unless($isAsesor)
+                <div class="p-3 border-t border-slate-50 bg-slate-50/50 text-center">
+                    <a href="{{ route('autorizacion') }}" class="text-xs font-bold text-brand hover:text-brand-700 transition-colors uppercase tracking-wide">
+                        Ver Bandeja Completa
+                    </a>
+                </div>
+                @endunless
+            </div>
+        </div>
+    </div>
+
 </div>
 @endsection
-
-@push('scripts')
-<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1"></script>
-<script>
-  // Buscar por DNI -> /clientes/{dni}
-  (() => {
-    const frm   = document.getElementById('frmQuickDni');
-    const input = document.getElementById('inpQuickDni');
-    if (!frm || !input) return;
-    const SHOW_URL = @json(route('clientes.show','__DNI__'));
-    frm.addEventListener('submit', (e) => {
-      e.preventDefault();
-      const dni = (input.value || '').replace(/\D/g,'').slice(0,12);
-      if (!dni) { input.focus(); return; }
-      window.location.assign(SHOW_URL.replace('__DNI__', encodeURIComponent(dni)));
-    });
-  })();
-
-  // Selector de mes
-  document.getElementById('mesPicker')?.addEventListener('change', (e)=>{
-    const ym = e.target.value || '';
-    const url = new URL(window.location.href);
-    url.searchParams.set('mes', ym);
-    window.location.assign(url.toString());
-  });
-
-  // Gráfica de pagos del mes
-  (()=>{
-    const el = document.getElementById('chartPagos');
-    if(!el) return;
-    const payload = (()=>{ try{ return JSON.parse(el.dataset.chart||'{}'); }catch(_){ return {}; }})();
-    const labels = payload.labels || [];
-    const data   = payload.data   || [];
-    const ctx = el.getContext('2d');
-    new Chart(ctx, {
-      type: 'bar',
-      data: {
-        labels,
-        datasets: [{
-          label: 'S/ por día',
-          data,
-          borderWidth: 2,
-          borderColor: getComputedStyle(document.documentElement).getPropertyValue('--bs-danger') || '#c62828',
-          backgroundColor: 'rgba(220, 53, 69, .15)',
-          hoverBackgroundColor: 'rgba(220, 53, 69, .25)',
-          borderRadius: 6
-        }]
-      },
-      options: {
-        responsive: true,
-        maintainAspectRatio: false,
-        animation: { duration: 250 },
-        scales: {
-          x: { grid: { display:false } },
-          y: { beginAtZero:true, ticks: { callback:(v)=>'S/ '+Number(v).toLocaleString() } }
-        },
-        plugins: {
-          legend: { display:false },
-          tooltip: { callbacks: { label: (ctx)=> 'S/ ' + Number(ctx.parsed.y ?? 0).toLocaleString(undefined,{minimumFractionDigits:2, maximumFractionDigits:2}) } }
-        }
-      }
-    });
-  })();
-</script>
-@endpush
