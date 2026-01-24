@@ -10,7 +10,7 @@
 </head>
 <body class="bg-slate-50 font-sans text-slate-900 antialiased selection:bg-brand/10 selection:text-brand-700">
 
-    {{-- 1. TOAST CONTAINER (Mismo del Login para que funcionen las notificaciones) --}}
+    {{-- 1. TOAST CONTAINER --}}
     <div id="toastContainer" class="fixed top-6 right-6 z-[60] flex flex-col gap-3 w-full max-w-sm pointer-events-none">
         @if (session('ok'))
         <div class="toast toast--ok animate-slide-in pointer-events-auto" data-autoclose="5000">
@@ -53,7 +53,7 @@
             
             {{-- Header Sidebar: Logo --}}
             <div class="flex h-16 shrink-0 items-center justify-center border-b border-slate-100 px-6">
-                <img src="{{ asset('img/logo.png') }}" alt="IMPULSE GO" class="h-8 w-auto object-contain">
+                <img src="{{ asset('img/logo.png') }}" alt="IMPULSE GO" class="h-12 w-auto object-contain">
             </div>
 
             {{-- === NUEVO: BUSCADOR GLOBAL EN SIDEBAR === --}}

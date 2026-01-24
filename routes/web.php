@@ -3,7 +3,7 @@
 use Illuminate\Support\Facades\Route;
 
 use App\Http\Controllers\AuthController;
-use App\Http\Controllers\ClientsControllers;
+use App\Http\Controllers\ClientesControllers;
 use App\Http\Controllers\PanelController;
 use App\Http\Controllers\ReporteGestionesController;
 use App\Http\Controllers\ReportePagosController;
@@ -56,10 +56,10 @@ Route::middleware('auth')->group(function () {
     |--------------------------------------------------------------------------
     */
     Route::prefix('clientes')->group(function () {
-        Route::get('/',      [ClientsControllers::class,'index'])->name('clientes.index');
-        Route::get('/{dni}', [ClientsControllers::class,'show'])->name('clientes.show');
+        Route::get('/',      [ClientesControllers::class,'index'])->name('clientes.index');
+        Route::get('/{dni}', [ClientesControllers::class,'show'])->name('clientes.show');
 
-        Route::post('/{dni}/promesas', [ClientsControllers::class,'storePromesa'])
+        Route::post('/{dni}/promesas', [ClientesControllers::class,'storePromesa'])
             ->name('clientes.promesas.store');
 
         Route::post('/{dni}/cnas', [CnaController::class, 'store'])

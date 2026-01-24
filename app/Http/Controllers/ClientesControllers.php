@@ -10,6 +10,7 @@ use App\Support\WorkflowMailer;
 use App\Models\PromesaPago;
 use App\Models\PromesaOperacion;
 use App\Models\PromesaCuota;
+use App\Models\Pagos;
 use App\Models\PagoPropia;
 use App\Models\PagoCajaCuscoCastigada;
 use App\Models\PagoCajaCuscoExtrajudicial;
@@ -17,27 +18,8 @@ use App\Models\ClienteCuenta;
 use App\Models\CnaSolicitud;
 
 
-class ClientsControllers extends Controller
+class ClientesControllers extends Controller
 {
-    public function index(Request $r)
-    {
-        $q  = trim((string)$r->query('q',''));
-        $pp = (int)($r->query('pp', 20)) ?: 20;
-
-        $clientes = ClienteCuenta::query()
-            ->select('cartera','dni','operacion','titular','updated_at')
-            ->when($q !== '', function ($w) use ($q) {
-                $w->where('dni','like',"%{$q}%")
-                  ->orWhere('operacion','like',"%{$q}%")
-                  ->orWhere('titular','like',"%{$q}%")
-                  ->orWhere('cartera','like',"%{$q}%");
-            })
-            ->orderByDesc('updated_at')
-            ->paginate($pp)->withQueryString();
-
-        return view('clientes.index', compact('clientes','q'));
-    }
-
     public function show(string $dni)
     {
         try {
@@ -49,38 +31,19 @@ class ClientsControllers extends Controller
             abort_if($cuentas->isEmpty(), 404);
             $titular = $cuentas->first()->titular;
 
-            // ===== A) Consolidado de pagos (3 fuentes) — versión simple
-            $propia = PagoPropia::where('dni',$dni)->select(
-                DB::raw('DATE(fecha_de_pago) as fecha'),
-                DB::raw('pagado_en_soles as monto'),
-                'operacion as oper',
-                DB::raw("UPPER(COALESCE(gestor, equipos, '-')) as gestor"),
-                DB::raw("UPPER(COALESCE(status, '-')) as estado"),
-                DB::raw("'PROPIA' as fuente")
-            );
-
-            $cast = PagoCajaCuscoCastigada::where('dni',$dni)->select(
-                DB::raw('DATE(fecha_de_pago) as fecha'),
-                DB::raw('pagado_en_soles as monto'),
-                'pagare as oper',
-                DB::raw("'-' as gestor"),
-                DB::raw("'-' as estado"),
-                DB::raw("'CUSCO CASTIGADA' as fuente")
-            );
-
-            $extra = PagoCajaCuscoExtrajudicial::where('dni',$dni)->select(
-                DB::raw('DATE(fecha_de_pago) as fecha'),
-                DB::raw('pagado_en_soles as monto'),
-                'pagare as oper',
-                DB::raw("'-' as gestor"),
-                DB::raw("'-' as estado"),
-                DB::raw("'CUSCO EXTRAJUDICIAL' as fuente")
-            );
-
-            $pagos = $propia->get()
-                ->concat($cast->get())
-                ->concat($extra->get())
-                ->sortByDesc('fecha')
+            // ===== A) Pagos
+            $pagos = Pagos::where('documento', $dni)
+                ->select(
+                    DB::raw('DATE(fecha) as fecha'),
+                    DB::raw('monto as monto'),
+                    DB::raw("COALESCE(operacion,'-') as oper"),
+                    DB::raw("UPPER(COALESCE(gestor,'-')) as gestor"),
+                    DB::raw("'-' as estado"),
+                    DB::raw("'PAGOS' as fuente"),
+                    'moneda'
+                )
+                ->orderByDesc('fecha')
+                ->get()
                 ->values();
 
             $totPagos = (float) $pagos->sum('monto');
@@ -92,7 +55,7 @@ class ClientsControllers extends Controller
                 ->orderByDesc('fecha_promesa')
                 ->get();
 
-            // ===== C) CCD (opcional) – solo si existe la tabla
+            // ===== C) CCD
             $ccd        = collect();
             $ccdByCodigo= collect();
 
@@ -114,47 +77,42 @@ class ClientsControllers extends Controller
                 }
             }
 
-            // ===== D) Métricas por operación (pagos_count/sum/list para cada cuenta)
+            // ===== D) Métricas por operación (sum/list para cada cuenta) SOLO PAGOS
             $ops = $cuentas->pluck('operacion')->filter()->unique()->values();
 
             $pagosPorOperacion = collect();
+
             if ($ops->isNotEmpty()) {
-                $q1 = DB::table('pagos_propia')->select([
-                    'operacion',
-                    DB::raw('fecha_de_pago as fecha'),
-                    DB::raw('pagado_en_soles as monto'),
-                    DB::raw("'PROPIA' as fuente"),
-                ])->where('dni',$dni)->whereIn('operacion',$ops);
 
-                $q2 = DB::table('pagos_caja_cusco_castigada')->select([
-                    DB::raw('pagare as operacion'),
-                    DB::raw('fecha_de_pago as fecha'),
-                    DB::raw('pagado_en_soles as monto'),
-                    DB::raw("'CUSCO CASTIGADA' as fuente"),
-                ])->where('dni',$dni)->whereIn('pagare',$ops);
+                $pagosFlat = DB::table('pagos')
+                    ->select([
+                        'operacion',
+                        DB::raw('DATE(fecha) as fecha'),
+                        DB::raw('monto as monto'),
+                        DB::raw("'PAGOS' as fuente"),
+                        DB::raw("UPPER(COALESCE(gestor,'-')) as gestor"),
+                        'moneda',
+                    ])
+                    ->where('documento', $dni)
+                    ->whereIn('operacion', $ops)
+                    ->get();
 
-                $q3 = DB::table('pagos_caja_cusco_extrajudicial')->select([
-                    DB::raw('pagare as operacion'),
-                    DB::raw('fecha_de_pago as fecha'),
-                    DB::raw('pagado_en_soles as monto'),
-                    DB::raw("'CUSCO EXTRAJUDICIAL' as fuente"),
-                ])->where('dni',$dni)->whereIn('pagare',$ops);
-
-                $union = $q1->unionAll($q2)->unionAll($q3);
-                $pagosFlat = DB::query()->fromSub($union,'p')->get();
                 $pagosPorOperacion = $pagosFlat->groupBy('operacion');
 
                 $cuentas = $cuentas->map(function ($c) use ($pagosPorOperacion) {
                     $opsKey = $c->operacion;
+
                     $grupo = $opsKey ? ($pagosPorOperacion[$opsKey] ?? collect()) : collect();
-                    $c->pagos_count = $grupo->count();
-                    $c->pagos_sum   = (float)$grupo->sum('monto');
+
+                    $c->pagos_sum   = (float) $grupo->sum('monto');
                     $c->pagos_list  = $grupo->sortByDesc('fecha')->values();
+
                     return $c;
                 });
+
             } else {
+
                 $cuentas = $cuentas->map(function ($c) {
-                    $c->pagos_count = 0;
                     $c->pagos_sum   = 0.0;
                     $c->pagos_list  = collect();
                     return $c;

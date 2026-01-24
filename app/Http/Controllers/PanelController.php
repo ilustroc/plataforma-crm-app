@@ -9,6 +9,7 @@ use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
 use App\Models\PromesaPago;
 use App\Models\CnaSolicitud;
+use App\Models\Pagos;
 
 class PanelController extends Controller
 {
@@ -19,26 +20,19 @@ class PanelController extends Controller
         $isAsesor     = ($role === 'asesor');
         $isSupervisor = ($role === 'supervisor');
         $isAdmin      = ($role === 'administrador' || $role === 'sistemas');
-
-        /* ========================= KPIs ========================= */
         $hoy = Carbon::today()->toDateString();
 
         // Promesas creadas hoy (asesor solo ve las suyas)
         $kpiPromHoy = PromesaPago::when($isAsesor, fn($q)=>$q->where('user_id',$user->id))
                                  ->whereDate('created_at',$hoy)
                                  ->count();
-
-        // Pagos de hoy (asesor solo ve pagos_propia donde él es gestor/equipo)
-        $kpiPagosHoy = 0.0;
-        if (Schema::hasTable('pagos_propia')) {
-            $q = DB::table('pagos_propia')->whereDate('fecha_de_pago',$hoy);
-            if ($isAsesor) {
-                $q->where(function($w) use ($user){
-                    $w->where('gestor',$user->name)->orWhere('equipos',$user->name);
-                });
-            }
-            $kpiPagosHoy = (float) $q->sum('pagado_en_soles');
-        }
+        
+        // Pagos de Hoy
+        $kpiPagosHoy = Pagos::whereDate('fecha',$hoy)
+            ->when($isAsesor, fn($q)=>$q->where(function($w) use ($user){
+                $w->where('gestor',$user->name)->orWhere('equipos',$user->name);
+            }))
+            ->sum('monto'); 
 
         /* ======= Actividades por ROL ======= */
         // Supervisor/Admin: pendientes/preaprobadas para aprobar
@@ -123,99 +117,69 @@ class PanelController extends Controller
         }
 
         /* ================= Gráfico Pagos del mes ================= */
-        $mes = $r->input('mes', Carbon::today()->format('Y-m')); // YYYY-MM
-        try { $ini = Carbon::createFromFormat('Y-m', $mes)->startOfMonth(); }
-        catch (\Exception $e) { $ini = Carbon::today()->startOfMonth(); $mes = $ini->format('Y-m'); }
+        $mes = $r->input('mes', Carbon::today()->format('Y-m'));
+        try {
+            $ini = Carbon::createFromFormat('Y-m', $mes)->startOfMonth();
+        } catch (\Exception $e) {
+            $ini = Carbon::today()->startOfMonth();
+            $mes = $ini->format('Y-m');
+        }
         $fin = (clone $ini)->endOfMonth();
 
-        $chartLabels = []; $chartData = []; $sumMes = 0.0;
+        $chartLabels = [];
+        $chartData   = [];
+        $sumMes      = 0.0;
 
-        if ($isAsesor) {
-            // Solo pagos_propia del asesor
-            if (Schema::hasTable('pagos_propia')) {
-                $rows = DB::table('pagos_propia')
-                    ->whereBetween('fecha_de_pago', [$ini->toDateString(), $fin->toDateString()])
-                    ->where(function($w) use ($user){
-                        $w->where('gestor',$user->name)->orWhere('equipos',$user->name);
-                    })
-                    ->selectRaw('DATE(fecha_de_pago) as f, SUM(pagado_en_soles) as s')
-                    ->groupBy('f')->orderBy('f')->get()->keyBy('f');
-                $days = $ini->daysInMonth;
-                for ($d=1; $d<=$days; $d++){
-                    $date = $ini->copy()->day($d)->toDateString();
-                    $chartLabels[] = str_pad($d,2,'0',STR_PAD_LEFT);
-                    $val = (float)($rows[$date]->s ?? 0);
-                    $chartData[] = round($val,2); $sumMes += $val;
-                }
-            }
-        } else {
-            // Unión (tu lógica anterior)
-            $unionParts = [];
-            if (Schema::hasTable('pagos_propia')) {
-                $unionParts[] = DB::table('pagos_propia')
-                    ->whereBetween('fecha_de_pago', [$ini->toDateString(), $fin->toDateString()])
-                    ->selectRaw('DATE(fecha_de_pago) as f, pagado_en_soles as s');
-            }
-            if (Schema::hasTable('pagos_caja_cusco_castigada')) {
-                $unionParts[] = DB::table('pagos_caja_cusco_castigada')
-                    ->whereBetween('fecha_de_pago', [$ini->toDateString(), $fin->toDateString()])
-                    ->selectRaw('DATE(fecha_de_pago) as f, pagado_en_soles as s');
-            }
-            if (Schema::hasTable('pagos_caja_cusco_extrajudicial')) {
-                $unionParts[] = DB::table('pagos_caja_cusco_extrajudicial')
-                    ->whereBetween('fecha_de_pago', [$ini->toDateString(), $fin->toDateString()])
-                    ->selectRaw('DATE(fecha_de_pago) as f, pagado_en_soles as s');
-            }
+        if (Schema::hasTable('pagos')) {
 
-            $daily = collect();
-            if (count($unionParts)) {
-                $union = array_shift($unionParts);
-                foreach ($unionParts as $q) $union->unionAll($q);
-                $daily = DB::query()->fromSub($union, 't')
-                    ->selectRaw('f, SUM(s) as total')->groupBy('f')->orderBy('f')->get()->keyBy('f');
-            }
+            $base = Pagos::query()
+                ->whereBetween('fecha', [$ini->toDateString(), $fin->toDateString()])
+                ->when($isAsesor, fn($q) => $q->where('gestor', $user->name));
+
+            $rows = (clone $base)
+                ->selectRaw('DATE(fecha) as f, SUM(monto) as s')
+                ->groupBy('f')
+                ->orderBy('f')
+                ->get()
+                ->keyBy('f');
 
             $days = $ini->daysInMonth;
-            for ($d=1; $d<=$days; $d++){
+
+            for ($d = 1; $d <= $days; $d++) {
                 $date = $ini->copy()->day($d)->toDateString();
-                $chartLabels[] = str_pad($d,2,'0',STR_PAD_LEFT);
-                $val = (float)($daily[$date]->total ?? 0);
-                $chartData[] = round($val,2); $sumMes += $val;
+                $chartLabels[] = str_pad($d, 2, '0', STR_PAD_LEFT);
+
+                $val = (float)($rows[$date]->s ?? 0);
+                $chartData[] = round($val, 2);
+                $sumMes += $val;
             }
         }
 
-        /* ===== Tabla de pagos_propia (opcional; aquí filtrada por asesor si aplica) ===== */
+        /* ===== Tabla de pagos ===== */
         $busq = trim($r->input('q',''));
         $propias = collect(); $propiasTotal = 0.0;
 
-        if (Schema::hasTable('pagos_propia')) {
-            $basePropias = DB::table('pagos_propia')
-                ->whereBetween('fecha_de_pago', [$ini->toDateString(), $fin->toDateString()])
-                ->when($isAsesor, function($q) use ($user){
-                    $q->where(function($w) use ($user){
-                        $w->where('gestor',$user->name)->orWhere('equipos',$user->name);
-                    });
-                })
+        if (Schema::hasTable('pagos')) {
+            $basePropias = DB::table('pagos')
+                ->whereBetween('fecha', [$ini->toDateString(), $fin->toDateString()])
+                ->when($isAsesor, fn($q) => $q->where('gestor', $user->name))
                 ->when($busq !== '', function($q) use ($busq){
                     $q->where(function($w) use ($busq){
-                        $w->where('dni','like',"%{$busq}%")
-                          ->orWhere('operacion','like',"%{$busq}%")
-                          ->orWhere('entidad','like',"%{$busq}%")
-                          ->orWhere('equipos','like',"%{$busq}%")
-                          ->orWhere('nombre_cliente','like',"%{$busq}%")
-                          ->orWhere('gestor','like',"%{$busq}%")
-                          ->orWhere('status','like',"%{$busq}%");
+                        $w->where('documento','like',"%{$busq}%")
+                        ->orWhere('operacion','like',"%{$busq}%")
+                        ->orWhere('moneda','like',"%{$busq}%")
+                        ->orWhere('gestor','like',"%{$busq}%");
                     });
                 });
 
             $propias = (clone $basePropias)
-                ->select('dni','operacion','entidad','equipos','nombre_cliente','producto','moneda',
-                         'fecha_de_pago','monto_pagado','pagado_en_soles','gestor','status')
-                ->orderByDesc('fecha_de_pago')
+                ->select('documento','operacion','moneda','fecha','monto','gestor')
+                ->orderByDesc('fecha')
                 ->paginate(25)->withQueryString();
 
-            $propiasTotal = (float) (clone $basePropias)->sum('pagado_en_soles');
+            $propiasTotal = (float) (clone $basePropias)->sum('monto');
         }
+
 
         return view('panel.resumen', compact(
             'role','isAsesor','isSupervisor','isAdmin',

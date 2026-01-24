@@ -1,0 +1,135 @@
+@import "tailwindcss";
+
+@theme {
+    --color-brand: #6F2661;
+    --color-brand-light: #fdf4fc;
+}
+
+@layer components {
+    body {
+        @apply bg-[#F8FAFC];
+    }
+
+    /* --- TARJETAS DE SECCIÓN (Cuentas, Pagos, etc) --- */
+    .section-card {
+        @apply bg-white rounded-[1.25rem] border border-slate-100 shadow-[0_2px_12px_-2px_rgba(0,0,0,0.03)] overflow-hidden mb-6;
+    }
+
+    .section-header {
+        @apply px-6 py-5 border-b border-slate-50 flex flex-col sm:flex-row sm:items-center justify-between gap-4 bg-white;
+    }
+
+    .section-title {
+        @apply text-lg font-bold text-slate-800 flex items-center gap-2.5;
+    }
+
+    /* --- HEADER CLIENTE (Compacto y Limpio) --- */
+    .client-header {
+        @apply bg-white rounded-xl border border-slate-200 shadow-sm mb-6 p-5 flex flex-col lg:flex-row lg:items-center justify-between gap-6;
+    }
+
+    .header-profile {
+        @apply flex items-center gap-4;
+    }
+
+    .header-avatar {
+        @apply h-12 w-12 shrink-0 rounded-full bg-slate-50 text-slate-500 flex items-center justify-center text-lg font-bold border border-slate-200 uppercase;
+    }
+
+    .header-info h1 {
+        @apply text-xl font-bold text-slate-800 leading-tight;
+    }
+
+    .header-meta {
+        @apply flex flex-wrap items-center gap-3 mt-1 text-sm text-slate-500;
+    }
+
+    /* Sección de métricas a la derecha con divisor vertical en desktop */
+    .header-stats {
+        @apply flex items-center gap-8 border-t border-slate-100 pt-4 lg:border-t-0 lg:border-l lg:pt-0 lg:pl-8 lg:ml-auto;
+    }
+
+    .stat-item {
+        @apply flex flex-col text-right;
+    }
+
+    .stat-label {
+        @apply text-[10px] uppercase tracking-wider font-bold text-slate-400 mb-0.5;
+    }
+    
+    .stat-value {
+        @apply text-lg font-bold text-slate-800 tabular-nums leading-none;
+    }
+
+    /* --- TABLAS --- */
+    .table-container {
+        @apply overflow-x-auto;
+    }
+    .table-compact {
+        @apply w-full text-left border-collapse;
+    }
+    .table-compact thead th {
+        @apply bg-slate-50/80 text-[10px] font-bold text-slate-400 uppercase tracking-wider
+            px-4 py-2 border-b border-slate-100 whitespace-nowrap
+            sticky top-0 z-10 backdrop-blur-sm;
+    }
+
+    .table-compact tbody tr {
+        @apply transition-colors border-b border-slate-50 last:border-0
+            hover:bg-slate-50/60;
+    }
+
+    .table-compact tbody td {
+        @apply px-4 py-2 text-[13px] text-slate-600 whitespace-nowrap align-middle;
+    }
+
+    /* --- CHECKBOX --- */
+    .checkbox-brand {
+        @apply h-4 w-4 rounded border-slate-300 text-brand focus:ring-brand focus:ring-offset-0 cursor-pointer transition-all;
+    }
+
+    /* --- BADGES --- */
+    .badge { 
+        @apply inline-flex items-center px-2.5 py-0.5 rounded-full text-[10px] font-bold border uppercase tracking-wide; 
+    }
+    .badge-info    { @apply bg-sky-50 text-sky-700 border-sky-200; }
+    .badge-success { @apply bg-emerald-50 text-emerald-700 border-emerald-200; }
+    .badge-warning { @apply bg-amber-50 text-amber-700 border-amber-200; }
+    .badge-danger  { @apply bg-red-50 text-red-700 border-red-200; }
+    .badge-neutral { @apply bg-slate-100 text-slate-500 border-slate-200; }
+    
+    /* --- BOTONES --- */
+    .btn-action {
+        @apply inline-flex items-center justify-center gap-2 px-4 py-2 text-sm font-semibold rounded-xl transition-all border shadow-sm active:scale-95;
+    }
+    .btn-outline {
+        @apply bg-white border-slate-200 text-slate-600 hover:bg-slate-50 hover:text-slate-900 hover:border-slate-300;
+    }
+    .btn-primary { 
+        @apply bg-brand border-transparent text-white hover:bg-[#5B1F50] hover:shadow-brand/20 hover:shadow-lg; 
+    }
+    .btn-success { 
+        @apply bg-emerald-600 border-transparent text-white hover:bg-emerald-700 hover:shadow-emerald-600/20 hover:shadow-lg; 
+    }
+    .btn-disabled {
+        @apply opacity-50 cursor-not-allowed shadow-none bg-slate-100 text-slate-400 border-slate-200 hover:bg-slate-100 hover:shadow-none pointer-events-none;
+    }
+
+    /* --- MODALES --- */
+    .modal-backdrop {
+        @apply fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-md transition-opacity opacity-0 pointer-events-none flex items-center justify-center p-4;
+    }
+    .modal-backdrop.show { @apply opacity-100 pointer-events-auto; }
+    .modal-box {
+        @apply bg-white rounded-2xl shadow-2xl w-full max-w-2xl max-h-[90vh] overflow-hidden flex flex-col scale-95 transition-transform duration-300;
+    }
+    .modal-backdrop.show .modal-box { @apply scale-100; }
+    .modal-header { @apply px-6 py-5 border-b border-slate-50 flex items-center justify-between bg-white; }
+    .modal-body { @apply p-6 overflow-y-auto bg-slate-50/30; }
+    .modal-footer { @apply px-6 py-4 border-t border-slate-100 bg-white flex justify-end gap-3; }
+
+    /* --- SCROLLBAR --- */
+    .custom-scroll::-webkit-scrollbar { height: 6px; width: 6px; }
+    .custom-scroll::-webkit-scrollbar-thumb { @apply bg-slate-200 rounded-full; }
+    .custom-scroll::-webkit-scrollbar-track { @apply bg-transparent; }
+}

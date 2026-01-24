@@ -18,6 +18,10 @@ export default defineConfig({
         // Archivos del Resumen
         'resources/css/resumen.css',
         'resources/js/resumen.js',
+
+        // Archivos del Cliente
+        'resources/css/cliente.css',
+        'resources/js/cliente.js',
       ],
       refresh: true,
     }),
