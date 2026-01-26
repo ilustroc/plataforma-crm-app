@@ -3,190 +3,126 @@
 @section('crumb','Estadísticas')
 
 @push('head')
-<style>
-  .sect{display:flex; align-items:center; gap:.6rem; font-weight:700; margin:6px 0 10px}
-  .sect::before{content:""; width:8px; height:18px; border-radius:4px; background:var(--accent)}
-  .kpi{position:relative; background:var(--surface); border:1px solid var(--border); border-radius:12px; padding:16px; height:100%; display:flex; flex-direction:column; justify-content:center; gap:6px;}
-  .kpi::before{content:""; position:absolute; left:0; top:0; bottom:0; width:4px; background:linear-gradient(180deg, var(--accent), color-mix(in oklab, var(--accent) 65%, black)); border-top-left-radius:12px; border-bottom-left-radius:12px; opacity:.95;}
-  .kpi .label{ color:var(--muted); font-size:.9rem }
-  .kpi .value{ font-weight:800; font-size:1.9rem; line-height:1 }
-  .viz{ background:var(--surface); border:1px solid var(--border); border-radius:14px; padding:14px; height:100% }
-  .viz h6{ margin:0 0 10px; font-weight:700; color:var(--ink) }
-  .viz .sub{ color:var(--muted); font-size:.9rem }
-  .table-card{ background:var(--surface); border:1px solid var(--border); border-radius:14px; padding:14px }
-  .table thead th{ color:var(--muted); font-weight:600; border-color:var(--border) }
-  .table tbody td{ border-color:var(--border) }
-</style>
+    @vite(['resources/css/dashboard.css', 'resources/js/dashboard.js'])
 @endpush
 
 @section('content')
-  {{-- Toolbar de filtros --}}
-    <form id="filtrosDash" class="card pad" method="GET" action="{{ route('dashboard') }}">
-      <div class="row g-2 align-items-end">
-        <div class="col-md-4">
-          <label class="form-label">Mes</label>
-          <input
-            type="month"
-            name="mes"
-            class="form-control"
-            value="{{ $mes ?? request('mes', now()->format('Y-m')) }}"
-          >
+
+    {{-- 1. BARRA DE FILTROS --}}
+    <form id="filtrosDash" method="GET" action="{{ route('dashboard') }}" class="filter-card">
+        <div class="grid grid-cols-1 md:grid-cols-12 gap-4 items-end">
+            
+            {{-- Mes --}}
+            <div class="md:col-span-4 lg:col-span-3">
+                <label class="form-label">Periodo</label>
+                <input type="month" name="mes" class="form-input" 
+                       value="{{ $mes }}">
+            </div>
+
+            {{-- Gestor (Select Dinámico) --}}
+            <div class="md:col-span-5 lg:col-span-4">
+                <label class="form-label">Gestor</label>
+                <select name="gestor" class="form-input cursor-pointer">
+                    <option value="">Todos los gestores</option>
+                    @foreach($gestores as $g)
+                        <option value="{{ $g }}" {{ $gestor == $g ? 'selected' : '' }}>
+                            {{ $g }}
+                        </option>
+                    @endforeach
+                </select>
+            </div>
+
+            {{-- Botones --}}
+            <div class="md:col-span-3 lg:col-span-5 flex gap-2">
+                <button type="submit" class="btn-filter">
+                    <svg class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M3 4a1 1 0 011-1h16a1 1 0 011 1v2.586a1 1 0 01-.293.707l-6.414 6.414a1 1 0 00-.293.707V17l-4 4v-6.586a1 1 0 00-.293-.707L3.293 7.293A1 1 0 013 6.586V4z"/></svg>
+                    Filtrar
+                </button>
+                @if(request()->has('mes') || request()->has('gestor'))
+                    <a href="{{ route('dashboard') }}" class="btn-reset">
+                        Limpiar
+                    </a>
+                @endif
+            </div>
         </div>
-    
-        <div class="col-md-4">
-          <label class="form-label">Cartera</label>
-          <select name="cartera" class="form-select">
-            <option value="propia" {{ ($cartera ?? request('cartera')) === 'propia' ? 'selected' : '' }}>Propia</option>
-            <option value="caja-cusco-castigada" {{ ($cartera ?? request('cartera')) === 'caja-cusco-castigada' ? 'selected' : '' }}>
-              Caja Cusco ▸ Castigada
-            </option>
-            <option value="caja-cusco-extrajudicial" {{ ($cartera ?? request('cartera')) === 'caja-cusco-extrajudicial' ? 'selected' : '' }}>
-              Caja Cusco ▸ Extrajudicial
-            </option>
-          </select>
-        </div>
-    
-        <div class="col-md-4">
-          <label class="form-label">Supervisor</label>
-          <select name="supervisor_id" class="form-select">
-            <option value="">Todos los supervisores</option>
-            @foreach($supervisores as $s)
-              <option value="{{ $s->id }}" {{ (string)($supervisorId ?? request('supervisor_id')) === (string)$s->id ? 'selected' : '' }}>
-                {{ $s->name }}
-              </option>
-            @endforeach
-          </select>
-        </div>
-    
-        <div class="col-12 d-flex gap-2 mt-1">
-          <button class="btn btn-primary"><i class="bi bi-funnel me-1"></i> Filtrar</button>
-          <a href="{{ route('dashboard') }}" class="btn btn-outline-secondary">Limpiar</a>
-        </div>
-      </div>
     </form>
 
-
-  {{-- KPIs fila 1 --}}
-  <div class="row row-cols-1 row-cols-md-2 row-cols-xl-3 g-3 mt-3">
-    <div class="col"><div class="kpi h-100"><div class="label">CCD generadas</div><div class="value">{{ $k['ccd_gen'] ?? 0 }}</div></div></div>
-    <div class="col"><div class="kpi h-100"><div class="label">Pagos (N°)</div><div class="value">{{ $k['pagos_num'] ?? 0 }}</div></div></div>
-    <div class="col"><div class="kpi h-100"><div class="label">Pagos (Monto)</div><div class="value">S/ {{ number_format($k['pagos_monto'] ?? 0,2) }}</div></div></div>
-  </div>
-
-  {{-- KPIs fila 2 (PDP) --}}
-  <div class="row row-cols-1 row-cols-md-2 row-cols-xl-4 g-3 mt-2">
-    <div class="col"><div class="kpi h-100"><div class="label">PDP generadas</div><div class="value">{{ $k['pdp_gen'] ?? 0 }}</div></div></div>
-    <div class="col"><div class="kpi h-100"><div class="label">PDP vigentes</div><div class="value">{{ $k['pdp_vig'] ?? 0 }}</div></div></div>
-    <div class="col"><div class="kpi h-100"><div class="label">PDP cumplidas</div><div class="value">{{ $k['pdp_cumpl'] ?? 0 }}</div></div></div>
-    <div class="col"><div class="kpi h-100"><div class="label">PDP caídas</div><div class="value">{{ $k['pdp_caidas'] ?? 0 }}</div></div></div>
-  </div>
-
-  {{-- Visualizaciones --}}
-  <div class="row g-3 mt-2">
-    <div class="col-12 col-xl-6">
-      <div class="viz">
-        <h6>Evolución de Pagos</h6><div class="sub mb-2">Últimos 12 meses</div>
-        <canvas id="linePagos" height="160"></canvas>
-      </div>
-    </div>
-
-    <div class="col-12 col-xl-6">
-      <div class="viz">
-        <h6>Cumplimiento de Promesas</h6><div class="sub mb-2">Generadas vs Cumplidas vs Caídas</div>
-        <canvas id="barPDP" height="160"></canvas>
-      </div>
-    </div>
-
-    <div class="col-12 col-xl-6">
-      <div class="viz">
-        <h6>% Cumplimiento</h6><div class="sub mb-2">Cumplidas / Generadas</div>
-        <canvas id="gaugePDP" height="200"></canvas>
-      </div>
-    </div>
-
-    <div class="col-12 col-xl-6">
-      <div class="table-card">
-        <h6 class="mb-2">Detalle de gestiones recientes</h6>
-        <div class="table-responsive">
-          <table class="table align-middle mb-0">
-            <thead>
-              <tr>
-                <th>Fecha</th>
-                <th>Cliente</th>
-                <th>Gestión</th>
-                <th>Resultado</th>
-              </tr>
-            </thead>
-            <tbody>
-              @forelse(($gestiones ?? []) as $g)
-                <tr>
-                  <td>{{ $g->fecha ?? '-' }}</td>
-                  <td>{{ $g->cliente ?? '-' }}</td>
-                  <td>{{ $g->tipo ?? '-' }}</td>
-                  <td>{{ $g->resultado ?? '-' }}</td>
-                </tr>
-              @empty
-                <tr><td colspan="4" class="text-center" style="color:var(--muted)">Sin gestiones recientes</td></tr>
-              @endforelse
-            </tbody>
-          </table>
+    {{-- 2. KPIs (Grid de Tarjetas) --}}
+    <div class="kpi-grid">
+        {{-- KPI: Cantidad Pagos --}}
+        <div class="kpi-card">
+            <div>
+                <div class="kpi-label">
+                    <svg class="h-4 w-4 text-brand" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2"/></svg>
+                    N° Pagos
+                </div>
+                <div class="kpi-value">{{ number_format($kpis['pagos_count']) }}</div>
+            </div>
+            <div class="mt-4 h-1 w-full bg-slate-100 rounded-full overflow-hidden">
+                <div class="h-full bg-brand w-[70%]"></div> {{-- Barra decorativa estática --}}
+            </div>
         </div>
-      </div>
+
+        {{-- KPI: Monto Recaudado --}}
+        <div class="kpi-card">
+            <div>
+                <div class="kpi-label text-emerald-600">
+                    <svg class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
+                    Recaudo Total
+                </div>
+                <div class="kpi-value text-emerald-700">S/ {{ number_format($kpis['pagos_sum'], 2) }}</div>
+            </div>
+            <div class="mt-4 h-1 w-full bg-emerald-100 rounded-full overflow-hidden">
+                <div class="h-full bg-emerald-500 w-full"></div>
+            </div>
+        </div>
+
+        {{-- KPI: Ticket Promedio (Calculado en vista) --}}
+        @php 
+            $ticket = $kpis['pagos_count'] > 0 ? $kpis['pagos_sum'] / $kpis['pagos_count'] : 0;
+        @endphp
+        <div class="kpi-card">
+            <div>
+                <div class="kpi-label text-sky-500">
+                    <svg class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 7h8m0 0v8m0-8l-8 8-4-4-6 6"/></svg>
+                    Ticket Promedio
+                </div>
+                <div class="kpi-value text-slate-700">S/ {{ number_format($ticket, 2) }}</div>
+            </div>
+            <div class="mt-4 text-xs text-slate-400 font-medium">
+                Promedio por operación
+            </div>
+        </div>
+
+        {{-- KPI: Placeholder PDP (Futuro) --}}
+        <div class="kpi-card bg-slate-50 border-dashed border-slate-300 shadow-none opacity-70">
+            <div>
+                <div class="kpi-label text-slate-400">PDP Generadas</div>
+                <div class="kpi-value text-slate-400">—</div>
+            </div>
+            <div class="mt-4 text-xs text-slate-400">Próximamente</div>
+        </div>
     </div>
-  </div>
+
+    {{-- 3. VISUALIZACIONES --}}
+    <div class="viz-grid">
+        {{-- Gráfica de Pagos --}}
+        <div class="chart-card lg:col-span-2">
+            <div class="chart-header">
+                <div>
+                    <h3 class="chart-title">Evolución de Pagos</h3>
+                    <p class="chart-subtitle">Comportamiento de recaudación (Últimos 12 meses)</p>
+                </div>
+                {{-- Botón opcional o filtro --}}
+                <div class="p-2 bg-slate-50 rounded-lg border border-slate-100">
+                    <svg class="h-5 w-5 text-slate-400" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 12l3-3 3 3 4-4M8 21l4-4 4 4M3 4h18M4 4h16v12a1 1 0 01-1 1H5a1 1 0 01-1-1V4z"/></svg>
+                </div>
+            </div>
+            
+            <div class="relative h-[300px] w-full">
+                <canvas id="linePagos" data-chart='@json($chart)'></canvas>
+            </div>
+        </div>
+    </div>
+
 @endsection
-
-@push('scripts')
-<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1"></script>
-<script>
-(function(){
-  const css = (v)=>getComputedStyle(document.documentElement).getPropertyValue(v).trim();
-  const col = { accent:()=>css('--accent'), ink:()=>css('--ink'), muted:()=>css('--muted'), border:()=>css('--border') };
-
-  const meses = {!! json_encode($meses ?? ['E','F','M','A','M','J','J','A','S','O','N','D']) !!};
-  const pagosSerie = {!! json_encode($serie_pagos ?? array_fill(0,12,0)) !!};
-  const pdpGen  = {{ (int)($k['pdp_gen'] ?? 0) }};
-  const pdpCum  = {{ (int)($k['pdp_cumpl'] ?? 0) }};
-  const pdpCai  = {{ (int)($k['pdp_caidas'] ?? 0) }};
-  const pctCumpl = (pdpGen>0)? Math.round((pdpCum/pdpGen)*100):0;
-  document.querySelectorAll('#filtrosDash input[name="mes"], #filtrosDash select').forEach(el => {
-    el.addEventListener('change', () => document.getElementById('filtrosDash').requestSubmit());
-  });
-  const ctxL = document.getElementById('linePagos');
-  const line = new Chart(ctxL, {
-    type:'line',
-    data:{ labels:meses, datasets:[{ label:'Pagos', data:pagosSerie, tension:.35, borderWidth:2, pointRadius:2 }]},
-    options:{ plugins:{ legend:{display:false} }, scales:{ x:{ ticks:{ color: col.muted() }, grid:{ color: col.border() } }, y:{ ticks:{ color: col.muted() }, grid:{ color: col.border() }}}}
-  });
-
-  const ctxB = document.getElementById('barPDP');
-  const bar = new Chart(ctxB, {
-    type:'bar',
-    data:{ labels:['Generadas','Cumplidas','Caídas'], datasets:[{ data:[pdpGen,pdpCum,pdpCai]}]},
-    options:{ plugins:{ legend:{display:false} }, scales:{ x:{ ticks:{ color: col.muted() }, grid:{ display:false } }, y:{ ticks:{ color: col.muted() }, grid:{ color: col.border() }, beginAtZero:true }}}
-  });
-
-  const ctxG = document.getElementById('gaugePDP');
-  const gauge = new Chart(ctxG, {
-    type:'doughnut',
-    data:{ labels:['Cumplido','Pendiente'], datasets:[{ data:[pctCumpl, 100-pctCumpl], cutout:'70%' }]},
-    options:{ rotation:-90, circumference:180, plugins:{ legend:{display:false}, tooltip:{enabled:false} }}
-  });
-
-  function colorize(){
-    const a = col.accent(), m = col.muted(), b = col.border();
-    line.data.datasets[0].borderColor = a; line.data.datasets[0].backgroundColor = a;
-    line.options.scales.x.ticks.color = m; line.options.scales.y.ticks.color = m;
-    line.options.scales.x.grid.color  = b; line.options.scales.y.grid.color  = b;
-
-    bar.data.datasets[0].backgroundColor = [a, 'color-mix(in oklab, '+a+' 70%, white)', 'color-mix(in oklab, '+a+' 55%, black)'];
-    bar.options.scales.x.ticks.color = m; bar.options.scales.y.ticks.color = m; bar.options.scales.y.grid.color = b;
-
-    gauge.data.datasets[0].backgroundColor = [a, b];
-    line.update(); bar.update(); gauge.update();
-  }
-  colorize();
-  new MutationObserver(colorize).observe(document.documentElement, {attributes:true, attributeFilter:['data-theme']});
-})();
-</script>
-@endpush

@@ -14,7 +14,7 @@ use App\Models\Pagos;
 use App\Models\PagoPropia;
 use App\Models\PagoCajaCuscoCastigada;
 use App\Models\PagoCajaCuscoExtrajudicial;
-use App\Models\ClienteCuenta;
+use App\Models\Clientes;
 use App\Models\CnaSolicitud;
 
 
@@ -24,12 +24,12 @@ class ClientesControllers extends Controller
     {
         try {
             // ===== Cuentas del cliente
-            $cuentas = ClienteCuenta::where('dni',$dni)
+            $cuentas = Clientes::where('dni',$dni)
                 ->orderByDesc('updated_at')
                 ->get();
 
             abort_if($cuentas->isEmpty(), 404);
-            $titular = $cuentas->first()->titular;
+            $nombre = $cuentas->first()->nombre;
 
             // ===== A) Pagos
             $pagos = Pagos::where('documento', $dni)
@@ -166,7 +166,7 @@ class ClientesControllers extends Controller
             }
 
             return view('clientes.show', compact(
-                'dni','titular','cuentas','pagos','promesas','ccd','pagosPorOperacion','totPagos'
+                'dni','nombre','cuentas','pagos','promesas','ccd','pagosPorOperacion','totPagos'
             ) + [
                 'ccdByCodigo'     => $ccdByCodigo,
                 'cnasByOperacion' => $cnasByOperacion,

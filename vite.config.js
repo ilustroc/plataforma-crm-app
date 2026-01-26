@@ -22,6 +22,14 @@ export default defineConfig({
         // Archivos del Cliente
         'resources/css/cliente.css',
         'resources/js/cliente.js',
+
+        // Archivos del Dashboard
+        'resources/css/dashboard.css',
+        'resources/js/dashboard.js',
+
+        // Archivos de Reporte de pagos
+        'resources/css/reporte_pagos.css',
+        'resources/js/reporte_pagos.js',
       ],
       refresh: true,
     }),

@@ -145,7 +145,7 @@
                             </a>
                         @empty
                             <div class="px-6 py-4 text-center text-sm text-slate-400 italic bg-slate-50/50 rounded-lg mx-4">
-                                🎉 Todo limpio por aquí
+                                Todo limpio por aquí
                             </div>
                         @endforelse
 

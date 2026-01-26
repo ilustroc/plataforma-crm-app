@@ -79,7 +79,7 @@ class AutorizacionController extends Controller
         if (!empty($opsAll)) {
             $ccByOp = DB::table('clientes_cuentas')
                 ->select([
-                    'operacion','dni','cartera','titular','entidad','producto','moneda',
+                    'operacion','dni','cartera','nombre','entidad','producto','moneda',
                     'saldo_capital','deuda_total','agente','anio_castigo',
                     'clasificacion','hasta','capital_descuento'
                 ])

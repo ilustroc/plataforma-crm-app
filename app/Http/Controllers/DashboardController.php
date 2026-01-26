@@ -3,98 +3,86 @@
 namespace App\Http\Controllers;
 
 use Illuminate\Http\Request;
-use Illuminate\Support\Carbon;
+use Illuminate\Support\Facades\DB;
+use Carbon\Carbon;
 use App\Models\User;
-use App\Models\PagoPropia;
-use App\Models\PagoCajaCuscoCastigada;
-use App\Models\PagoCajaCuscoExtrajudicial;
+use App\Models\Pagos;
 
 class DashboardController extends Controller
 {
     public function index(Request $r)
     {
-        // cartera: propia | caja-cusco-castigada | caja-cusco-extrajudicial (también acepta "extrajudicial")
-        $cartera = $r->query('cartera', 'propia');
-        if ($cartera === 'extrajudicial') $cartera = 'caja-cusco-extrajudicial';
-    
-        $mesParam   = $r->query('mes', now('America/Lima')->format('Y-m')); // YYYY-MM
-        $supervisor = (int) $r->query('supervisor_id', 0);
-    
-        // Rangos de fechas (Lima)
+        // 1. Filtros Básicos
+        $mesParam = $r->query('mes', now('America/Lima')->format('Y-m')); // YYYY-MM
+        $gestor   = $r->query('gestor'); // Filtrar por nombre de gestor si es necesario
+
+        // 2. Definir Rangos de Fecha
         try {
-            $inicioMes = \Carbon\Carbon::createFromFormat('Y-m', $mesParam, 'America/Lima')->startOfMonth();
+            $inicioMes = Carbon::createFromFormat('Y-m', $mesParam, 'America/Lima')->startOfMonth();
         } catch (\Throwable $e) {
             $inicioMes = now('America/Lima')->startOfMonth();
             $mesParam  = $inicioMes->format('Y-m');
         }
         $finMes = (clone $inicioMes)->endOfMonth();
-    
+
+        // Rango anual para la gráfica (últimos 12 meses)
         $ini12 = (clone $inicioMes)->subMonths(11)->startOfMonth();
         $fin12 = (clone $finMes)->endOfMonth();
-    
-        // Builder base + expresión de monto según cartera
-        switch ($cartera) {
-            case 'caja-cusco-castigada':
-                $model = PagoCajaCuscoCastigada::query();
-                $montoExpr = 'COALESCE(pagado_en_soles,0)';
-                break;
-            case 'caja-cusco-extrajudicial':
-                $model = PagoCajaCuscoExtrajudicial::query();
-                // Total = Monto pagado + Pagado en S/
-                $montoExpr = 'COALESCE(monto_pagado,0)';
-                break;
-            default:
-                $model = PagoPropia::query();
-                $montoExpr = 'COALESCE(pagado_en_soles,0)';
-                break;
+
+        // 3. Query Base
+        $query = Pagos::query();
+
+        // (Opcional) Filtro de gestor si tu tabla pagos tiene esa columna llena
+        if ($gestor) {
+            $query->where('gestor', 'like', "%$gestor%");
         }
-    
-        // (Opcional) filtro por supervisor (si implementas mapping gestor<-asesores)
-        if ($supervisor > 0) {
-            $sup = User::find($supervisor);
-            // TODO: $aliases = $sup?->asesores()->pluck('alias')->filter();
-            // if ($aliases && $aliases->count()) { $model->whereIn('gestor', $aliases); }
-        }
-    
-        // KPIs del mes
-        $k = [
-            'ccd_gen'      => 0,
-            'pagos_num'    => (clone $model)->whereBetween('fecha_de_pago', [$inicioMes, $finMes])->count(),
-            'pagos_monto'  => (float) (clone $model)->whereBetween('fecha_de_pago', [$inicioMes, $finMes])
-                                    ->selectRaw("SUM($montoExpr) as total")->value('total') ?? 0.0,
-            'pdp_gen'      => 0,
-            'pdp_vig'      => 0,
-            'pdp_cumpl'    => 0,
-            'pdp_caidas'   => 0,
+
+        // 4. Calcular KPIs del Mes Actual
+        // Clonamos el query para no afectar las siguientes consultas
+        $kpiQuery = (clone $query)->whereBetween('fecha', [$inicioMes, $finMes]);
+
+        $kpis = [
+            'pagos_count' => $kpiQuery->count(),
+            'pagos_sum'   => (float) $kpiQuery->sum('monto'),
+            // Aquí podrías agregar lógica para PDP si tienes una tabla de promesas relacionada
+            'pdp_gen'     => 0, 
+            'pdp_cumpl'   => 0
         ];
-    
-        // Serie últimos 12 meses
-        $serieRaw = (clone $model)
-            ->selectRaw("DATE_FORMAT(fecha_de_pago,'%Y-%m') as ym, SUM($montoExpr) as total")
-            ->whereBetween('fecha_de_pago', [$ini12, $fin12])
-            ->groupBy('ym')->orderBy('ym')
-            ->pluck('total','ym');
-    
-        $meses = []; $serie_pagos = [];
+
+        // 5. Datos para la Gráfica (Evolución 12 meses)
+        // Agrupamos por año-mes y sumamos el monto
+        $serieData = (clone $query)
+            ->selectRaw("DATE_FORMAT(fecha, '%Y-%m') as ym, SUM(monto) as total")
+            ->whereBetween('fecha', [$ini12, $fin12])
+            ->groupBy('ym')
+            ->orderBy('ym')
+            ->pluck('total', 'ym');
+
+        // Rellenar meses vacíos con 0
+        $labels = [];
+        $values = [];
         $cursor = $ini12->copy();
-        for ($i=0; $i<12; $i++) {
+        
+        for ($i = 0; $i < 12; $i++) {
             $key = $cursor->format('Y-m');
-            $meses[] = strtoupper($cursor->locale('es')->isoFormat('MMM')); // SEP, OCT...
-            $serie_pagos[] = (float) ($serieRaw[$key] ?? 0);
+            // Formato etiqueta: "Ene", "Feb"...
+            $labels[] = ucfirst($cursor->locale('es')->isoFormat('MMM')); 
+            $values[] = (float) ($serieData[$key] ?? 0);
             $cursor->addMonth();
         }
-    
-        $supervisores = User::where('role','supervisor')->select('id','name')->orderBy('name')->get();
-    
+
+        // 6. Obtener lista de gestores para el select (agrupando los que existen en pagos)
+        $gestores = Pagos::select('gestor')->distinct()->whereNotNull('gestor')->orderBy('gestor')->pluck('gestor');
+
         return view('dashboard.index', [
-            'mes'            => $mesParam,
-            'cartera'        => $cartera,
-            'supervisorId'   => $supervisor,
-            'supervisores'   => $supervisores,
-            'k'              => $k,
-            'meses'          => $meses,
-            'serie_pagos'    => $serie_pagos,
-            'gestiones'      => collect(),
+            'mes'      => $mesParam,
+            'gestor'   => $gestor,
+            'gestores' => $gestores,
+            'kpis'     => $kpis,
+            'chart'    => [
+                'labels' => $labels,
+                'data'   => $values
+            ]
         ]);
     }
 }

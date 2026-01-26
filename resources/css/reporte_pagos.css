@@ -1,0 +1,75 @@
+@import "tailwindcss";
+
+@theme {
+    --color-brand: #6F2661;
+}
+
+@layer components {
+    body {
+        @apply bg-[#F8FAFC];
+    }
+
+    /* FILTROS */
+    .filter-bar {
+        @apply bg-white rounded-2xl border border-slate-100 shadow-sm p-5 mb-6 flex flex-col lg:flex-row gap-4 items-end;
+    }
+    
+    .form-group {
+        @apply flex flex-col gap-1.5 w-full;
+    }
+    
+    .form-label {
+        @apply text-xs font-bold text-slate-500 uppercase tracking-wide;
+    }
+    
+    .form-input {
+        @apply w-full rounded-xl border-slate-200 bg-slate-50 py-2.5 px-3 text-sm text-slate-700 transition-all focus:bg-white focus:border-brand focus:ring-1 focus:ring-brand outline-none;
+    }
+
+    .btn-search {
+        @apply flex h-[42px] items-center justify-center gap-2 rounded-xl bg-slate-800 px-6 text-sm font-semibold text-white shadow-md transition-all hover:bg-slate-700 active:scale-95;
+    }
+    
+    .btn-export {
+        @apply flex h-[42px] w-[42px] items-center justify-center rounded-xl bg-emerald-600 text-white shadow-md shadow-emerald-200 transition-all hover:bg-emerald-700 active:scale-95;
+    }
+
+    /* TABLA */
+    .table-card {
+        @apply bg-white rounded-2xl border border-slate-100 shadow-sm overflow-hidden;
+    }
+    
+    .table-responsive {
+        @apply overflow-x-auto;
+    }
+    
+    .rpt-table {
+        @apply w-full text-left border-collapse;
+    }
+    
+    .rpt-table thead th {
+        @apply bg-slate-50/80 text-[11px] font-bold text-slate-400 uppercase tracking-wider px-6 py-3 border-b border-slate-100 whitespace-nowrap sticky top-0 z-10 backdrop-blur-sm;
+    }
+    
+    .rpt-table tbody tr {
+        @apply transition-colors border-b border-slate-50 last:border-0 hover:bg-slate-50/50;
+    }
+    
+    .rpt-table tbody td {
+        @apply px-6 py-3 text-sm text-slate-600 whitespace-nowrap align-middle;
+    }
+
+    /* Paginación Tailwind */
+    .pagination {
+        @apply flex items-center gap-1;
+    }
+    .page-link {
+        @apply flex h-8 w-8 items-center justify-center rounded-lg border border-slate-200 bg-white text-xs font-medium text-slate-500 hover:border-brand hover:text-brand transition-colors;
+    }
+    .page-item.active .page-link {
+        @apply border-brand bg-brand text-white;
+    }
+    .page-item.disabled .page-link {
+        @apply opacity-50 cursor-not-allowed border-slate-100 bg-slate-50;
+    }
+}

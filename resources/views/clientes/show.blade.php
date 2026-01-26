@@ -24,11 +24,11 @@
         {{-- Izquierda: Identidad --}}
         <div class="header-profile">            
             <div class="header-avatar">
-                {{ substr($titular, 0, 1) }}
+                {{ substr($nombre, 0, 1) }}
             </div>
             
             <div class="header-info">
-                <h1>{{ $titular }}</h1>
+                <h1>{{ $nombre }}</h1>
                 
                 <div class="header-meta">
                     {{-- DNI con copiado rápido --}}

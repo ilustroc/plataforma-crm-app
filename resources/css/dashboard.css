@@ -1,0 +1,78 @@
+@import "tailwindcss";
+
+@theme {
+    --color-brand: #6F2661;
+}
+
+@layer components {
+    body {
+        @apply bg-[#F8FAFC];
+    }
+
+    /* --- CONTENEDOR DE FILTROS --- */
+    .filter-card {
+        @apply bg-white rounded-2xl border border-slate-100 shadow-[0_2px_15px_-3px_rgba(0,0,0,0.03)] p-5 mb-6;
+    }
+    
+    .form-label {
+        @apply block text-xs font-bold text-slate-500 uppercase tracking-wide mb-1.5;
+    }
+
+    .form-input {
+        @apply w-full rounded-xl border-slate-200 bg-slate-50 py-2.5 px-3 text-sm text-slate-700 transition-all focus:bg-white focus:border-brand focus:ring-1 focus:ring-brand outline-none;
+    }
+
+    .btn-filter {
+        @apply inline-flex items-center justify-center gap-2 rounded-xl bg-brand px-5 py-2.5 text-sm font-semibold text-white shadow-md shadow-brand/20 transition-all hover:bg-[#5B1F50] hover:translate-y-[-1px];
+    }
+
+    .btn-reset {
+        @apply inline-flex items-center justify-center gap-2 rounded-xl border border-slate-200 bg-white px-5 py-2.5 text-sm font-semibold text-slate-600 transition-all hover:bg-slate-50 hover:text-slate-900;
+    }
+
+    /* --- KPIs --- */
+    .kpi-grid {
+        @apply grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-5 mb-6;
+    }
+
+    .kpi-card {
+        @apply relative overflow-hidden rounded-2xl bg-white p-5 border border-slate-100 shadow-[0_4px_20px_-4px_rgba(0,0,0,0.03)] flex flex-col justify-between h-full transition-all hover:border-brand/20 hover:shadow-md;
+    }
+    
+    /* Barra decorativa lateral */
+    .kpi-card::before {
+        content: '';
+        @apply absolute left-0 top-0 bottom-0 w-1 bg-brand opacity-0 transition-opacity;
+    }
+    .kpi-card:hover::before {
+        @apply opacity-100;
+    }
+
+    .kpi-label {
+        @apply text-xs font-bold text-slate-400 uppercase tracking-wider mb-2 flex items-center gap-2;
+    }
+    
+    .kpi-value {
+        @apply text-2xl font-bold text-slate-800 tabular-nums;
+    }
+
+    /* --- CHART SECTION --- */
+    .viz-grid {
+        @apply grid grid-cols-1 lg:grid-cols-2 gap-6 mb-6;
+    }
+
+    .chart-card {
+        @apply bg-white rounded-2xl border border-slate-100 shadow-[0_2px_15px_-3px_rgba(0,0,0,0.03)] p-6;
+    }
+
+    .chart-header {
+        @apply mb-6 flex items-center justify-between;
+    }
+    
+    .chart-title {
+        @apply text-base font-bold text-slate-800;
+    }
+    .chart-subtitle {
+        @apply text-xs font-medium text-slate-400;
+    }
+}
