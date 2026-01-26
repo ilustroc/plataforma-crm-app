@@ -7,9 +7,8 @@ use App\Http\Controllers\ClientesControllers;
 use App\Http\Controllers\PanelController;
 use App\Http\Controllers\ReporteGestionesController;
 use App\Http\Controllers\ReportePagosController;
-use App\Http\Controllers\AdminUsersController;
-use App\Http\Controllers\PlaceholdersPagosController;
-use App\Http\Controllers\PlaceholdersGestionesController;
+use App\Http\Controllers\Admin\UserController;
+use App\Http\Controllers\Integracion\PagosImportController;
 use App\Http\Controllers\DashboardController;
 use App\Http\Controllers\ClientesCargaController;
 use App\Http\Controllers\AutorizacionController;
@@ -132,36 +131,60 @@ Route::middleware('auth')->group(function () {
     */
     Route::middleware('role:administrador')->group(function () {
 
-        Route::view('/integracion/data', 'placeholders.integracion-data')->name('integracion.data');
+        // =========================
+        // INTEGRACIÓN
+        // =========================
+        Route::prefix('integracion')->group(function () {
 
-        Route::get('/integracion/data/clientes/template', [ClientesCargaController::class, 'templateClientesMaster'])
-            ->name('integracion.data.clientes.template');
-        Route::post('/integracion/data/clientes/import',  [ClientesCargaController::class, 'importClientesMaster'])
-            ->name('integracion.data.clientes.import');
+            // Vista principal de Data
+            Route::view('data', 'imports.integracion-data')->name('integracion.data');
 
-        Route::get('/integracion/pagos',          [PlaceholdersPagosController::class, 'index'])->name('integracion.pagos');
-        Route::post('/integracion/pagos/import',  [PlaceholdersPagosController::class, 'import'])->name('integracion.pagos.import');
-        Route::get('/integracion/pagos/template', [PlaceholdersPagosController::class, 'template'])->name('integracion.pagos.template');
+            // DATA / CLIENTES
+            Route::get('data/clientes/template', [ClientesCargaController::class, 'templateClientesMaster'])
+                ->name('integracion.data.clientes.template');
 
-        Route::post('/integracion/pagos/import/cusco-castigada',  [PlaceholdersPagosController::class, 'importCajaCuscoCastigada'])->name('integracion.pagos.import.cusco');
-        Route::get('/integracion/pagos/template/cusco-castigada', [PlaceholdersPagosController::class, 'templateCajaCuscoCastigada'])->name('integracion.pagos.template.cusco');
+            Route::post('data/clientes/import', [ClientesCargaController::class, 'importClientesMaster'])
+                ->name('integracion.data.clientes.import');
 
-        Route::get('/integracion/pagos/template/cusco-extrajudicial', [PlaceholdersPagosController::class, 'templateCajaCuscoExtrajudicial'])->name('integracion.pagos.template.cusco_extrajudicial');
-        Route::post('/integracion/pagos/import/cusco-extrajudicial',  [PlaceholdersPagosController::class, 'importCajaCuscoExtrajudicial'])->name('integracion.pagos.import.cusco_extrajudicial');
+            // PAGOS
+            Route::get('pagos', [PagosImportController::class, 'create'])
+                ->name('integracion.pagos');
 
-        // ===== Integración ▸ Gestiones (PROPIA) – NUEVO =====
-        Route::get('/integracion/gestiones',                     [PlaceholdersGestionesController::class,'index'])->name('integracion.gestiones');
-        Route::get('/integracion/gestiones/template/propia',     [PlaceholdersGestionesController::class,'templatePropia'])->name('integracion.gestiones.template.propia');
-        Route::post('/integracion/gestiones/import/propia',      [PlaceholdersGestionesController::class,'importPropia'])->name('integracion.gestiones.import.propia');
+            Route::post('pagos/import', [PagosImportController::class, 'import'])
+                ->name('integracion.pagos.import');
 
-        // Administración de usuarios
-        Route::get('/administracion',                           [AdminUsersController::class, 'index'])->name('administracion');
-        Route::post('/administracion/supervisores',             [AdminUsersController::class, 'storeSupervisor'])->name('administracion.supervisores.store');
-        Route::post('/administracion/asesores',                 [AdminUsersController::class, 'storeAsesor'])->name('administracion.asesores.store');
-        Route::patch('/administracion/asesores/{id}/reasignar', [AdminUsersController::class, 'reassignAsesor'])->name('administracion.asesores.reassign');
-        Route::patch('/administracion/usuarios/{user}/toggle',   [AdminUsersController::class,'toggleActive'])->name('administracion.usuarios.toggle');
-        Route::patch('/administracion/usuarios/{user}/password', [AdminUsersController::class,'updatePassword'])->name('administracion.usuarios.password');
+            Route::get('pagos/template', [PagosImportController::class, 'template'])
+                ->name('integracion.pagos.template');
+        });
+
+        // =========================
+        // ADMINISTRACIÓN DE USUARIOS (NUEVO)
+        // =========================
+        
+        // Prefijo URL: /admin/users
+        // Prefijo Nombre: admin.users. (ej: admin.users.index)
+        Route::prefix('admin/users')->name('admin.users.')->group(function () {
+            
+            // Listado y Creación
+            Route::get('/', [UserController::class, 'index'])->name('index');
+            Route::post('/', [UserController::class, 'store'])->name('store');
+            
+            // Acciones sobre un usuario específico
+            Route::prefix('{user}')->group(function() {
+                // Actualizar / Eliminar (CRUD básico)
+                Route::patch('/', [UserController::class, 'update'])->name('update');
+                Route::delete('/', [UserController::class, 'destroy'])->name('destroy');
+
+                // Acciones especiales (Modales)
+                Route::patch('/toggle',   [UserController::class, 'toggle'])->name('toggle');
+                Route::patch('/password', [UserController::class, 'password'])->name('password');
+                Route::patch('/reassign', [UserController::class, 'reassign'])->name('reassign');
+                Route::patch('/role',     [UserController::class, 'setRole'])->name('role');
+            });
+        });
+
     });
+
 
     // Zonas por rol (opcional)
     Route::middleware('role:administrador')->get('/admin', fn () => 'Zona Admin');

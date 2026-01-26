@@ -2,21 +2,41 @@
 
 namespace Database\Seeders;
 
-// use Illuminate\Database\Console\Seeds\WithoutModelEvents;
 use Illuminate\Database\Seeder;
+use Illuminate\Support\Facades\Hash;
+use App\Models\User;
+use App\Models\Team;
 
 class DatabaseSeeder extends Seeder
 {
-    /**
-     * Seed the application's database.
-     */
     public function run(): void
     {
-        // \App\Models\User::factory(10)->create();
+        // 1. Crear Equipo Principal
+        $equipo = Team::create([
+            'name' => 'Gerencia General',
+            'description' => 'Equipo administrativo principal',
+            'is_active' => true,
+        ]);
 
-        // \App\Models\User::factory()->create([
-        //     'name' => 'Test User',
-        //     'email' => 'test@example.com',
-        // ]);
+        // 2. Crear Admin Test (Asignado al equipo)
+        User::create([
+            'name' => 'Admin Test',
+            'email' => 'test@test.com',
+            'password' => Hash::make('test1234'), // Contraseña segura
+            'role' => 'administrador',
+            'is_active' => true,
+            'email_verified_at' => now(),
+            'equipo_id' => $equipo->id, // Asignamos el ID del equipo creado arriba
+        ]);
+
+        // 3. Crear un Supervisor de prueba (opcional)
+        User::create([
+            'name' => 'Supervisor Demo',
+            'email' => 'sup@test.com',
+            'password' => Hash::make('test1234'),
+            'role' => 'supervisor',
+            'is_active' => true,
+            'equipo_id' => $equipo->id,
+        ]);
     }
 }

@@ -30,6 +30,14 @@ export default defineConfig({
         // Archivos de Reporte de pagos
         'resources/css/reporte_pagos.css',
         'resources/js/reporte_pagos.js',
+
+        // Archivos de Importar Pagos
+        'resources/css/importar_pagos.css',
+        'resources/js/importar_pagos.js',
+
+        // Archivos de Admin
+        'resources/css/admin.css',
+        'resources/js/admin.js',
       ],
       refresh: true,
     }),
