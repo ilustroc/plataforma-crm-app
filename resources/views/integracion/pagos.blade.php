@@ -8,7 +8,6 @@
 
 @section('content')
 
-<div class="mx-auto w-[92%] max-w-4xl">
     {{-- Header compacto --}}
     <div class="mb-4">
         <h1 class="text-xl font-semibold text-slate-800">Carga masiva de pagos</h1>
@@ -98,6 +97,5 @@
             </div>
         </form>
     </div>
-</div>
 
 @endsection

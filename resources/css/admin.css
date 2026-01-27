@@ -1,66 +1,92 @@
-@import "tailwindcss";
+/* ✅ Importa solo theme + utilities (SIN preflight/base) */
+@import "tailwindcss/theme";
+@import "tailwindcss/utilities";
 
 @theme {
-    --color-brand: #6F2661;
+  --color-brand: #6F2661;
+  --color-brand-dark: #5B1F50;
 }
 
 @layer components {
-    /* Layout Cards */
-    .admin-card {
-        @apply bg-white rounded-2xl border border-slate-100 shadow-sm p-6 h-full transition-all hover:shadow-md;
-    }
-    .admin-card-header {
-        @apply flex items-center gap-2 mb-4 pb-2 border-b border-slate-50;
-    }
-    .admin-card-title {
-        @apply text-lg font-bold text-slate-800;
-    }
 
-    /* Forms */
-    .form-group {
-        @apply mb-4;
-    }
-    .form-label {
-        @apply block text-xs font-bold text-slate-500 uppercase tracking-wide mb-1.5;
-    }
-    .form-input {
-        @apply w-full rounded-xl border-slate-200 bg-slate-50 py-2.5 px-3 text-sm text-slate-700 transition-all focus:bg-white focus:border-brand focus:ring-1 focus:ring-brand outline-none;
-    }
-    .form-select {
-        @apply w-full rounded-xl border-slate-200 bg-slate-50 py-2.5 px-3 text-sm text-slate-700 transition-all focus:bg-white focus:border-brand focus:ring-1 focus:ring-brand outline-none cursor-pointer;
-    }
+  /* ====== Layout ====== */
+  .admin-page-head {
+    @apply flex flex-col md:flex-row justify-between items-start md:items-end mb-8 gap-4;
+  }
 
-    /* Buttons */
-    .btn-primary {
-        @apply w-full flex items-center justify-center gap-2 rounded-xl bg-brand py-2.5 text-sm font-bold text-white shadow-md shadow-brand/20 transition-all hover:bg-[#5B1F50] active:scale-95;
-    }
-    .btn-icon {
-        @apply p-1.5 rounded-lg text-slate-400 hover:text-brand hover:bg-slate-50 transition-colors;
-    }
-    .btn-sm-action {
-        @apply px-2 py-1 rounded text-xs font-medium border border-slate-200 bg-white text-slate-600 hover:border-brand hover:text-brand transition-colors;
-    }
+  .admin-actions {
+    @apply flex flex-wrap gap-3;
+  }
 
-    /* Badges & Status */
-    .badge {
-        @apply inline-flex items-center px-2 py-0.5 rounded-full text-xs font-bold border;
-    }
-    .status-on { @apply bg-emerald-50 text-emerald-700 border-emerald-200; }
-    .status-off { @apply bg-red-50 text-red-700 border-red-200; }
-    
-    /* Table */
-    .admin-table { @apply w-full text-left border-collapse; }
-    .admin-table th { @apply bg-slate-50 p-3 text-xs font-bold text-slate-400 uppercase tracking-wider border-b border-slate-100; }
-    .admin-table td { @apply p-3 border-b border-slate-50 text-sm text-slate-600 align-middle; }
-    .admin-table tr:hover td { @apply bg-slate-50/50; }
+  /* ====== Cards ====== */
+  .admin-card {
+    @apply bg-white rounded-2xl border border-slate-100 shadow-sm p-6 w-full transition-all hover:shadow-md;
+  }
 
-    /* Modal */
-    .modal-backdrop {
-        @apply fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-sm transition-opacity opacity-0 pointer-events-none flex items-center justify-center p-4;
-    }
-    .modal-backdrop.show { @apply opacity-100 pointer-events-auto; }
-    .modal-box {
-        @apply bg-white rounded-2xl shadow-xl w-full max-w-md scale-95 transition-transform duration-200 p-6;
-    }
-    .modal-backdrop.show .modal-box { @apply scale-100; }
+  .admin-card-header {
+    @apply flex items-center gap-2 mb-4 pb-2 border-b border-slate-50;
+  }
+
+  .admin-card-title {
+    @apply text-lg font-bold text-slate-800;
+  }
+
+  /* ====== Forms ====== */
+  .form-group { @apply mb-4; }
+  .form-label { @apply block text-xs font-bold text-slate-500 uppercase tracking-wide mb-1.5; }
+  .form-input { @apply w-full rounded-xl border-slate-200 bg-slate-50 py-2.5 px-3 text-sm text-slate-700 transition-all focus:bg-white focus:border-brand focus:ring-1 focus:ring-brand outline-none; }
+  .form-select { @apply w-full rounded-xl border-slate-200 bg-slate-50 py-2.5 px-3 text-sm text-slate-700 transition-all focus:bg-white focus:border-brand focus:ring-1 focus:ring-brand outline-none cursor-pointer; }
+
+  /* ====== Buttons (a prueba de conflictos) ====== */
+  .btn-primary,
+  .btn-secondary {
+    @apply inline-flex items-center justify-center gap-2 rounded-xl text-sm font-bold
+      transition-all active:scale-95 cursor-pointer select-none whitespace-nowrap;
+  }
+
+  /* Primario (Asesor) */
+  .btn-primary {
+    @apply bg-brand text-white shadow-lg shadow-brand/20 py-2.5 px-6 hover:bg-brand-dark hover:-translate-y-0.5;
+  }
+
+  /* Secundario (Supervisor) - ✅ garantizado (no queda “sin estilo”) */
+  .btn-secondary {
+    @apply bg-slate-800 text-white shadow-lg shadow-slate-300/50 py-2.5 px-6 hover:bg-slate-700 hover:-translate-y-0.5;
+  }
+
+  /* Acciones pequeñas */
+  .btn-sm-action {
+    @apply inline-flex items-center justify-center gap-1.5 px-2.5 py-1.5 rounded-lg text-xs font-semibold
+      border border-slate-200 bg-white text-slate-600 hover:border-brand hover:text-brand hover:bg-slate-50 transition-colors shadow-sm;
+  }
+
+  /* ====== Badges ====== */
+  .badge { @apply inline-flex items-center px-2.5 py-1 rounded-full text-[10px] font-bold border uppercase tracking-wider; }
+  .status-on { @apply bg-emerald-50 text-emerald-700 border-emerald-200; }
+  .status-off { @apply bg-red-50 text-red-700 border-red-200; }
+
+  /* ====== Table ====== */
+  .admin-table { @apply w-full text-left border-collapse; }
+  .admin-table th { @apply bg-slate-50/80 p-3 text-xs font-bold text-slate-400 uppercase tracking-wider border-b border-slate-100; }
+  .admin-table td { @apply p-3 border-b border-slate-50 text-sm text-slate-600 align-middle; }
+  .admin-table tr:hover td { @apply bg-slate-50/60; }
+
+  /* ====== Team list (mejora, evita crecer infinito) ====== */
+  .team-list { @apply space-y-2 max-h-48 overflow-y-auto pr-1; }
+  .team-item { @apply flex items-center justify-between bg-slate-50/80 p-2 rounded-lg border border-slate-100 hover:border-slate-200 transition-all; }
+
+  .avatar-initials {
+    @apply h-8 w-8 rounded-full bg-white border border-slate-200 flex items-center justify-center
+      text-xs font-bold text-slate-600 uppercase;
+  }
+
+  .status-dot {
+    @apply absolute -bottom-0.5 -right-0.5 h-2.5 w-2.5 rounded-full border-2 border-white;
+  }
+
+  /* ====== Modal ====== */
+  .modal-backdrop { @apply fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-sm transition-opacity opacity-0 pointer-events-none flex items-center justify-center p-4; }
+  .modal-backdrop.show { @apply opacity-100 pointer-events-auto; }
+  .modal-box { @apply bg-white rounded-2xl shadow-2xl w-full max-w-md scale-95 transition-transform duration-200 p-6; }
+  .modal-backdrop.show .modal-box { @apply scale-100; }
 }
