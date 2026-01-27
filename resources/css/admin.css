@@ -1,4 +1,3 @@
-/* ✅ Importa solo theme + utilities (SIN preflight/base) */
 @import "tailwindcss/theme";
 @import "tailwindcss/utilities";
 

@@ -4,6 +4,8 @@ namespace App\Http\Controllers\Admin;
 
 use App\Http\Controllers\Controller;
 use App\Http\Requests\Admin\StoreUserRequest;
+use App\Http\Requests\Admin\UpdateUserPasswordRequest;
+use App\Http\Requests\Admin\UpdateUserRequest;
 use App\Models\User;
 use App\Services\Admin\UserService;
 use Illuminate\Http\Request;
@@ -19,8 +21,9 @@ class UserController extends Controller
 
     public function index()
     {
-        $supervisores = $this->userService->getHierarchy();
-        $listaSupervisores = $supervisores->pluck('name', 'id'); 
+        // Agregamos paginación aquí para mejor rendimiento
+        $supervisores = $this->userService->getHierarchy(); 
+        $listaSupervisores = User::where('role', 'supervisor')->pluck('name', 'id');
 
         return view('admin.users.index', compact('supervisores', 'listaSupervisores'));
     }
@@ -31,9 +34,10 @@ class UserController extends Controller
         return back()->with('ok', 'Usuario creado correctamente.');
     }
 
-    public function password(Request $request, User $user)
+    // USAMOS EL REQUEST DEDICADO
+    public function password(UpdateUserPasswordRequest $request, User $user)
     {
-        $request->validate(['password' => 'required|min:6|confirmed']);
+        // La validación ya ocurrió automáticamente en el Request
         $this->userService->updatePassword($user, $request->password);
         return back()->with('ok', 'Contraseña actualizada.');
     }
@@ -44,9 +48,9 @@ class UserController extends Controller
         return back()->with('ok', 'Estado actualizado.');
     }
 
-    public function reassign(Request $request, User $user)
+    // USAMOS EL REQUEST DEDICADO
+    public function reassign(UpdateUserRequest $request, User $user)
     {
-        $request->validate(['supervisor_id' => 'required|exists:users,id']);
         $this->userService->reassign($user, $request->supervisor_id);
         return back()->with('ok', 'Asesor reasignado.');
     }
