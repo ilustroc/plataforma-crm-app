@@ -11,7 +11,7 @@
 }
 
 @layer components {
-  /* Específico del Dashboard */
+  /* Dashboard */
   .nav-item {
       @apply flex items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-medium text-slate-500 transition-all duration-200 hover:bg-slate-50 hover:text-slate-900;
   }
@@ -24,7 +24,7 @@
   .nav-item:hover .nav-icon { @apply text-slate-600; }
   .nav-item.active .nav-icon { @apply text-brand; }
 
-  /* Toasts (Repetimos clases o usamos un archivo shared.css si prefieres no duplicar, pero así queda aislado) */
+  /* Toasts*/
   .toast {
     @apply flex items-center gap-4 rounded-2xl p-4 shadow-lg bg-white border border-slate-100 backdrop-blur-md transition-all duration-300;
   }
