@@ -6,58 +6,58 @@ use Carbon\Carbon;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Schema;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Str;
 use App\Support\WorkflowMailer;
+
+// Modelos
+use App\Models\Cartera; // <--- Nuevo Modelo Principal
 use App\Models\PromesaPago;
 use App\Models\PromesaOperacion;
 use App\Models\PromesaCuota;
 use App\Models\Pagos;
-use App\Models\PagoPropia;
-use App\Models\PagoCajaCuscoCastigada;
-use App\Models\PagoCajaCuscoExtrajudicial;
-use App\Models\Clientes;
 use App\Models\CnaSolicitud;
-
 
 class ClientesControllers extends Controller
 {
     public function show(string $dni)
     {
         try {
-            // ===== Cuentas del cliente
-            $cuentas = Clientes::where('dni',$dni)
+            // ===== 1. Cuentas del cliente (Desde Tabla Cartera)
+            // Usamos 'documento' que es el campo DNI en la nueva tabla
+            $cuentas = Cartera::where('documento', $dni)
                 ->orderByDesc('updated_at')
                 ->get();
 
             abort_if($cuentas->isEmpty(), 404);
+            
             $nombre = $cuentas->first()->nombre;
 
-            // ===== A) Pagos
+            // ===== 2. Pagos (Historial General)
             $pagos = Pagos::where('documento', $dni)
                 ->select(
                     DB::raw('DATE(fecha) as fecha'),
                     DB::raw('monto as monto'),
-                    DB::raw("COALESCE(operacion,'-') as oper"),
+                    DB::raw("COALESCE(operacion,'-') as operacion"),
                     DB::raw("UPPER(COALESCE(gestor,'-')) as gestor"),
                     DB::raw("'-' as estado"),
                     DB::raw("'PAGOS' as fuente"),
                     'moneda'
                 )
                 ->orderByDesc('fecha')
-                ->get()
-                ->values();
+                ->get();
 
             $totPagos = (float) $pagos->sum('monto');
 
-            // ===== B) Promesas (si tienes los scopes/relaciones)
-            $promesas = PromesaPago::where('dni',$dni)
+            // ===== 3. Promesas (Historial de Acuerdos)
+            $promesas = PromesaPago::where('dni', $dni)
                 ->when(method_exists(PromesaPago::class,'scopeWithDecisionRefs'), fn($q)=>$q->withDecisionRefs())
-                ->with('operaciones')
+                ->with('operaciones') // Trae el detalle de operaciones
                 ->orderByDesc('fecha_promesa')
                 ->get();
 
-            // ===== C) CCD
-            $ccd        = collect();
-            $ccdByCodigo= collect();
+            // ===== 4. CCD (Documentos Digitales - Legacy)
+            $ccd = collect();
+            $ccdByCodigo = collect();
 
             if (Schema::hasTable('ccd_clientes')) {
                 $cols = DB::getSchemaBuilder()->getColumnListing('ccd_clientes');
@@ -77,104 +77,67 @@ class ClientesControllers extends Controller
                 }
             }
 
-            // ===== D) Métricas por operación (sum/list para cada cuenta) SOLO PAGOS
+            // ===== 5. Mapeo de Pagos por Operación (Para la vista de tarjetas)
             $ops = $cuentas->pluck('operacion')->filter()->unique()->values();
-
             $pagosPorOperacion = collect();
 
             if ($ops->isNotEmpty()) {
+                // Filtramos los pagos que coinciden con las operaciones de la cartera
+                $pagosFlat = $pagos->whereIn('oper', $ops);
+                $pagosPorOperacion = $pagosFlat->groupBy('oper');
 
-                $pagosFlat = DB::table('pagos')
-                    ->select([
-                        'operacion',
-                        DB::raw('DATE(fecha) as fecha'),
-                        DB::raw('monto as monto'),
-                        DB::raw("'PAGOS' as fuente"),
-                        DB::raw("UPPER(COALESCE(gestor,'-')) as gestor"),
-                        'moneda',
-                    ])
-                    ->where('documento', $dni)
-                    ->whereIn('operacion', $ops)
-                    ->get();
-
-                $pagosPorOperacion = $pagosFlat->groupBy('operacion');
-
+                // Inyectamos el resumen de pagos dentro del objeto cuenta para facilitar la vista
                 $cuentas = $cuentas->map(function ($c) use ($pagosPorOperacion) {
                     $opsKey = $c->operacion;
-
                     $grupo = $opsKey ? ($pagosPorOperacion[$opsKey] ?? collect()) : collect();
 
-                    $c->pagos_sum   = (float) $grupo->sum('monto');
-                    $c->pagos_list  = $grupo->sortByDesc('fecha')->values();
-
+                    $c->pagos_sum  = (float) $grupo->sum('monto');
+                    $c->pagos_list = $grupo->sortByDesc('fecha')->values();
                     return $c;
                 });
-
             } else {
-
                 $cuentas = $cuentas->map(function ($c) {
-                    $c->pagos_sum   = 0.0;
-                    $c->pagos_list  = collect();
+                    $c->pagos_sum  = 0.0;
+                    $c->pagos_list = collect();
                     return $c;
                 });
             }
 
-            // ===== E) CNAs por operación (100% defensivo)
+            // ===== 6. CNAs (Cartas de No Adeudo)
             $cnasByOperacion = collect();
             if (Schema::hasTable('cna_solicitudes')) {
-                $colsCna = DB::getSchemaBuilder()->getColumnListing('cna_solicitudes');
-            
-                // Trae estado y, si existen, rutas a archivos
-                $want = ['id','dni','nro_carta','operaciones','workflow_estado','created_at','pdf_path','docx_path'];
-                $selCna = collect($want)->filter(fn($c)=>in_array($c,$colsCna))->values()->all();
-            
-                $cnas = DB::table('cna_solicitudes')
-                    ->select($selCna)
-                    ->where('dni',$dni)
+                $cnas = CnaSolicitud::where('dni', $dni)
+                    ->select('id','dni','nro_carta','operaciones','workflow_estado','created_at','pdf_path','docx_path')
                     ->orderByDesc('created_at')
                     ->get();
             
                 $map = [];
                 foreach ($cnas as $row) {
-                    $opsRaw = $row->operaciones ?? '[]';
-                    $opsArr = is_array($opsRaw) ? $opsRaw : (json_decode($opsRaw, true) ?: []);
-                    if (!is_array($opsArr)) {
-                        $opsArr = array_filter(array_map('trim', explode(',', (string)$opsRaw)));
+                    // Decodificar JSON de operaciones (nuevo formato) o array legacy
+                    $opsArr = is_array($row->operaciones) ? $row->operaciones : (json_decode($row->operaciones, true) ?: []);
+                    
+                    // Fallback para string separado por comas
+                    if (!is_array($opsArr) && is_string($row->operaciones)) {
+                        $opsArr = array_filter(array_map('trim', explode(',', $row->operaciones)));
                     }
             
                     foreach ($opsArr as $op) {
                         if (!$op) continue;
                         $map[$op] = $map[$op] ?? collect();
-                        $map[$op]->push((object)[
-                            'id'              => $row->id,
-                            'nro_carta'       => $row->nro_carta ?? $row->id,
-                            'workflow_estado' => $row->workflow_estado ?? 'pendiente',
-                            'created_at'      => $row->created_at,
-                            'pdf_path'        => $row->pdf_path   ?? null,
-                            'docx_path'       => $row->docx_path  ?? null,
-                        ]);
+                        $map[$op]->push($row);
                     }
                 }
                 $cnasByOperacion = collect($map);
             }
 
-            // ===== F) Próximo N.º de carta CNA (para el modal)
-            $nextNroCarta = null;
-            if (Schema::hasTable('cna_solicitudes')) {
-                $maxCorr = (int) DB::table('cna_solicitudes')->max('correlativo');
-                $nextNroCarta = str_pad(($maxCorr ?: 0) + 1, 6, '0', STR_PAD_LEFT); // 000001, 000002, ...
-            }
-
             return view('clientes.show', compact(
-                'dni','nombre','cuentas','pagos','promesas','ccd','pagosPorOperacion','totPagos'
-            ) + [
-                'ccdByCodigo'     => $ccdByCodigo,
-                'cnasByOperacion' => $cnasByOperacion,
-                'nextNroCarta'    => $nextNroCarta,   // << NUEVO
-            ]);
+                'dni','nombre','cuentas','pagos','promesas','ccd','pagosPorOperacion','totPagos',
+                'ccdByCodigo', 'cnasByOperacion'
+            ));
+
         } catch (\Throwable $e) {
             \Log::error('Clientes.show ERROR', ['dni'=>$dni,'msg'=>$e->getMessage(),'file'=>$e->getFile(),'line'=>$e->getLine()]);
-            return back()->withErrors('Ocurrió un error cargando el cliente. Revisa los logs.');
+            return back()->withErrors('Ocurrió un error cargando el cliente: ' . $e->getMessage());
         }
     }
 
@@ -182,68 +145,42 @@ class ClientesControllers extends Controller
     {
         $r->merge(['dni' => $dni]);
 
+        // Si es cancelación, usamos fecha_pago específica
         if ($r->input('tipo') === 'cancelacion' && $r->filled('fecha_pago_cancel')) {
             $r->merge(['fecha_pago' => $r->input('fecha_pago_cancel')]);
         }
 
-        // ===== VALIDACIÓN
+        // ===== VALIDACIÓN =====
         $rules = [
-            'dni'           => 'required|string|max:30',
-            'tipo'          => 'required|in:convenio,cancelacion',
-            'nota'          => 'nullable|string|max:500',
+            'dni'          => 'required|string|max:30',
+            'tipo'         => 'required|in:convenio,cancelacion',
+            'nota'         => 'nullable|string|max:1000',
+            
+            // JSON stringified desde el frontend
+            'operaciones'  => 'required', 
 
-            // <<-- HAZ LA LISTA OBLIGATORIA
-            'operaciones'   => 'required|array|min:1',
-            'operaciones.*' => 'string|max:50',
+            // Validaciones condicionales
+            'fecha_pago'   => 'exclude_unless:tipo,cancelacion|required|date',
+            'monto'        => 'exclude_unless:tipo,cancelacion|required|numeric|min:0.01', // Input name="monto" en cancelación
 
-            // Cancelación
-            'fecha_pago'    => 'exclude_unless:tipo,cancelacion|required|date',
-            'monto_cancel'  => 'exclude_unless:tipo,cancelacion|required|numeric|min:0.01',
-
-            // Convenio
             'nro_cuotas'     => 'exclude_unless:tipo,convenio|required|integer|min:1',
             'monto_convenio' => 'exclude_unless:tipo,convenio|required|numeric|min:0.01',
-            'cron_fecha'     => 'exclude_unless:tipo,convenio|required|array|min:1',
-            'cron_fecha.*'   => 'exclude_unless:tipo,convenio|date',
-            'cron_monto'     => 'exclude_unless:tipo,convenio|required|array|min:1',
-            'cron_monto.*'   => 'exclude_unless:tipo,convenio|numeric|min:0.01',
-            'cron_balon'     => 'exclude_unless:tipo,convenio|nullable|integer|min:1',
+            // Cronograma manual si aplica
+            'cron_fecha'     => 'exclude_unless:tipo,convenio|nullable|array',
+            'cron_monto'     => 'exclude_unless:tipo,convenio|nullable|array',
         ];
+        
         $r->validate($rules);
 
-        // ===== NORMALIZACIONES
-        if ($r->filled('fecha_pago')) {
-            $r->merge(['fecha_pago' => $this->toIsoDate($r->input('fecha_pago'))]);
+        // Decodificar operaciones (vienen como JSON string "[123, 456]")
+        $opsInput = $r->input('operaciones');
+        $opsArray = is_string($opsInput) ? json_decode($opsInput, true) : $opsInput;
+        
+        if (empty($opsArray) || !is_array($opsArray)) {
+            return back()->withErrors(['operaciones' => 'Debes seleccionar al menos una operación.'])->withInput();
         }
 
-        $cronFechas = array_map(fn($f)=>$this->toIsoDate($f), (array)$r->input('cron_fecha', []));
-        $cronMontos = array_map(fn($m)=>$this->normalizeMoney($m), (array)$r->input('cron_monto', []));
-        $cronBalon  = (int)$r->input('cron_balon', 0);
-
-        foreach (['monto_convenio','monto_cancel'] as $fld) {
-            if ($r->has($fld)) $r->merge([$fld => $this->normalizeMoney($r->input($fld))]);
-        }
-
-        // ===== REGLAS CONVENIO (igual que tenías)
-        if ($r->input('tipo') === 'convenio') {
-            $n = max(1, (int)$r->input('nro_cuotas'));
-            if (count($cronFechas) !== $n || count($cronMontos) !== $n) {
-                $cronFechas = array_slice($cronFechas, 0, $n);
-                $cronMontos = array_slice($cronMontos, 0, $n);
-                while (count($cronFechas) < $n) $cronFechas[] = $cronFechas ? end($cronFechas) : now()->toDateString();
-                while (count($cronMontos) < $n) $cronMontos[] = 0;
-            }
-            $suma = array_sum(array_map('floatval', $cronMontos));
-            if (abs($suma - (float)$r->input('monto_convenio')) > 0.01) {
-                return back()->withErrors('La suma del cronograma (S/ '.number_format($suma,2).') debe coincidir con el Monto convenio.')
-                            ->withInput();
-            }
-            if ($cronBalon > 0 && $cronBalon > $n) {
-                return back()->withErrors('La cuota balón no existe en el cronograma.')->withInput();
-            }
-        }
-
-        // ===== PERSISTENCIA
+        // ===== LÓGICA DE DATOS =====
         DB::beginTransaction();
         try {
             $base = [
@@ -255,127 +192,123 @@ class ClientesControllers extends Controller
                 'user_id'             => $r->user()->id ?? null,
             ];
 
+            // A) Convenio
             if ($r->input('tipo') === 'convenio') {
                 $n = max(1, (int)$r->input('nro_cuotas'));
-                $firstDate = Carbon::parse($cronFechas[0] ?? now());
-                $avgCuota = $n > 0 ? (array_sum(array_map('floatval', $cronMontos)) / $n) : 0;
+                
+                // Generar cronograma automático si no viene manual
+                $montoTotal = (float)$r->input('monto_convenio');
+                $fechaIni   = Carbon::parse($r->input('fecha_pago')); // name="fecha_pago" en el form de convenio
+                
+                // Calculo simple de cuota promedio para guardar en cabecera
+                $avgCuota = $montoTotal / $n;
 
                 $data = array_merge($base, [
                     'fecha_promesa'  => now()->toDateString(),
-                    'fecha_pago'     => $firstDate->toDateString(),
-                    'cuota_dia'      => (int)$firstDate->day,
+                    'fecha_pago'     => $fechaIni->toDateString(),
+                    'cuota_dia'      => (int)$fechaIni->day,
                     'nro_cuotas'     => $n,
-                    'monto_convenio' => $r->input('monto_convenio'),
+                    'monto'          => $montoTotal, // Usamos 'monto' como el total general en DB
+                    'monto_convenio' => $montoTotal,
                     'monto_cuota'    => $avgCuota,
                 ]);
-            } else { // cancelación
+            } 
+            // B) Cancelación
+            else { 
                 $fecha = Carbon::parse($r->input('fecha_pago'));
+                $monto = (float)$r->input('monto'); // El input se llama 'monto' en el modal de cancelacion? (Verificar vista)
+                // En tu vista anterior era 'monto' en ambos, ajustado.
+
                 $data = array_merge($base, [
-                    'fecha_promesa' => $fecha->toDateString(),
+                    'fecha_promesa' => now()->toDateString(),
                     'fecha_pago'    => $fecha->toDateString(),
-                    'monto'         => $r->input('monto_cancel'),
+                    'monto'         => $monto,
+                    'nro_cuotas'    => 1,
                 ]);
             }
 
-            /** @var \App\Models\PromesaPago $promesa */
+            /** @var PromesaPago $promesa */
             $promesa = PromesaPago::create($data);
 
-            // --- Operaciones (limpias, únicas) ---
-            $ops = collect($r->input('operaciones', []))
-                ->map(fn($op)=>trim((string)$op))
-                ->filter()
-                ->unique()
-                ->values()
-                ->all();
+            // --- Guardar Detalle de Operaciones ---
+            $opsRows = [];
+            foreach ($opsArray as $op) {
+                // Buscamos la entidad real en la Cartera
+                $carteraInfo = Cartera::where('operacion', $op)->first();
+                $entidadReal = $carteraInfo ? $carteraInfo->entidad : 'PROPIA';
 
-            // Legacy: guarda TODAS en cadena "op1, op2"
-            $promesa->operacion = implode(', ', $ops);
-            $promesa->save();
-
-            // Detalle: una fila por operación
-            $now = now();
-            $rows = [];
-            foreach ($ops as $op) {
-                $rows[] = [
+                $opsRows[] = [
                     'promesa_id' => $promesa->id,
                     'operacion'  => $op,
-                    'cartera'    => 'PROPIA', // o la cartera real por operación si la tienes
-                    'created_at' => $now,
-                    'updated_at' => $now,
+                    'cartera'    => $entidadReal, 
+                    'created_at' => now(),
+                    'updated_at' => now(),
                 ];
             }
-            PromesaOperacion::insert($rows);
+            PromesaOperacion::insert($opsRows);
 
-            // Cronograma (solo convenio)
+            // Legacy support (campo string)
+            $promesa->operacion = implode(', ', $opsArray);
+            $promesa->save();
+
+            // --- Generar Cuotas (Solo Convenio) ---
             if ($promesa->tipo === 'convenio') {
-                $rows = [];
-                foreach ($cronFechas as $i => $f) {
-                    $rows[] = [
+                $cuotasRows = [];
+                $fechaCursor = Carbon::parse($promesa->fecha_pago);
+                $saldo = $promesa->monto;
+                $cuotaBase = floor(($promesa->monto / $promesa->nro_cuotas) * 100) / 100;
+                
+                for ($i = 1; $i <= $promesa->nro_cuotas; $i++) {
+                    // Ajuste de centavos en la primera cuota
+                    $montoEstaCuota = ($i === 1) 
+                        ? ($promesa->monto - ($cuotaBase * ($promesa->nro_cuotas - 1))) 
+                        : $cuotaBase;
+
+                    $cuotasRows[] = [
                         'promesa_id' => $promesa->id,
-                        'nro'        => $i + 1,
-                        'fecha'      => Carbon::parse($f)->toDateString(),
-                        'monto'      => (float)$cronMontos[$i],
-                        'es_balon'   => ($cronBalon === ($i + 1)),
+                        'nro'        => $i,
+                        'fecha'      => $fechaCursor->toDateString(),
+                        'monto'      => $montoEstaCuota,
+                        'es_balon'   => false,
                         'created_at' => now(),
                         'updated_at' => now(),
                     ];
+                    
+                    $fechaCursor->addMonth(); // Siguiente mes
                 }
-                PromesaCuota::insert($rows);
+                PromesaCuota::insert($cuotasRows);
             }
 
             DB::commit();
             
-            WorkflowMailer::promesaPendiente($promesa);
+            // Notificar (opcional)
+            if (class_exists(WorkflowMailer::class)) {
+                WorkflowMailer::promesaPendiente($promesa);
+            }
+
             return back()->with('ok', 'Propuesta registrada y enviada para autorización.');
+
         } catch (\Throwable $e) {
             DB::rollBack();
-            return back()->withErrors($e->getMessage())->withInput();
+            return back()->withErrors('Error al guardar: ' . $e->getMessage())->withInput();
         }
     }
 
-    /** Normaliza fechas a formato ISO (YYYY-MM-DD). */
+    // --- Helpers ---
+
     private function toIsoDate(?string $v): ?string
     {
-        $v = trim((string)$v);
-        if ($v === '') return null;
-
-        if (preg_match('~^\d{1,2}/\d{1,2}/\d{4}$~', $v)) {
-            [$d,$m,$y] = explode('/', $v);
-            return sprintf('%04d-%02d-%02d', (int)$y, (int)$m, (int)$d);
+        if (!$v) return null;
+        try {
+            return Carbon::parse($v)->toDateString();
+        } catch (\Exception $e) {
+            return null;
         }
-        if (preg_match('~^\d{4}-\d{1,2}-\d{1,2}$~', $v)) {
-            return $v;
-        }
-        $ts = strtotime($v);
-        return $ts ? date('Y-m-d', $ts) : null;
     }
 
-    /** Normaliza montos: "1.234,56", "S/ 200" → "1234.56". */
     private function normalizeMoney(?string $v): ?string
     {
-        $v = trim((string)$v);
-        if ($v === '') return null;
-
-        $v = preg_replace('/[^0-9\-\.,]/', '', $v) ?? '';
-        $hasComma = strpos($v, ',') !== false;
-        $hasDot   = strpos($v, '.') !== false;
-
-        if ($hasComma && $hasDot) {
-            $lastComma = strrpos($v, ',');
-            $lastDot   = strrpos($v, '.');
-            if ($lastComma > $lastDot) {
-                $v = str_replace('.', '', $v);
-                $v = str_replace(',', '.', $v);
-            } else {
-                $v = str_replace(',', '', $v);
-            }
-        } elseif ($hasComma && !$hasDot) {
-            $v = str_replace('.', '', $v);
-            $v = str_replace(',', '.', $v);
-        } else {
-            $v = str_replace(',', '', $v);
-        }
-
-        return is_numeric($v) ? $v : null;
+        if (!$v) return null;
+        return preg_replace('/[^0-9\.]/', '', str_replace(',', '', $v));
     }
 }

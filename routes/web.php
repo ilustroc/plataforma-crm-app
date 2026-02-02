@@ -9,8 +9,8 @@ use App\Http\Controllers\ReporteGestionesController;
 use App\Http\Controllers\ReportePagosController;
 use App\Http\Controllers\Admin\UserController;
 use App\Http\Controllers\Integracion\PagosImportController;
+use App\Http\Controllers\Integracion\CarterasImportController;
 use App\Http\Controllers\DashboardController;
-use App\Http\Controllers\ClientesCargaController;
 use App\Http\Controllers\AutorizacionController;
 use App\Http\Controllers\PromesaPdfController;
 use App\Http\Controllers\CnaController;
@@ -136,22 +136,27 @@ Route::middleware('auth')->group(function () {
         // =========================
         Route::prefix('integracion')->group(function () {
 
-            // Vista principal de Data
-            Route::view('data', 'imports.integracion-data')->name('integracion.data');
+            // 1. Vista Principal de Carga de Data
+            Route::view('/carteras', 'integracion.carteras')->name('carteras');
 
-            // DATA / CLIENTES
-            Route::get('data/clientes/template', [ClientesCargaController::class, 'templateClientesMaster'])
-                ->name('integracion.data.clientes.template');
+            // 2. Rutas para Carga de Carteras (Cartera Master)
+            Route::prefix('data/carteras')->name('integracion.carteras.')->group(function () {
 
-            Route::post('data/clientes/import', [ClientesCargaController::class, 'importClientesMaster'])
-                ->name('integracion.data.clientes.import');
+                // Descargar plantilla CSV
+                Route::get('/template', [CarterasImportController::class, 'templateCarterasMaster'])
+                    ->name('template');
+
+                // Procesar subida del archivo
+                Route::post('/import', [CarterasImportController::class, 'importCarterasMaster'])
+                    ->name('import');
+            });
 
             // PAGOS
             Route::get('pagos', [PagosImportController::class, 'create'])
                 ->name('integracion.pagos');
 
-            Route::post('pagos/import', [PagosImportController::class, 'import'])
-                ->name('integracion.pagos.import');
+            Route::post('pagos/store', [PagosImportController::class, 'store'])
+                ->name('integracion.pagos.store');
 
             Route::get('pagos/template', [PagosImportController::class, 'template'])
                 ->name('integracion.pagos.template');

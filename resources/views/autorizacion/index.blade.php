@@ -1,622 +1,221 @@
-{{-- resources/views/autorizacion/index.blade.php --}}
 @extends('layouts.app')
 @section('title','Autorización de Promesas')
 @section('crumb','Autorización')
 
-@section('content')
-<div class="container-fluid">
-  <div class="card">
-    <div class="card-body d-flex align-items-center justify-content-between">
-      <h5 class="mb-0">
-        Autorización de Promesas
-        <small class="text-muted ms-2">{{ $isSupervisor ? 'Bandeja del Supervisor' : 'Bandeja del Administrador' }}</small>
-      </h5>
-      <form class="d-flex" method="GET" action="{{ route('autorizacion') }}">
-        <input name="q" value="{{ $q }}" class="form-control form-control-sm me-2" placeholder="DNI / Operación / Nota">
-        <button class="btn btn-primary btn-sm">Buscar</button>
-        @if($q)
-          <a class="btn btn-outline-secondary btn-sm ms-2" href="{{ route('autorizacion') }}">Limpiar</a>
-        @endif
-      </form>
-    </div>
-  </div>
-
-  @if(session('ok'))
-    <div class="alert alert-success mt-3 py-2">{{ session('ok') }}</div>
-  @endif
-  @if($errors->any())
-    <div class="alert alert-danger mt-3 py-2">{{ $errors->first() }}</div>
-  @endif
-
-  {{-- ====== Promesas ====== --}}
-  <div class="card mt-3">
-    <div class="card-body p-0">
-      <div class="table-responsive">
-        <table class="table table-sm table-hover align-middle mb-0">
-          <thead class="table-light">
-            <tr>
-              <th class="text-center">DNI</th>
-              <th class="text-center">Operación(es)</th>
-              <th class="text-center">Fecha</th>
-              <th class="text-end">Monto (S/)</th>
-              <th>Nota</th>
-              <th class="text-end">Acciones</th>
-            </tr>
-          </thead>
-          <tbody>
-          @forelse($rows as $p)
-            @php
-              $fechaYmd = $p->fecha_promesa ? substr((string)$p->fecha_promesa,0,10) : '—';
-              $fechaDmy = $p->fecha_promesa ? \Carbon\Carbon::parse($p->fecha_promesa)->format('d/m/Y') : '';
-              $crono    = $p->cuotas_json ?? [];
-              $hasBalon = (bool)($p->has_balon ?? false);
-              $montoMostrar = (float)($p->monto > 0 ? $p->monto : $p->monto_convenio);
-            @endphp
-            <tr>
-              <td class="text-center text-nowrap">{{ $p->dni }}</td>
-              <td class="text-center text-nowrap">{{ $p->operacion ?: '—' }}</td>
-              <td class="text-center text-nowrap">{{ $fechaYmd }}</td>
-              <td class="text-end text-nowrap">{{ number_format($montoMostrar, 2) }}</td>
-              <td class="text-truncate" style="max-width:420px" title="{{ $p->nota }}">{{ $p->nota }}</td>
-              <td class="text-end">
-                <button
-                  class="btn btn-outline-secondary btn-sm js-ver-ficha"
-                  data-tipo="{{ $p->tipo }}"
-                  data-dni="{{ $p->dni }}"
-                  data-operacion="{{ $p->operacion ?? '' }}"
-                  data-fecha="{{ $fechaDmy }}"
-                  data-cartera="{{ $p->cartera ?? '—' }}"
-                  data-asesor="{{ $p->asesor_nombre ?? '—' }}"
-                  data-agente="{{ $p->creador_nombre ?? '—' }}"
-                  data-titular="{{ $p->titular ?? '—' }}"
-                  data-trabaja="{{ ($p->trabajo ?? '') === 'SI' ? 'SI' : 'NO' }}"
-                  data-clasificacion="{{ $p->clasificacion ?? '—' }}"
-                  data-deuda="{{ number_format((float)($p->deuda_total ?? 0),2) }}"
-                  data-capital-raw="{{ (float)($p->saldo_capital ?? 0) }}"
-                  data-negociado="{{ number_format($montoMostrar, 2) }}"
-                  data-totalconvenio-raw="{{ (float)($p->monto_convenio ?? 0) }}"
-                  data-detalle="{{ $p->nota ?? '' }}"
-                  data-nota-sup="{{ $p->nota_preaprobacion ?? '' }}"
-                  data-nota-gen="{{ $p->nota ?? '' }}"
-                  data-crono='@json($crono)'
-                  data-hasbalon="{{ $hasBalon ? 1 : 0 }}"
-                  data-cuentas='@json($p->cuentas_json ?? [])'
-                  data-bs-toggle="modal" data-bs-target="#modalFicha">
-                  Ver ficha
-                </button>
-                @if($isSupervisor)
-                  <button type="button" class="btn btn-primary btn-sm js-open-nota"
-                          data-title="Pre-aprobar"
-                          data-action="{{ route('autorizacion.preaprobar',$p) }}">
-                    Pre-aprobar
-                  </button>
-
-                  <button type="button" class="btn btn-outline-danger btn-sm js-open-rechazo"
-                          data-action="{{ route('autorizacion.rechazar.sup',$p) }}"
-                          data-bs-toggle="modal" data-bs-target="#modalRechazo">
-                    Rechazar
-                  </button>
-                @else
-                  <button type="button" class="btn btn-primary btn-sm js-open-nota"
-                          data-title="Aprobar"
-                          data-action="{{ route('autorizacion.aprobar',$p) }}">
-                    Aprobar
-                  </button>
-
-                  <button type="button" class="btn btn-outline-danger btn-sm js-open-rechazo"
-                          data-action="{{ route('autorizacion.rechazar.admin',$p) }}"
-                          data-bs-toggle="modal" data-bs-target="#modalRechazo">
-                    Rechazar
-                  </button>
-                @endif
-              </td>
-            </tr>
-          @empty
-            <tr><td colspan="6" class="text-center text-muted py-4">Sin pendientes.</td></tr>
-          @endforelse
-          </tbody>
-        </table>
-      </div>
-    </div>
-  </div>
-  {{-- ====== /Promesas ====== --}}
-
-  {{-- Modal RECHAZO (nota obligatoria) --}}
-  <div class="modal fade" id="modalRechazo" tabindex="-1" aria-hidden="true">
-    <div class="modal-dialog">
-      <form class="modal-content" id="formRechazo" method="POST" action="#">
-        @csrf
-        <div class="modal-header">
-          <h6 class="modal-title">Motivo / Nota de rechazo</h6>
-          <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Cerrar"></button>
-        </div>
-        <div class="modal-body">
-          <textarea name="nota_estado" id="motivoTxt" class="form-control" rows="5" maxlength="500" required></textarea>
-        </div>
-        <div class="modal-footer">
-          <button class="btn btn-outline-secondary" type="button" data-bs-dismiss="modal">Cancelar</button>
-          <button class="btn btn-danger" type="submit">Rechazar</button>
-        </div>
-      </form>
-    </div>
-  </div>
-  {{-- /Modal RECHAZO --}}
-
-  {{-- Modal de NOTA (para Pre-aprobar / Aprobar) --}}
-  <div class="modal fade" id="modalNotaEstado" tabindex="-1" aria-hidden="true">
-    <div class="modal-dialog">
-      <form class="modal-content" id="formNotaEstado" method="POST" action="#">
-        @csrf
-        <div class="modal-header">
-          <h6 class="modal-title" id="modalNotaEstadoTitulo">Agregar nota</h6>
-          <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Cerrar"></button>
-        </div>
-        <div class="modal-body">
-          <textarea name="nota_estado" id="notaEstadoTxt" class="form-control" rows="5" maxlength="500"
-                    placeholder="(opcional) Escribe una nota para esta decisión…"></textarea>
-        </div>
-        <div class="modal-footer">
-          <button class="btn btn-outline-secondary" type="button" data-bs-dismiss="modal">Cancelar</button>
-          <button class="btn btn-primary" type="submit">Guardar</button>
-        </div>
-      </form>
-    </div>
-  </div>
-
-  {{-- Modal FICHA (Datos generales + acordeón por cuenta + cronograma) --}}
-  <div class="modal fade" id="modalFicha" tabindex="-1" aria-hidden="true">
-    <div class="modal-dialog modal-lg modal-dialog-scrollable">
-      <div class="modal-content">
-        <div class="modal-header">
-          <h6 class="modal-title">Detalle de Propuesta</h6>
-          <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Cerrar"></button>
-        </div>
-        <div class="modal-body">
-          <div class="mb-2">
-            <strong>DNI:</strong> <span id="f_dni">—</span> &nbsp;&nbsp;
-            <strong>Operación(es):</strong> <span id="f_op">—</span> &nbsp;&nbsp;
-            <strong>Fecha:</strong> <span id="t_fecha">—</span>
-          </div>
-
-          {{-- Datos generales (simplificado) --}}
-          <table class="table table-sm">
-            <tbody>
-              <tr><th style="width:220px">Tipo</th><td id="t_tipo">—</td></tr>
-              <tr><th>Cartera</th><td id="t_cartera">—</td></tr>
-              <tr><th>Equipo</th><td id="t_asesor">—</td></tr>
-              <tr><th>Asesor (quien creó)</th><td id="t_agente">—</td></tr>
-              <tr><th>Cliente</th><td id="t_titular">—</td></tr>
-              <tr><th>Trabajo</th><td id="t_trab">—</td></tr>
-              <tr><th>Calificación SBS</th><td id="t_clasificacion">—</td></tr>
-              <tr><th>Suma Deuda Total</th><td id="t_deuda">—</td></tr>
-              <tr><th>Monto Negociado</th><td id="t_neg">—</td></tr>
-            </tbody>
-          </table>
-
-          {{-- Notas visibles para ADMIN: general + supervisor (si existen) --}}
-          <div class="mb-2">
-            <strong>Notas</strong>
-            <div class="small text-muted mt-1" id="nota_general_wrap" style="display:none">
-              <span class="badge bg-secondary me-1">General</span>
-              <span id="nota_general_txt"></span>
-            </div>
-            <div class="small text-muted mt-1" id="nota_sup_wrap" style="display:none">
-              <span class="badge bg-info me-1">Supervisor</span>
-              <span id="nota_sup_txt"></span>
-            </div>
-          </div>
-
-          {{-- Acordeón por cuenta --}}
-          <h6 class="mt-3">Cuentas incluidas</h6>
-          <div class="accordion" id="acc_cuentas"></div>
-
-          {{-- Cronograma (si aplica) --}}
-          <div id="crono_wrap" class="d-none mt-3">
-            <h6 class="mb-2" id="crono_titulo">Cronograma de cuotas</h6>
-            <div class="table-responsive">
-              <table class="table table-sm align-middle">
-                <thead class="table-light">
-                  <tr>
-                    <th style="width:60px" class="text-center">#</th>
-                    <th style="width:160px" class="text-center">Fecha</th>
-                    <th class="text-end">Importe (S/)</th>
-                    <th style="width:120px" class="text-center"></th>
-                  </tr>
-                </thead>
-                <tbody id="crono_body"></tbody>
-                <tfoot>
-                  <tr>
-                    <th colspan="2" class="text-end">TOTAL CONVENIO</th>
-                    <th class="text-end" id="crono_total">0.00</th>
-                    <th></th>
-                  </tr>
-                  <tr id="fila_balon" class="d-none">
-                    <th colspan="2" class="text-end">Cuota balón (Capital – Convenio)</th>
-                    <th class="text-end" id="crono_balon">0.00</th>
-                    <th></th>
-                  </tr>
-                </tfoot>
-              </table>
-            </div>
-          </div>
-          {{-- /Cronograma --}}
-        </div>
-        <div class="modal-footer">
-          <button class="btn btn-outline-secondary" type="button" data-bs-dismiss="modal">Cerrar</button>
-        </div>
-      </div>
-    </div>
-  </div>
-  {{-- /Modal FICHA --}}
-
-  {{-- ====== Solicitudes de CNA ====== --}}
-  <div class="card mt-4">
-    <div class="card-header fw-bold">Solicitudes de CNA</div>
-    <div class="card-body p-0">
-      <div class="table-responsive">
-        <table class="table table-sm align-middle mb-0">
-          <thead class="table-light">
-            <tr>
-              <th class="text-center">DNI</th>
-              <th class="text-center">No. Carta</th>
-              <th>Producto</th>
-              <th class="text-center">Operación</th>
-              <th class="text-center">Fecha</th>
-              <th>Observación</th>
-              <th class="text-end">Acciones</th>
-            </tr>
-          </thead>
-            <tbody>
-            @forelse($cnaRows as $cna)
-              @php
-                // Operaciones como array normalizado (string, sin vacíos)
-                $ops = collect((array)($cna->operaciones ?? []))
-                          ->map(fn($x)=>trim((string)$x))
-                          ->filter()
-                          ->values();
-
-                // Productos únicos según operación (si tienes $prodByOp)
-                $productos = $ops->map(fn($op) => $prodByOp[(string)$op] ?? null)
-                                ->filter()
-                                ->unique()
-                                ->values();
-
-                // Representación para la celda de Operaciones
-                // Opción A: badges
-                $opsBadges = $ops->map(fn($op) =>
-                  '<span class="badge rounded-pill text-bg-light border">'.$op.'</span>'
-                )->implode(' ');
-
-                // Opción B (si prefieres cadena simple): $opsCadena = $ops->implode(', ');
-              @endphp
-
-              <tr>
-                <td class="text-center text-nowrap">{{ $cna->dni }}</td>
-                <td class="text-center text-nowrap">{{ $cna->nro_carta }}</td>
-
-                {{-- Producto: uno o varios --}}
-                <td class="text-nowrap">
-                  @if($productos->isEmpty())
-                    —
-                  @elseif($productos->count() === 1)
-                    {{ $productos->first() }}
-                  @else
-                    {{ $productos->implode(' · ') }}
-                  @endif
-                </td>
-
-                {{-- Operaciones (todas en una sola celda) --}}
-                <td class="text-center text-nowrap">
-                  {!! $opsBadges ?: '—' !!}
-                  {{-- Si prefieres texto: {{ $ops->implode(', ') ?: '—' }} --}}
-                </td>
-
-                <td class="text-center text-nowrap">{{ optional($cna->created_at)->format('Y-m-d') }}</td>
-
-                {{-- Observación en lugar de nota --}}
-                <td class="text-truncate" style="max-width:420px" title="{{ $cna->observacion }}">
-                  {{ $cna->observacion ?: '—' }}
-                </td>
-
-                <td class="text-end">
-                  {{-- Ver pagos --}}
-                  <button type="button"
-                          class="btn btn-outline-secondary btn-sm me-1 js-ver-pagos"
-                          data-dni="{{ $cna->dni }}"
-                          data-pagos='@json($pagosByDni[$cna->dni] ?? [])'
-                          data-bs-toggle="modal" data-bs-target="#modalPagos">
-                    Ver pagos
-                  </button>
-
-                  @if($isSupervisor)
-                    <form class="d-inline" method="POST" action="{{ route('cna.preaprobar',$cna) }}">@csrf
-                      <button class="btn btn-primary btn-sm">Pre-aprobar</button>
-                    </form>
-                    <form class="d-inline" method="POST" action="{{ route('cna.rechazar.sup',$cna) }}">@csrf
-                      <button class="btn btn-outline-danger btn-sm">Rechazar</button>
-                    </form>
-                  @else
-                    <form class="d-inline" method="POST" action="{{ route('cna.aprobar',$cna) }}">@csrf
-                      <button class="btn btn-primary btn-sm">Aprobar</button>
-                    </form>
-                    <form class="d-inline" method="POST" action="{{ route('cna.rechazar.admin',$cna) }}">@csrf
-                      <button class="btn btn-outline-danger btn-sm">Rechazar</button>
-                    </form>
-                  @endif
-                </td>
-              </tr>
-            @empty
-              <tr><td colspan="7" class="text-center text-muted py-4">Sin solicitudes de CNA.</td></tr>
-            @endforelse
-            </tbody>
-        </table>
-      </div>
-      {{-- paginación de CNA (propia) --}}
-      <div class="p-2">
-        {{ $cnaRows->withQueryString()->onEachSide(1)->links('pagination::bootstrap-5') }}
-      </div>
-    </div>
-  </div>
-  {{-- ====== /Solicitudes de CNA ====== --}}
-
-  {{-- Modal: Ver pagos --}}
-  <div class="modal fade" id="modalPagos" tabindex="-1" aria-hidden="true">
-    <div class="modal-dialog modal-lg modal-dialog-scrollable">
-      <div class="modal-content">
-        <div class="modal-header">
-          <h6 class="modal-title">
-            Pagos del DNI <span id="pagos_dni">—</span>
-          </h6>
-          <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Cerrar"></button>
-        </div>
-        <div class="modal-body">
-          <div class="table-responsive">
-            <table class="table table-sm align-middle">
-              <thead class="table-light">
-                <tr>
-                  <th class="text-nowrap">Operación/Pagaré</th>
-                  <th class="text-nowrap">Fecha</th>
-                  <th class="text-end text-nowrap">Monto (S/)</th>
-                  <th class="text-nowrap">Gestor</th>
-                  <th class="text-nowrap">Estado</th>
-                </tr>
-              </thead>
-              <tbody id="pagos_tbody"></tbody>
-            </table>
-          </div>
-        </div>
-        <div class="modal-footer">
-          <button class="btn btn-outline-secondary" type="button" data-bs-dismiss="modal">Cerrar</button>
-        </div>
-      </div>
-    </div>
-  </div>
-
-@endsection
-@push('scripts')
-<script>
-  // =================== Modal de NOTA (Pre-aprobar / Aprobar) ===================
-  (function () {
-    const frm   = document.getElementById('formNotaEstado');
-    const title = document.getElementById('modalNotaEstadoTitulo');
-    const txt   = document.getElementById('notaEstadoTxt');
-    const modalEl = document.getElementById('modalNotaEstado');
-    let modal;
-
-    function ensureModal() {
-      if (!modal) modal = new bootstrap.Modal(modalEl);
-      return modal;
-    }
-
-    document.querySelectorAll('.js-open-nota').forEach(btn => {
-      btn.addEventListener('click', () => {
-        frm.setAttribute('action', btn.dataset.action || '#');
-        title.textContent = btn.dataset.title || 'Agregar nota';
-        txt.value = '';
-        ensureModal().show();
-        setTimeout(() => txt.focus(), 120);
-      });
-    });
-  })();
-
-  // ============================ Rechazo (modal) ================================
-  document.querySelectorAll('.js-open-rechazo').forEach(btn=>{
-    btn.addEventListener('click', ()=>{
-      document.getElementById('formRechazo').setAttribute('action', btn.dataset.action);
-      setTimeout(()=> document.getElementById('motivoTxt').focus(), 150);
-    });
-  });
-
-  // ========================== Helpers de formato ==============================
-  const fmt = (n)=> (Math.round((Number(n)||0)*100)/100).toFixed(2);
-  const pct = (v)=> (v===null || v===undefined || v==='') ? '—' : ((Number(v)||0)*100).toFixed(0)+'%';
-
-  // ============================= Ver FICHA ====================================
-  document.querySelectorAll('.js-ver-ficha').forEach(btn=>{
-    btn.addEventListener('click', ()=>{
-      const tipo = (btn.dataset.tipo || '').toLowerCase();
-
-      // Encabezado
-      document.getElementById('f_dni').textContent   = btn.dataset.dni || '—';
-      document.getElementById('t_fecha').textContent = btn.dataset.fecha || '—';
-
-      // Datos generales
-      const set = (id, v)=> (document.getElementById('t_'+id).textContent = (v||'—'));
-      set('tipo', tipo ? (tipo==='cancelacion' ? 'Cancelación' : 'Convenio') : '—');
-      set('cartera', btn.dataset.cartera);
-      set('asesor',  btn.dataset.asesor);   // Equipo = AGENTE
-      set('agente',  btn.dataset.agente);   // quien creó
-      set('titular', btn.dataset.titular);
-      set('trab',    btn.dataset.trabaja);
-      set('clasificacion', btn.dataset.clasificacion);
-      set('deuda',   btn.dataset.deuda);
-      set('neg',     btn.dataset.negociado);
-
-      // Notas
-      const notaGen = (btn.dataset.detalle || '').trim();
-      const notaSup = (btn.dataset.notaSup || '').trim();
-      const ngWrap = document.getElementById('nota_general_wrap');
-      const nsWrap = document.getElementById('nota_sup_wrap');
-      if (ngWrap) {
-        if (notaGen) { ngWrap.style.display='block'; document.getElementById('nota_general_txt').textContent = notaGen; }
-        else { ngWrap.style.display='none'; }
-      }
-      if (nsWrap) {
-        if (notaSup) { nsWrap.style.display='block'; document.getElementById('nota_sup_txt').textContent = notaSup; }
-        else { nsWrap.style.display='none'; }
-      }
-
-      // ===== Acordeón por cuenta =====
-      const acc = document.getElementById('acc_cuentas');
-      if (acc) {
-        acc.innerHTML = '';
-        let cuentas = [];
-        try {
-          const raw = btn.getAttribute('data-cuentas'); // más seguro para JSON largo
-          cuentas = raw ? JSON.parse(raw) : [];
-        } catch(e) { cuentas = []; }
-
-        // Muestra las operaciones en el encabezado
-        document.getElementById('f_op').textContent = cuentas.length
-          ? cuentas.map(c=>c.operacion).join(', ')
-          : (btn.dataset.operacion || '—');
-
-        if (!cuentas.length) {
-          acc.innerHTML = '<div class="text-secondary small">No se encontraron cuentas asociadas.</div>';
-        } else {
-          cuentas.forEach((c, idx)=>{
-            const id = 'accItem_'+idx;
-            const html = `
-              <div class="accordion-item">
-                <h2 class="accordion-header" id="${id}_h">
-                  <button class="accordion-button ${idx>0?'collapsed':''}" type="button"
-                          data-bs-toggle="collapse" data-bs-target="#${id}_c"
-                          aria-expanded="${idx===0?'true':'false'}" aria-controls="${id}_c">
-                    Operación ${c.operacion || '—'} · ${c.entidad || '—'} · ${c.producto || '—'}
-                  </button>
-                </h2>
-                <div id="${id}_c" class="accordion-collapse collapse ${idx===0?'show':''}"
-                    aria-labelledby="${id}_h" data-bs-parent="#acc_cuentas">
-                  <div class="accordion-body p-2">
-                    <table class="table table-sm mb-0">
-                      <tbody>
-                        <tr><th style="width:220px">Número de Operación</th><td>${c.operacion || '—'}</td></tr>
-                        <tr><th>Año Castigo</th><td>${c.anio_castigo ?? '—'}</td></tr>
-                        <tr><th>Entidad</th><td>${c.entidad || '—'}</td></tr>
-                        <tr><th>Producto</th><td>${c.producto || '—'}</td></tr>
-                        <tr><th>Capital</th><td>S/ ${fmt(c.saldo_capital)}</td></tr>
-                        <tr><th>Deuda Total</th><td>S/ ${fmt(c.deuda_total)}</td></tr>
-                        <tr><th>Campaña</th><td>S/ ${fmt(c.capital_descuento)}</td></tr>
-                        <tr><th>% de descuento</th><td>${pct(c.hasta)}</td></tr>
-                      </tbody>
-                    </table>
-                  </div>
-                </div>
-              </div>`;
-            acc.insertAdjacentHTML('beforeend', html);
-          });
-        }
-      }
-
-      // ===== Cronograma (oculta si es cancelación)
-      const cronoWrap  = document.getElementById('crono_wrap');
-      const cronoBody  = document.getElementById('crono_body');
-      const cronoTotal = document.getElementById('crono_total');
-      const filaBalon  = document.getElementById('fila_balon');
-      const cronoBalon = document.getElementById('crono_balon');
-      const titulo     = document.getElementById('crono_titulo');
-
-      let crono = [];
-      try { crono = JSON.parse(btn.getAttribute('data-crono') || '[]'); } catch(_) { crono = []; }
-
-      if (tipo === 'cancelacion') { cronoWrap.classList.add('d-none'); return; }
-
-      const hasBalon = (btn.dataset.hasbalon === '1') || crono.some(r => !!r.es_balon);
-      titulo.textContent = hasBalon ? 'Cronograma de cuotas (con balón)' : 'Cronograma de cuotas';
-
-      cronoBody.innerHTML = '';
-      let sum = 0;
-      crono.forEach(r=>{
-        sum += Number(r.monto) || 0;
-        const tr = document.createElement('tr');
-        tr.innerHTML = `
-          <td class="text-center">${String(r.nro ?? '').padStart(2,'0')}</td>
-          <td class="text-center">${r.fecha || '—'}</td>
-          <td class="text-end">${fmt(r.monto)}</td>
-          <td class="text-center">${r.es_balon ? 'BALÓN' : ''}</td>
-        `;
-        cronoBody.appendChild(tr);
-      });
-      cronoTotal.textContent = fmt(sum);
-      cronoWrap.classList.remove('d-none');
-
-      const capitalRaw  = parseFloat(btn.dataset.capitalRaw || '0');
-      const convenioRaw = parseFloat(btn.dataset.totalconvenioRaw || String(sum));
-      const balon = Math.max(capitalRaw - convenioRaw, 0);
-      if (hasBalon || balon > 0.009) {
-        filaBalon.classList.remove('d-none');
-        cronoBalon.textContent = fmt(balon);
-      } else {
-        filaBalon.classList.add('d-none');
-        cronoBalon.textContent = '0.00';
-      }
-    });
-  });
-
-  // ============================== Ver PAGOS ===================================
-  // Requiere un modal con:
-  //  - <span id="pagos_dni"></span>  (en el título)
-  //  - <tbody id="pagos_tbody"></tbody> (cuerpo de la tabla)
-  (function(){
-    const modalEl = document.getElementById('modalPagos');
-    if (!modalEl) return;
-    const modal = new bootstrap.Modal(modalEl);
-    const spanDni = document.getElementById('pagos_dni');
-    const tbody   = document.getElementById('pagos_tbody');
-
-    const RUTA_PAGOS = @json(route('autorizacion.pagos', '__DNI__')); // placeholder
-
-    function setRowsLoading(){
-      tbody.innerHTML = '<tr><td colspan="5" class="text-center text-secondary py-3">Cargando…</td></tr>';
-    }
-    function setRowsEmpty(){
-      tbody.innerHTML = '<tr><td colspan="5" class="text-center text-muted py-3">Sin pagos registrados.</td></tr>';
-    }
-    function addRow(p){
-      const tr = document.createElement('tr');
-      const f  = p.fecha ? new Date(p.fecha).toLocaleDateString('es-PE') : '';
-      tr.innerHTML = `
-        <td class="text-nowrap">${p.oper ?? '—'}</td>
-        <td class="text-nowrap">${f}</td>
-        <td class="text-end text-nowrap">${fmt(p.monto)}</td>
-        <td class="text-nowrap">${p.gestor || '—'}</td>
-        <td class="text-nowrap">${String(p.estado || '—').toUpperCase()}</td>
-      `;
-      tbody.appendChild(tr);
-    }
-
-    document.querySelectorAll('.js-ver-pagos').forEach(btn=>{
-      btn.addEventListener('click', async ()=>{
-        const dni = String(btn.dataset.dni || '').trim();
-        spanDni.textContent = dni || '—';
-        setRowsLoading();
-        modal.show();
-
-        try{
-          const url = RUTA_PAGOS.replace('__DNI__', encodeURIComponent(dni || ''));
-          const r   = await fetch(url, { headers: { 'Accept': 'application/json' } });
-          if (!r.ok) throw new Error('HTTP '+r.status);
-          const j   = await r.json();
-          const arr = Array.isArray(j.pagos) ? j.pagos : [];
-          if (!arr.length) { setRowsEmpty(); return; }
-          tbody.innerHTML = '';
-          arr.forEach(addRow);
-        }catch(e){
-          tbody.innerHTML = '<tr><td colspan="5" class="text-center text-danger py-3">Error cargando pagos.</td></tr>';
-          console.error('Pagos DNI error:', e);
-        }
-      });
-    });
-  })();
-</script>
+@push('head')
+    @vite(['resources/css/autorizacion.css', 'resources/js/autorizacion.js'])
 @endpush
+
+@section('content')
+
+{{-- Inicializamos Alpine aquí --}}
+<div x-data="autorizacion" class="max-w-7xl mx-auto">
+
+    {{-- HEADER & BUSCADOR --}}
+    <div class="auth-card">
+        <div class="auth-header">
+            <div>
+                <h1 class="auth-title">
+                    <svg class="h-6 w-6 text-brand" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
+                    Bandeja de Autorización
+                </h1>
+            </div>
+
+            <form method="GET" action="{{ route('autorizacion') }}" class="flex gap-2 w-full sm:w-auto">
+                <input type="text" name="q" value="{{ $q }}" class="form-input w-64" placeholder="Buscar DNI, Operación...">
+                <button class="btn-action btn-primary px-4 shadow-lg shadow-brand/20">Buscar</button>
+                @if($q)
+                    <a href="{{ route('autorizacion') }}" class="btn-action btn-outline">Limpiar</a>
+                @endif
+            </form>
+        </div>
+    </div>
+
+    {{-- TABLA PROMESAS --}}
+    <div class="auth-card">
+        <div class="table-container">
+            <table class="auth-table">
+                <thead>
+                    <tr>
+                        <th class="text-center w-24">DNI</th>
+                        <th class="text-center w-32">Operación</th>
+                        <th class="text-center w-28">Fecha</th>
+                        <th class="text-right w-32">Monto</th>
+                        <th>Detalle / Nota</th>
+                        <th class="text-right w-48">Acciones</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    @forelse($rows as $p)
+                        @php
+                            $monto = (float)($p->monto > 0 ? $p->monto : $p->monto_convenio);
+                            // Preparamos el JSON para Alpine
+                            $jsonData = json_encode([
+                                'dni'     => $p->dni,
+                                'nombre'  => $p->titular_txt ?? '—',
+                                'tipo'    => $p->tipo,
+                                'fecha'   => optional($p->fecha_promesa)->format('d/m/Y'),
+                                'monto'   => $monto,
+                                'cuentas' => $p->cuentas_json,
+                                'nota'    => $p->nota,
+                                'crono'   => $p->cuotas_json ?? []
+                            ]);
+                        @endphp
+                        <tr class="group hover:bg-slate-50/50">
+                            <td class="text-center font-mono text-xs text-slate-600">{{ $p->dni }}</td>
+                            <td class="text-center font-mono text-xs text-slate-500">{{ Str::limit($p->operacion_txt, 15) }}</td>
+                            <td class="text-center text-xs text-slate-500">{{ optional($p->fecha_promesa)->format('d/m/Y') }}</td>
+                            <td class="text-right font-bold text-slate-700 text-xs">S/ {{ number_format($monto, 2) }}</td>
+                            <td class="text-xs text-slate-500 truncate max-w-[200px]" title="{{ $p->nota }}">{{ $p->nota }}</td>
+                            <td class="text-right">
+                                <div class="flex justify-end gap-1">
+                                    {{-- Botón Ver Ficha (Ojo) --}}
+                                    <button @click="openFicha({{ $jsonData }})" class="btn-action btn-outline h-7 px-2" title="Ver Detalle">
+                                        <svg class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"/><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z"/></svg>
+                                    </button>
+
+                                    @if($isSupervisor)
+                                        {{-- Botones Supervisor --}}
+                                        <button @click="openNota('{{ route('autorizacion.preaprobar', $p) }}', 'Pre-aprobar Promesa')" class="btn-action btn-primary h-7 px-2 bg-emerald-600 hover:bg-emerald-700 border-transparent text-white" title="Pre-aprobar">
+                                            <svg class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/></svg>
+                                        </button>
+                                        <button @click="openRechazo('{{ route('autorizacion.rechazar.sup', $p) }}')" class="btn-action btn-danger-outline h-7 px-2 text-rose-600 border-rose-200 hover:bg-rose-50" title="Rechazar">
+                                            <svg class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/></svg>
+                                        </button>
+                                    @else
+                                        {{-- Botones Admin --}}
+                                        <button @click="openNota('{{ route('autorizacion.aprobar', $p) }}', 'Aprobar Promesa')" class="btn-action btn-primary h-7 px-2 bg-brand hover:bg-brand/90 border-transparent text-white" title="Aprobar">
+                                            <svg class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
+                                        </button>
+                                        <button @click="openRechazo('{{ route('autorizacion.rechazar.admin', $p) }}')" class="btn-action btn-danger-outline h-7 px-2 text-rose-600 border-rose-200 hover:bg-rose-50" title="Rechazar">
+                                            <svg class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/></svg>
+                                        </button>
+                                    @endif
+                                </div>
+                            </td>
+                        </tr>
+                    @empty
+                        <tr><td colspan="6" class="text-center py-12 text-slate-400 italic">No hay promesas pendientes.</td></tr>
+                    @endforelse
+                </tbody>
+            </table>
+        </div>
+    </div>
+
+    {{-- MODAL FICHA DETALLE --}}
+    <div x-show="modalFichaOpen" x-cloak class="modal-backdrop">
+        <div class="modal-box" @click.away="modalFichaOpen = false">
+            <div class="modal-header">
+                <h3 class="font-bold text-lg text-slate-800">Detalle de Propuesta</h3>
+                <button @click="modalFichaOpen = false" class="text-slate-400 hover:text-slate-600">✕</button>
+            </div>
+            <div class="modal-body space-y-4">
+                <div class="grid grid-cols-2 md:grid-cols-4 gap-4 text-sm bg-slate-50 p-4 rounded-xl border border-slate-100">
+                    <div><span class="text-slate-400 block text-[10px] uppercase font-bold tracking-wider">Cliente</span> <span class="font-bold text-slate-700" x-text="ficha.nombre"></span></div>
+                    <div><span class="text-slate-400 block text-[10px] uppercase font-bold tracking-wider">DNI</span> <span class="font-mono text-slate-600" x-text="ficha.dni"></span></div>
+                    <div><span class="text-slate-400 block text-[10px] uppercase font-bold tracking-wider">Tipo</span> <span class="uppercase badge badge-info" x-text="ficha.tipo"></span></div>
+                    <div><span class="text-slate-400 block text-[10px] uppercase font-bold tracking-wider">Monto</span> <span class="font-bold text-brand" x-text="fmtMoney(ficha.monto)"></span></div>
+                </div>
+
+                <div class="bg-white p-3 rounded-xl text-sm text-slate-600 border border-slate-200">
+                    <span class="text-[10px] uppercase font-bold text-slate-400 block mb-1">Nota del Asesor</span>
+                    <p x-text="ficha.nota || 'Sin nota adjunta.'"></p>
+                </div>
+
+                {{-- Tabla Cuentas --}}
+                <div x-show="ficha.cuentas && ficha.cuentas.length > 0">
+                    <h4 class="text-xs font-bold text-slate-400 uppercase mb-2">Cuentas Involucradas</h4>
+                    <div class="border border-slate-200 rounded-xl overflow-hidden shadow-sm">
+                        <table class="w-full text-xs text-left">
+                            <thead class="bg-slate-50 text-slate-500 font-bold border-b border-slate-200">
+                                <tr><th class="px-4 py-2.5">Operación</th><th class="px-4 py-2.5">Entidad / Producto</th><th class="px-4 py-2.5 text-right">Deuda Total</th></tr>
+                            </thead>
+                            <tbody>
+                                <template x-for="c in ficha.cuentas" :key="c.operacion">
+                                    <tr class="border-b border-slate-50 last:border-0 hover:bg-slate-50/50">
+                                        <td class="px-4 py-2 font-mono text-slate-600 font-medium" x-text="c.operacion"></td>
+                                        <td class="px-4 py-2 text-slate-600">
+                                            <span x-text="c.entidad"></span> - <span class="text-slate-400" x-text="c.producto"></span>
+                                        </td>
+                                        <td class="px-4 py-2 text-right font-bold text-slate-700" x-text="fmtMoney(c.deuda_total)"></td>
+                                    </tr>
+                                </template>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+
+                {{-- Cronograma --}}
+                <div x-show="ficha.crono && ficha.crono.length > 0">
+                    <h4 class="text-xs font-bold text-slate-400 uppercase mb-2 mt-4">Cronograma de Pagos</h4>
+                    <div class="border border-slate-200 rounded-xl overflow-hidden shadow-sm max-h-40 overflow-y-auto">
+                        <table class="w-full text-xs text-left">
+                            <thead class="bg-slate-50 text-slate-500 font-bold border-b border-slate-200 sticky top-0">
+                                <tr><th class="px-4 py-2.5 text-center">Cuota</th><th class="px-4 py-2.5">Fecha</th><th class="px-4 py-2.5 text-right">Importe</th></tr>
+                            </thead>
+                            <tbody>
+                                <template x-for="row in ficha.crono" :key="row.nro">
+                                    <tr class="border-b border-slate-50 last:border-0 hover:bg-slate-50/50">
+                                        <td class="px-4 py-2 text-center text-slate-400 font-mono" x-text="row.nro"></td>
+                                        <td class="px-4 py-2 text-slate-600" x-text="formatDate(row.fecha)"></td>
+                                        <td class="px-4 py-2 text-right font-mono font-medium text-slate-700" x-text="fmtMoney(row.monto)"></td>
+                                    </tr>
+                                </template>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button @click="modalFichaOpen = false" class="btn-action btn-outline w-full sm:w-auto">Cerrar</button>
+            </div>
+        </div>
+    </div>
+
+    {{-- MODAL APROBACIÓN (Nota) --}}
+    <div x-show="modalNotaOpen" x-cloak class="modal-backdrop">
+        <div class="modal-box max-w-md" @click.away="modalNotaOpen = false">
+            <form :action="actionUrl" method="POST">
+                @csrf
+                <div class="modal-header">
+                    <h3 class="font-bold text-lg text-slate-800" x-text="actionTitle"></h3>
+                    <button type="button" @click="modalNotaOpen = false" class="text-slate-400">✕</button>
+                </div>
+                <div class="modal-body">
+                    <label class="block text-xs font-bold text-slate-500 uppercase mb-1.5">Nota (Opcional)</label>
+                    <textarea name="nota_estado" id="txtNota" rows="3" class="form-input" placeholder="Comentarios..."></textarea>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" @click="modalNotaOpen = false" class="btn-action btn-outline">Cancelar</button>
+                    <button type="submit" class="btn-action btn-primary bg-emerald-600 hover:bg-emerald-700 border-transparent text-white">Confirmar</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    {{-- MODAL RECHAZO --}}
+    <div x-show="modalRechazoOpen" x-cloak class="modal-backdrop">
+        <div class="modal-box max-w-md" @click.away="modalRechazoOpen = false">
+            <form :action="actionUrl" method="POST">
+                @csrf
+                <div class="modal-header">
+                    <h3 class="font-bold text-lg text-red-600">Rechazar Solicitud</h3>
+                    <button type="button" @click="modalRechazoOpen = false" class="text-slate-400">✕</button>
+                </div>
+                <div class="modal-body">
+                    <div class="p-3 bg-red-50 text-red-700 text-xs rounded-xl border border-red-100 mb-3">
+                        Indica el motivo del rechazo.
+                    </div>
+                    <label class="block text-xs font-bold text-slate-500 uppercase mb-1.5">Motivo</label>
+                    <textarea name="nota_estado" id="txtRechazo" rows="3" class="form-input border-red-200 focus:border-red-500 bg-red-50/30" required></textarea>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" @click="modalRechazoOpen = false" class="btn-action btn-outline">Cancelar</button>
+                    <button type="submit" class="btn-action btn-primary bg-red-600 hover:bg-red-700 border-transparent text-white">Rechazar</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+</div>
+@endsection

@@ -10,7 +10,7 @@
         @apply bg-[#F8FAFC];
     }
 
-    /* --- TARJETAS DE SECCIÓN (Cuentas, Pagos, etc) --- */
+    /* --- TARJETAS DE SECCIÓN --- */
     .section-card {
         @apply bg-white rounded-[1.25rem] border border-slate-100 shadow-[0_2px_12px_-2px_rgba(0,0,0,0.03)] overflow-hidden mb-6;
     }
@@ -23,7 +23,7 @@
         @apply text-lg font-bold text-slate-800 flex items-center gap-2.5;
     }
 
-    /* --- HEADER CLIENTE (Compacto y Limpio) --- */
+    /* --- HEADER CLIENTE --- */
     .client-header {
         @apply bg-white rounded-xl border border-slate-200 shadow-sm mb-6 p-5 flex flex-col lg:flex-row lg:items-center justify-between gap-6;
     }
@@ -44,7 +44,6 @@
         @apply flex flex-wrap items-center gap-3 mt-1 text-sm text-slate-500;
     }
 
-    /* Sección de métricas a la derecha con divisor vertical en desktop */
     .header-stats {
         @apply flex items-center gap-8 border-t border-slate-100 pt-4 lg:border-t-0 lg:border-l lg:pt-0 lg:pl-8 lg:ml-auto;
     }
@@ -92,10 +91,10 @@
     .badge { 
         @apply inline-flex items-center px-2.5 py-0.5 rounded-full text-[10px] font-bold border uppercase tracking-wide; 
     }
-    .badge-info    { @apply bg-sky-50 text-sky-700 border-sky-200; }
+    .badge-info     { @apply bg-sky-50 text-sky-700 border-sky-200; }
     .badge-success { @apply bg-emerald-50 text-emerald-700 border-emerald-200; }
     .badge-warning { @apply bg-amber-50 text-amber-700 border-amber-200; }
-    .badge-danger  { @apply bg-red-50 text-red-700 border-red-200; }
+    .badge-danger   { @apply bg-red-50 text-red-700 border-red-200; }
     .badge-neutral { @apply bg-slate-100 text-slate-500 border-slate-200; }
     
     /* --- BOTONES --- */

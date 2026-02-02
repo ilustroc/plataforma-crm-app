@@ -1,184 +1,182 @@
+// Esperar a que el DOM esté listo
 document.addEventListener('DOMContentLoaded', () => {
     
-    // --- 1. MODALES VANILLA (Abrir/Cerrar) ---
-    const modals = document.querySelectorAll('.modal-backdrop');
-    
-    function openModal(id) {
-        const m = document.getElementById(id);
-        if(m) {
-            m.classList.add('show');
-            document.body.style.overflow = 'hidden'; // Bloquear scroll body
-        }
-    }
-    
-    function closeModal(id) {
-        const m = document.getElementById(id);
-        if(m) {
-            m.classList.remove('show');
-            document.body.style.overflow = '';
-        }
-    }
-
-    // Botones que abren modales
-    document.querySelectorAll('[data-modal-target]').forEach(btn => {
-        btn.addEventListener('click', () => openModal(btn.dataset.modalTarget));
-    });
-
-    // Botones cerrar y click fuera
-    modals.forEach(m => {
-        const closeBtns = m.querySelectorAll('[data-modal-close]');
-        closeBtns.forEach(b => b.addEventListener('click', () => closeModal(m.id)));
-        
-        m.addEventListener('click', (e) => {
-            if(e.target === m) closeModal(m.id);
-        });
-    });
-
-
-    // --- 2. SELECCIÓN DE CUENTAS (Checkboxes) ---
+    // --- Referencias ---
     const chkAll = document.getElementById('chkAll');
-    const chks = Array.from(document.querySelectorAll('.chkOp'));
-    const btnProp = document.getElementById('btnPropuesta');
+    const chks = document.querySelectorAll('.chkOp');
+    const btnPropuesta = document.getElementById('btnPropuesta');
     const btnCna = document.getElementById('btnSolicitarCna');
-    const counters = document.querySelectorAll('.selection-count'); // Para actualizar contadores
-
-    function refreshSelection() {
-        const selected = chks.filter(c => c.checked && !c.disabled).map(c => c.value);
-        const count = selected.length;
-        
-        // Actualizar badges
-        counters.forEach(el => el.textContent = count);
-        
-        // Habilitar botones
-        if(btnProp) btnProp.disabled = count === 0;
-        if(btnCna) btnCna.disabled = count === 0;
-
-        return selected;
-    }
-
-    if(chkAll) {
-        chkAll.addEventListener('change', () => {
-            chks.forEach(c => { if(!c.disabled) c.checked = chkAll.checked; });
-            refreshSelection();
-        });
-    }
-
-    chks.forEach(c => c.addEventListener('change', () => {
-        const enabled = chks.filter(x => !x.disabled).length;
-        const checked = chks.filter(x => x.checked && !x.disabled).length;
-        if (enabled && chkAll) chkAll.checked = (checked === enabled);
-        refreshSelection();
-    }));
-
-
-    // --- 3. MODAL PROPUESTA (Lógica Cronograma) ---
-    const modalProp = document.getElementById('modalPropuesta');
+    const countSpans = document.querySelectorAll('.selection-count');
     
-    // Solo si el modal existe (usuario autorizado)
-    if(modalProp) {
-        // Al abrir, llenar operaciones
-        const openBtn = document.querySelector('[data-modal-target="modalPropuesta"]');
-        if(openBtn) {
-            openBtn.addEventListener('click', () => {
-                const ops = refreshSelection();
-                const container = document.getElementById('opsResumen');
-                const hiddenContainer = document.getElementById('opsHidden');
-                
-                // Visual
-                container.innerHTML = ops.length 
-                    ? ops.map(op => `<span class="badge badge-neutral bg-slate-100 px-2 py-0.5 rounded text-xs border border-slate-200 mr-1">${op}</span>`).join('') 
-                    : '<span class="text-slate-400 italic">Ninguna</span>';
+    // Elementos del Modal Propuesta
+    const opsResumen = document.getElementById('opsResumen');
+    const opsHidden = document.getElementById('opsHidden');
+    const cvTotal = document.getElementById('cvTotal');
+    const cvNro = document.getElementById('cvNro');
+    const cvFechaIni = document.getElementById('cvFechaIni');
+    const cvGen = document.getElementById('cvGen');
+    const tblCronoBody = document.getElementById('tblCronoBody');
+    const cvSuma = document.getElementById('cvSuma');
 
-                // Hidden Inputs
-                hiddenContainer.innerHTML = '';
-                ops.forEach(op => {
-                    const i = document.createElement('input');
-                    i.type = 'hidden'; i.name = 'operaciones[]'; i.value = op;
-                    hiddenContainer.appendChild(i);
-                });
+    // --- Estado ---
+    let selectedOps = [];
 
-                // Disparar input para recalcular capital
-                document.getElementById('cvTotal')?.dispatchEvent(new Event('input'));
-            });
-        }
+    // --- Funciones ---
 
-        // Lógica Cronograma (Simplificada del original)
-        const nro = document.getElementById('cvNro');
-        const total = document.getElementById('cvTotal');
-        const tblCrono = document.getElementById('tblCronoBody');
-        const sumaLabel = document.getElementById('cvSuma');
-        const genBtn = document.getElementById('cvGen');
-        const fIni = document.getElementById('cvFechaIni');
+    function updateSelection() {
+        selectedOps = Array.from(chks)
+            .filter(c => c.checked)
+            .map(c => c.value); // Valor es la 'operacion'
 
-        function renderRows(n) {
-            if(!tblCrono) return;
-            tblCrono.innerHTML = '';
-            for(let i=1; i<=n; i++) {
-                const tr = document.createElement('tr');
-                tr.innerHTML = `
-                    <td class="text-center text-slate-500 font-mono">${String(i).padStart(2,'0')}</td>
-                    <td><input type="date" class="w-full rounded border-slate-200 text-sm py-1 px-2 cr-fecha"></td>
-                    <td><input type="number" step="0.01" class="w-full rounded border-slate-200 text-sm py-1 px-2 cr-monto text-right"></td>
-                `;
-                tblCrono.appendChild(tr);
-            }
-        }
-
-        function autoFill() {
-            const n = parseInt(nro.value || 0);
-            const t = parseFloat(total.value || 0);
-            if(n <= 0) return;
-            
-            const amount = (t / n).toFixed(2);
-            let startDate = fIni.value ? new Date(fIni.value + 'T00:00:00') : null;
-
-            const inputs = tblCrono.querySelectorAll('.cr-monto');
-            const dates = tblCrono.querySelectorAll('.cr-fecha');
-
-            inputs.forEach((inp, idx) => {
-                inp.value = amount;
-                if(startDate) {
-                    const d = new Date(startDate);
-                    d.setMonth(d.getMonth() + idx);
-                    dates[idx].valueAsDate = d;
-                }
-            });
-            recalcTotal();
-        }
-
-        function recalcTotal() {
-            const inputs = tblCrono.querySelectorAll('.cr-monto');
-            let sum = 0;
-            inputs.forEach(i => sum += parseFloat(i.value || 0));
-            if(sumaLabel) {
-                sumaLabel.textContent = sum.toFixed(2);
-                const target = parseFloat(total.value || 0);
-                const diff = Math.abs(sum - target);
-                
-                sumaLabel.className = diff < 0.1 ? 'font-bold text-emerald-600' : 'font-bold text-red-600';
-            }
-        }
-
-        // Eventos Cronograma
-        if(genBtn) genBtn.addEventListener('click', () => {
-            renderRows(parseInt(nro.value || 1));
-            autoFill();
-            recalcTotal();
-        });
+        const count = selectedOps.length;
         
-        if(tblCrono) tblCrono.addEventListener('input', recalcTotal);
+        // Actualizar contadores en botones
+        countSpans.forEach(span => span.textContent = count);
+
+        // Habilitar/Deshabilitar botones
+        if (count > 0) {
+            btnPropuesta.classList.remove('btn-disabled');
+            btnPropuesta.disabled = false;
+            btnCna.classList.remove('btn-disabled');
+            btnCna.disabled = false;
+        } else {
+            btnPropuesta.classList.add('btn-disabled');
+            btnPropuesta.disabled = true;
+            btnCna.classList.add('btn-disabled');
+            btnCna.disabled = true;
+        }
+
+        // Actualizar checkbox maestro
+        chkAll.checked = (count === chks.length && count > 0);
+        chkAll.indeterminate = (count > 0 && count < chks.length);
     }
 
-    // --- 4. COPIAR AL PORTAPAPELES ---
-    document.querySelectorAll('[data-copy]').forEach(btn => {
-        btn.addEventListener('click', () => {
-            const text = btn.dataset.copy;
-            navigator.clipboard.writeText(text).then(() => {
-                const original = btn.innerHTML;
-                btn.innerHTML = `<svg class="w-4 h-4 text-emerald-500" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/></svg>`;
-                setTimeout(() => btn.innerHTML = original, 1500);
+    function renderModalOps() {
+        // Limpiar
+        opsResumen.innerHTML = '';
+        opsHidden.innerHTML = '';
+
+        selectedOps.forEach(op => {
+            // Badge visual
+            const badge = document.createElement('span');
+            badge.className = 'text-[10px] bg-white border border-slate-200 px-2 py-1 rounded text-slate-600 font-mono font-bold';
+            badge.textContent = op;
+            opsResumen.appendChild(badge);
+
+            // Input hidden para enviar al backend
+            const input = document.createElement('input');
+            input.type = 'hidden';
+            input.name = 'operaciones[]';
+            input.value = op;
+            opsHidden.appendChild(input);
+        });
+    }
+
+    function generateCronograma() {
+        tblCronoBody.innerHTML = '';
+        const total = parseFloat(cvTotal.value);
+        const cuotas = parseInt(cvNro.value);
+        const fechaStr = cvFechaIni.value;
+
+        if (!total || !cuotas || !fechaStr) return;
+
+        let montoBase = Math.floor((total / cuotas) * 100) / 100;
+        let diff =  Math.round((total - (montoBase * cuotas)) * 100) / 100;
+        
+        // La diferencia se suma a la primera cuota
+        let primerMonto = montoBase + diff;
+
+        let currentDate = new Date(fechaStr + 'T00:00:00'); // Evitar timezone issues
+
+        let html = '';
+        
+        for (let i = 1; i <= cuotas; i++) {
+            let monto = (i === 1) ? primerMonto : montoBase;
+            
+            // Formatear fecha (DD/MM/YYYY)
+            let day = String(currentDate.getDate()).padStart(2, '0');
+            let month = String(currentDate.getMonth() + 1).padStart(2, '0');
+            let year = currentDate.getFullYear();
+            let dateFmt = `${day}/${month}/${year}`;
+
+            html += `
+                <tr>
+                    <td class="py-2 px-3 text-center border-b border-slate-100 text-slate-500">${i}</td>
+                    <td class="py-2 px-3 text-left border-b border-slate-100 text-slate-700">${dateFmt}</td>
+                    <td class="py-2 px-3 text-right border-b border-slate-100 font-mono font-medium">S/ ${monto.toFixed(2)}</td>
+                </tr>
+            `;
+
+            // Siguiente mes
+            currentDate.setMonth(currentDate.getMonth() + 1);
+        }
+
+        tblCronoBody.innerHTML = html;
+        cvSuma.textContent = total.toFixed(2);
+    }
+
+    // --- Event Listeners ---
+
+    // Checkbox Maestro
+    if(chkAll) {
+        chkAll.addEventListener('change', (e) => {
+            const isChecked = e.target.checked;
+            chks.forEach(c => {
+                if(!c.disabled) c.checked = isChecked;
             });
+            updateSelection();
+        });
+    }
+
+    // Checkboxes Individuales
+    chks.forEach(c => {
+        c.addEventListener('change', updateSelection);
+    });
+
+    // Botones para abrir Modal
+    const modalTriggers = document.querySelectorAll('[data-modal-target]');
+    modalTriggers.forEach(btn => {
+        btn.addEventListener('click', () => {
+            const targetId = btn.getAttribute('data-modal-target');
+            const modal = document.getElementById(targetId);
+            if(modal) {
+                // Si es el de propuesta, renderizamos las ops seleccionadas
+                if (targetId === 'modalPropuesta') {
+                    renderModalOps();
+                    // Resetear cronograma visual
+                    tblCronoBody.innerHTML = '';
+                    cvSuma.textContent = '0.00';
+                }
+                modal.classList.add('show');
+            }
         });
     });
 
+    // Botones para cerrar Modal
+    const closeBtns = document.querySelectorAll('[data-modal-close]');
+    closeBtns.forEach(btn => {
+        btn.addEventListener('click', () => {
+            const modal = btn.closest('.modal-backdrop');
+            if(modal) modal.classList.remove('show');
+        });
+    });
+
+    // Botón Generar Cronograma
+    if(cvGen) {
+        cvGen.addEventListener('click', generateCronograma);
+    }
+
+    // Copiar DNI
+    const btnCopy = document.querySelector('[data-copy]');
+    if(btnCopy){
+        btnCopy.addEventListener('click', () => {
+            const text = btnCopy.getAttribute('data-copy');
+            navigator.clipboard.writeText(text).then(() => {
+                // Feedback visual opcional
+                const original = btnCopy.innerHTML;
+                btnCopy.innerHTML = `<span class="text-brand text-xs font-bold">Copiado!</span>`;
+                setTimeout(() => btnCopy.innerHTML = original, 1500);
+            });
+        });
+    }
 });

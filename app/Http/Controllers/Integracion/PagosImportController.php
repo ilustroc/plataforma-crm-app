@@ -29,16 +29,15 @@ class PagosImportController extends Controller
     public function store(StorePagosImportRequest $request, PagosCsvImporter $importer)
     {
         $file = $request->file('archivo');
-
-        // Guardado temporal
         $path = $file->storeAs('temp', 'pagos_import_' . now()->format('Ymd_His') . '.csv');
 
         [$ok, $skip, $errores] = $importer->import(Storage::path($path));
 
         Storage::delete($path);
 
+        // Corregido: El nombre de la ruta según tu web.php es 'integracion.pagos'
         return redirect()
-            ->route('integracion.pagos.create')
+            ->route('integracion.pagos') 
             ->with('ok', "Importación completada. Registrados: {$ok}. Omitidos: {$skip}.")
             ->with('warn', count($errores) ? implode("\n", array_slice($errores, 0, 5)) : null);
     }

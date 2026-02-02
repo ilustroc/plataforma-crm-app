@@ -1,0 +1,52 @@
+@import "tailwindcss";
+
+@theme {
+    --color-brand: #6F2661;
+}
+
+@layer components {
+    /* Contenedor Principal */
+    .import-card {
+        @apply bg-white rounded-2xl border border-slate-100 shadow-sm overflow-hidden;
+    }
+
+    .import-header {
+        @apply px-8 py-6 border-b border-slate-100 bg-slate-50/50 flex flex-col md:flex-row justify-between items-start md:items-center gap-4;
+    }
+
+    .import-title {
+        @apply text-lg font-bold text-slate-800;
+    }
+    
+    .import-desc {
+        @apply text-sm text-slate-500 mt-1;
+    }
+
+    /* Botón Descargar Plantilla */
+    .btn-template {
+        @apply inline-flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-bold text-brand bg-purple-50 border border-purple-100 hover:bg-purple-100 transition-colors;
+    }
+
+    /* Zona de Carga (Drag & Drop) */
+    .upload-area {
+        @apply border-2 border-dashed border-slate-300 rounded-xl bg-slate-50 p-10 text-center transition-all cursor-pointer relative mt-6 hover:border-brand hover:bg-purple-50/30;
+    }
+
+    .file-input {
+        @apply absolute inset-0 w-full h-full opacity-0 cursor-pointer z-10;
+    }
+
+    .upload-icon {
+        @apply mx-auto h-12 w-12 text-slate-400 mb-3 transition-colors;
+    }
+
+    /* Botón Subir */
+    .btn-upload {
+        @apply w-full flex items-center justify-center gap-2 rounded-xl bg-brand py-3 text-sm font-bold text-white shadow-lg shadow-brand/20 transition-all hover:bg-[#5B1F50] disabled:opacity-50 disabled:cursor-not-allowed mt-6;
+    }
+
+    /* Feedback de Archivo */
+    .file-feedback {
+        @apply mt-4 p-3 rounded-lg bg-emerald-50 border border-emerald-100 text-emerald-700 text-sm font-medium flex items-center gap-2 hidden;
+    }
+}
