@@ -1,14 +1,13 @@
-// Esperar a que el DOM esté listo
 document.addEventListener('DOMContentLoaded', () => {
     
-    // --- Referencias ---
+    // --- Referencias Globales ---
     const chkAll = document.getElementById('chkAll');
     const chks = document.querySelectorAll('.chkOp');
     const btnPropuesta = document.getElementById('btnPropuesta');
     const btnCna = document.getElementById('btnSolicitarCna');
     const countSpans = document.querySelectorAll('.selection-count');
     
-    // Elementos del Modal Propuesta
+    // --- Referencias Modal Propuesta ---
     const opsResumen = document.getElementById('opsResumen');
     const opsHidden = document.getElementById('opsHidden');
     const cvTotal = document.getElementById('cvTotal');
@@ -18,6 +17,9 @@ document.addEventListener('DOMContentLoaded', () => {
     const tblCronoBody = document.getElementById('tblCronoBody');
     const cvSuma = document.getElementById('cvSuma');
 
+    // --- Referencias Modal CNA [NUEVO] ---
+    const cnaOpsHidden = document.getElementById('cnaOpsHidden');
+
     // --- Estado ---
     let selectedOps = [];
 
@@ -26,33 +28,33 @@ document.addEventListener('DOMContentLoaded', () => {
     function updateSelection() {
         selectedOps = Array.from(chks)
             .filter(c => c.checked)
-            .map(c => c.value); // Valor es la 'operacion'
+            .map(c => c.value);
 
         const count = selectedOps.length;
         
-        // Actualizar contadores en botones
+        // Actualizar contadores visuales
         countSpans.forEach(span => span.textContent = count);
 
         // Habilitar/Deshabilitar botones
         if (count > 0) {
-            btnPropuesta.classList.remove('btn-disabled');
-            btnPropuesta.disabled = false;
-            btnCna.classList.remove('btn-disabled');
-            btnCna.disabled = false;
+            if(btnPropuesta) { btnPropuesta.classList.remove('btn-disabled'); btnPropuesta.disabled = false; }
+            if(btnCna) { btnCna.classList.remove('btn-disabled'); btnCna.disabled = false; }
         } else {
-            btnPropuesta.classList.add('btn-disabled');
-            btnPropuesta.disabled = true;
-            btnCna.classList.add('btn-disabled');
-            btnCna.disabled = true;
+            if(btnPropuesta) { btnPropuesta.classList.add('btn-disabled'); btnPropuesta.disabled = true; }
+            if(btnCna) { btnCna.classList.add('btn-disabled'); btnCna.disabled = true; }
         }
 
         // Actualizar checkbox maestro
-        chkAll.checked = (count === chks.length && count > 0);
-        chkAll.indeterminate = (count > 0 && count < chks.length);
+        if(chkAll) {
+            chkAll.checked = (count === chks.length && count > 0);
+            chkAll.indeterminate = (count > 0 && count < chks.length);
+        }
     }
 
-    function renderModalOps() {
-        // Limpiar
+    // Renderiza inputs ocultos para el Modal de PROPUESTA
+    function renderModalOpsPropuesta() {
+        if(!opsResumen || !opsHidden) return;
+        
         opsResumen.innerHTML = '';
         opsHidden.innerHTML = '';
 
@@ -63,7 +65,7 @@ document.addEventListener('DOMContentLoaded', () => {
             badge.textContent = op;
             opsResumen.appendChild(badge);
 
-            // Input hidden para enviar al backend
+            // Input hidden
             const input = document.createElement('input');
             input.type = 'hidden';
             input.name = 'operaciones[]';
@@ -72,8 +74,25 @@ document.addEventListener('DOMContentLoaded', () => {
         });
     }
 
+    // Renderiza inputs ocultos para el Modal de CNA [NUEVO]
+    function renderModalOpsCna() {
+        if(!cnaOpsHidden) return;
+        
+        cnaOpsHidden.innerHTML = ''; // Limpiar anteriores
+
+        selectedOps.forEach(op => {
+            const input = document.createElement('input');
+            input.type = 'hidden';
+            input.name = 'operaciones[]'; // Mismo nombre que espera el controlador
+            input.value = op;
+            cnaOpsHidden.appendChild(input);
+        });
+    }
+
     function generateCronograma() {
+        if(!tblCronoBody) return;
         tblCronoBody.innerHTML = '';
+        
         const total = parseFloat(cvTotal.value);
         const cuotas = parseInt(cvNro.value);
         const fechaStr = cvFechaIni.value;
@@ -82,18 +101,13 @@ document.addEventListener('DOMContentLoaded', () => {
 
         let montoBase = Math.floor((total / cuotas) * 100) / 100;
         let diff =  Math.round((total - (montoBase * cuotas)) * 100) / 100;
-        
-        // La diferencia se suma a la primera cuota
         let primerMonto = montoBase + diff;
-
-        let currentDate = new Date(fechaStr + 'T00:00:00'); // Evitar timezone issues
+        let currentDate = new Date(fechaStr + 'T00:00:00');
 
         let html = '';
-        
         for (let i = 1; i <= cuotas; i++) {
             let monto = (i === 1) ? primerMonto : montoBase;
             
-            // Formatear fecha (DD/MM/YYYY)
             let day = String(currentDate.getDate()).padStart(2, '0');
             let month = String(currentDate.getMonth() + 1).padStart(2, '0');
             let year = currentDate.getFullYear();
@@ -106,18 +120,15 @@ document.addEventListener('DOMContentLoaded', () => {
                     <td class="py-2 px-3 text-right border-b border-slate-100 font-mono font-medium">S/ ${monto.toFixed(2)}</td>
                 </tr>
             `;
-
-            // Siguiente mes
             currentDate.setMonth(currentDate.getMonth() + 1);
         }
 
         tblCronoBody.innerHTML = html;
-        cvSuma.textContent = total.toFixed(2);
+        if(cvSuma) cvSuma.textContent = total.toFixed(2);
     }
 
     // --- Event Listeners ---
 
-    // Checkbox Maestro
     if(chkAll) {
         chkAll.addEventListener('change', (e) => {
             const isChecked = e.target.checked;
@@ -128,31 +139,36 @@ document.addEventListener('DOMContentLoaded', () => {
         });
     }
 
-    // Checkboxes Individuales
     chks.forEach(c => {
         c.addEventListener('change', updateSelection);
     });
 
-    // Botones para abrir Modal
+    // Lógica para abrir Modales
     const modalTriggers = document.querySelectorAll('[data-modal-target]');
     modalTriggers.forEach(btn => {
         btn.addEventListener('click', () => {
             const targetId = btn.getAttribute('data-modal-target');
             const modal = document.getElementById(targetId);
+            
             if(modal) {
-                // Si es el de propuesta, renderizamos las ops seleccionadas
+                // Si abrimos Propuesta -> Llenar datos de propuesta
                 if (targetId === 'modalPropuesta') {
-                    renderModalOps();
-                    // Resetear cronograma visual
-                    tblCronoBody.innerHTML = '';
-                    cvSuma.textContent = '0.00';
+                    renderModalOpsPropuesta();
+                    if(tblCronoBody) tblCronoBody.innerHTML = '';
+                    if(cvSuma) cvSuma.textContent = '0.00';
                 }
+                
+                // Si abrimos CNA -> Llenar datos de CNA [ESTO FALTABA]
+                if (targetId === 'modalCna') {
+                    renderModalOpsCna();
+                }
+
                 modal.classList.add('show');
             }
         });
     });
 
-    // Botones para cerrar Modal
+    // Botones Cerrar Modal
     const closeBtns = document.querySelectorAll('[data-modal-close]');
     closeBtns.forEach(btn => {
         btn.addEventListener('click', () => {
@@ -161,7 +177,6 @@ document.addEventListener('DOMContentLoaded', () => {
         });
     });
 
-    // Botón Generar Cronograma
     if(cvGen) {
         cvGen.addEventListener('click', generateCronograma);
     }
@@ -172,7 +187,6 @@ document.addEventListener('DOMContentLoaded', () => {
         btnCopy.addEventListener('click', () => {
             const text = btnCopy.getAttribute('data-copy');
             navigator.clipboard.writeText(text).then(() => {
-                // Feedback visual opcional
                 const original = btnCopy.innerHTML;
                 btnCopy.innerHTML = `<span class="text-brand text-xs font-bold">Copiado!</span>`;
                 setTimeout(() => btnCopy.innerHTML = original, 1500);

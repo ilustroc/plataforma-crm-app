@@ -357,6 +357,9 @@
                         </div>
                     </div>
                     
+                    {{-- [NUEVO] Contenedor oculto para las operaciones --}}
+                    <div id="cnaOpsHidden"></div>
+
                     <div class="space-y-4">
                         <div>
                             <label class="block text-xs font-bold text-slate-500 uppercase mb-1.5">Monto Pagado (S/)</label>

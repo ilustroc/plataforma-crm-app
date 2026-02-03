@@ -3,6 +3,7 @@
 namespace App\Http\Controllers;
 
 use App\Models\CnaSolicitud;
+use App\Models\Cartera; // <--- Nuevo modelo
 use Carbon\Carbon;
 use Illuminate\Http\Request;
 use App\Support\WorkflowMailer;
@@ -21,35 +22,33 @@ class CnaController extends Controller
     public function store(Request $request, string $dni)
     {
         $data = $request->validate([
-            'titular'               => ['nullable','string','max:150'],
-            'nota'                  => ['nullable','string','max:1000'],
-            'observacion'           => ['nullable','string','max:1000'],
-            'fecha_pago_realizado'  => ['required','date'],
-            'monto_pagado'          => ['required','numeric','min:0.01','max:999999999.99'],
-            'operaciones'           => ['required','array','min:1'],
-            'operaciones.*'         => ['string','max:50'],
-        ], [], [
-            'fecha_pago_realizado'  => 'fecha de pago realizado',
-            'monto_pagado'          => 'monto pagado',
-            'operaciones'           => 'operaciones',
+            'titular'              => ['nullable','string','max:150'],
+            'nota'                 => ['nullable','string','max:1000'],
+            'observacion'          => ['nullable','string','max:1000'],
+            'fecha_pago_realizado' => ['required','date'],
+            'monto_pagado'         => ['required','numeric','min:0.01','max:999999999.99'],
+            'operaciones'          => ['required','array','min:1'], // Ahora viene como array directo
+            'operaciones.*'        => ['string','max:50'],
         ]);
 
         $ops = array_values(array_filter(array_map('strval', $data['operaciones'] ?? [])));
+        
         if (empty($ops)) {
             return back()->withErrors('Selecciona al menos una operación para la CNA.');
         }
 
-        // Titular (si no llega desde el form)
-        $titular = $data['titular'] ?? DB::table('clientes_cuentas')
-            ->where('dni', $dni)
-            ->whereNotNull('titular')
-            ->value('titular');
+        // Buscar titular en Cartera si no se envía
+        $titular = $data['titular'] ?? Cartera::where('documento', $dni)
+            ->whereNotNull('nombre')
+            ->value('nombre'); // En Cartera el campo es 'nombre', no 'titular'
 
-        // (Opcional) Derivar un "producto" de referencia con las operaciones elegidas
-        $productoAuto = DB::table('clientes_cuentas')
-            ->whereIn('operacion', $ops)
+        // Derivar producto de referencia
+        $productoAuto = Cartera::whereIn('operacion', $ops)
             ->whereNotNull('producto')
-            ->pluck('producto')->filter()->unique()->implode(' / ') ?: null;
+            ->pluck('producto')
+            ->filter()
+            ->unique()
+            ->implode(' / ') ?: null;
 
         $solicitud = DB::transaction(function () use ($dni, $data, $ops, $titular, $productoAuto) {
             // Bloqueo para evitar colisiones de correlativo
@@ -63,9 +62,9 @@ class CnaController extends Controller
                 'correlativo'          => $next,
                 'nro_carta'            => $nro,
                 'dni'                  => $dni,
-                'titular'              => $titular,
+                'titular'              => $titular ?? 'DESCONOCIDO',
                 'producto'             => $productoAuto,
-                'operaciones'          => $ops,
+                'operaciones'          => $ops, // El cast 'array' lo convierte a JSON
                 'nota'                 => $data['nota'] ?? null,
                 'observacion'          => $data['observacion'] ?? null,
                 'fecha_pago_realizado' => $data['fecha_pago_realizado'],
@@ -75,7 +74,10 @@ class CnaController extends Controller
             ]);
         });
 
-        WorkflowMailer::cnaPendiente($solicitud);
+        if (class_exists(WorkflowMailer::class)) {
+            WorkflowMailer::cnaPendiente($solicitud);
+        }
+        
         return back()->with('ok', "Solicitud de CNA enviada. N.º {$solicitud->nro_carta}");
     }
 
@@ -83,8 +85,7 @@ class CnaController extends Controller
      * Flujo de aprobación
      * ======================================================= */
 
-    // ── Supervisor
-
+    // ── Supervisor ──
     public function preaprobar(CnaSolicitud $cna)
     {
         $this->authorizeRole('supervisor');
@@ -94,15 +95,17 @@ class CnaController extends Controller
         }
 
         $cna->update([
-            'workflow_estado' => 'preaprobada',
-            'pre_aprobado_por'=> Auth::id(),
-            'pre_aprobado_at' => now(),
-            'rechazado_por'   => null,
-            'rechazado_at'    => null,
-            'motivo_rechazo'  => null,
+            'workflow_estado'  => 'preaprobada',
+            'pre_aprobado_por' => Auth::id(),
+            'pre_aprobado_at'  => now(),
+            'rechazado_por'    => null,
+            'rechazado_at'     => null,
+            'motivo_rechazo'   => null,
         ]);
 
-        WorkflowMailer::cnaPreaprobada($cna);
+        if (class_exists(WorkflowMailer::class)) {
+            WorkflowMailer::cnaPreaprobada($cna);
+        }
         return back()->with('ok', 'CNA pre-aprobada.');
     }
 
@@ -121,12 +124,14 @@ class CnaController extends Controller
             'motivo_rechazo'  => substr((string)$request->input('nota_estado',''), 0, 500),
         ]);
 
-        WorkflowMailer::cnaRechazadaSup($cna, $req->input('nota_estado'));
+        if (class_exists(WorkflowMailer::class)) {
+            WorkflowMailer::cnaRechazadaSup($cna, $request->input('nota_estado'));
+        }
         return back()->with('ok', 'CNA rechazada por supervisor.');
     }
 
-    // ── Administrador
-    public function aprobar(CnaSolicitud $cna)
+    // ── Administrador ──
+    public function aprobar(Request $request, CnaSolicitud $cna)
     {
         $this->authorizeRole('administrador');
 
@@ -134,6 +139,7 @@ class CnaController extends Controller
             return back()->withErrors('Solo se puede aprobar una CNA pre-aprobada.');
         }
 
+        // Actualizar estado PRIMERO
         $cna->update([
             'workflow_estado' => 'aprobada',
             'aprobado_por'    => Auth::id(),
@@ -141,9 +147,17 @@ class CnaController extends Controller
         ]);
 
         // Generar DOCX + PDF desde plantilla
-        $this->generateOutputsFromTemplate($cna);
+        try {
+            $this->generateOutputsFromTemplate($cna);
+        } catch (\Throwable $e) {
+            Log::error("Error generando PDF para CNA {$cna->id}: " . $e->getMessage());
+            // No revertimos la aprobación, pero avisamos (o podrías hacer rollback)
+            return back()->with('ok', 'CNA aprobada, pero hubo un error generando el documento: ' . $e->getMessage());
+        }
 
-        WorkflowMailer::cnaResuelta($cna, true, $req->input('nota_estado'));
+        if (class_exists(WorkflowMailer::class)) {
+            WorkflowMailer::cnaResuelta($cna, true, $request->input('nota_estado'));
+        }
         return back()->with('ok', 'CNA aprobada y archivos generados.');
     }
 
@@ -162,7 +176,9 @@ class CnaController extends Controller
             'motivo_rechazo'  => substr((string)$request->input('nota_estado',''), 0, 500),
         ]);
 
-        WorkflowMailer::cnaResuelta($cna, false, $req->input('nota_estado'));
+        if (class_exists(WorkflowMailer::class)) {
+            WorkflowMailer::cnaResuelta($cna, false, $request->input('nota_estado'));
+        }
         return back()->with('ok', 'CNA rechazada por administrador.');
     }
 
@@ -170,56 +186,44 @@ class CnaController extends Controller
      * Descargas
      * ======================================================= */
 
-    /** GET /cna/{cna}/pdf */
     public function pdf(int $id)
     {
         $cna = CnaSolicitud::findOrFail($id);
-        if ($cna->workflow_estado !== 'aprobada') {
-            abort(403, 'Solo disponible para CNA aprobadas.');
-        }
+        if ($cna->workflow_estado !== 'aprobada') abort(403);
 
-        // Construye SIEMPRE el nombre esperado
         $base   = sprintf('CNA %s - %s', $cna->nro_carta, $cna->dni);
         $pdfRel = 'cna/pdfs/'.$base.'.pdf';
 
         if (Storage::exists($pdfRel)) {
             return Storage::download($pdfRel, $base.'.pdf');
         }
-
-        // Si no existe, intenta servir el DOCX como respaldo
+        
+        // Fallback al DOCX
         $docxRel = 'cna/docx/'.$base.'.docx';
         if (Storage::exists($docxRel)) {
             return Storage::download($docxRel, $base.'.docx');
         }
 
-        abort(404, 'Archivo no encontrado: '.$pdfRel);
+        abort(404, 'Archivo no encontrado.');
     }
 
     public function docx(int $id)
     {
         $cna = CnaSolicitud::findOrFail($id);
-        if ($cna->workflow_estado !== 'aprobada') {
-            abort(403, 'Solo disponible para CNA aprobadas.');
-        }
+        if ($cna->workflow_estado !== 'aprobada') abort(403);
 
-        $base   = sprintf('CNA %s - %s', $cna->nro_carta, $cna->dni);
-        $docxRel= 'cna/docx/'.$base.'.docx';
+        $base    = sprintf('CNA %s - %s', $cna->nro_carta, $cna->dni);
+        $docxRel = 'cna/docx/'.$base.'.docx';
 
         if (Storage::exists($docxRel)) {
             return Storage::download($docxRel, $base.'.docx');
         }
 
-        // Respaldo: si el PDF existe, al menos entrega eso
-        $pdfRel = 'cna/pdfs/'.$base.'.pdf';
-        if (Storage::exists($pdfRel)) {
-            return Storage::download($pdfRel, $base.'.pdf');
-        }
-
-        abort(404, 'Archivo no encontrado: '.$docxRel);
+        abort(404, 'Archivo no encontrado.');
     }
 
     /* =========================================================
-     * Helpers
+     * Helpers & Generación de Documentos
      * ======================================================= */
 
     private function authorizeRole(string $role)
@@ -230,167 +234,123 @@ class CnaController extends Controller
         }
     }
 
-    /**
-     * Llena storage/app/templates/cna_template.docx y crea:
-     *  - DOCX en storage/app/cna/docx
-     *  - PDF  en storage/app/cna/pdfs (vía iLovePDF)
-     */
     private function generateOutputsFromTemplate(CnaSolicitud $cna): void
     {
         $tplPath = storage_path('app/templates/cna_template.docx');
-        if (!is_file($tplPath)) {
+        
+        if (!file_exists($tplPath)) {
             throw new \RuntimeException('Plantilla cna_template.docx no encontrada en storage/app/templates/');
         }
 
         $docxDir = 'cna/docx';
         $pdfDir  = 'cna/pdfs';
-        \Storage::makeDirectory($docxDir);
-        \Storage::makeDirectory($pdfDir);
+        Storage::makeDirectory($docxDir);
+        Storage::makeDirectory($pdfDir);
 
-        $docxName = "CNA {$cna->nro_carta} - {$cna->dni}.docx";
-        $pdfName  = "CNA {$cna->nro_carta} - {$cna->dni}.pdf";
-        $docxRel  = $docxDir.'/'.$docxName;
-        $pdfRel   = $pdfDir.'/'.$pdfName;
+        $baseName = "CNA {$cna->nro_carta} - {$cna->dni}";
+        $docxRel  = "{$docxDir}/{$baseName}.docx";
+        $pdfRel   = "{$pdfDir}/{$baseName}.pdf";
 
-        // ---------- Rellenar DOCX ----------
+        // 1. Preparar datos para la plantilla
         $tp = new TemplateProcessor($tplPath);
 
-        $titular = $cna->titular ?? \DB::table('clientes_cuentas')
-            ->where('dni', $cna->dni)->value('titular');
+        // Buscar titular si falta
+        $titular = $cna->titular ?? Cartera::where('documento', $cna->dni)->value('nombre');
 
-        // Fecha de pago (opcional)
+        // Formatear fecha de pago
         $fechaPago = '';
         if ($cna->fecha_pago_realizado) {
-            try { $fechaPago = Carbon::parse($cna->fecha_pago_realizado)->format('d/m/Y'); }
-            catch (\Throwable $e) { $fechaPago = (string)$cna->fecha_pago_realizado; }
+            $fechaPago = Carbon::parse($cna->fecha_pago_realizado)->format('d/m/Y');
         }
 
-        // >>> NUEVO: fecha de aprobación en español <<<
-        // Usa la fecha de aprobación si existe; si no, hoy.
-        try {
-            Carbon::setLocale('es');
-            $aprobadoAt = $cna->aprobado_at
-                ? Carbon::parse($cna->aprobado_at)
-                : now();
-            // “26 de setiembre de 2025”
-            $aprobadoAtStr = $aprobadoAt->translatedFormat('d \\de F \\de Y');
-            // Opcional: capitalizar el mes (si tu plantilla lo quiere así)
-            // $aprobadoAtStr = mb_convert_case($aprobadoAtStr, MB_CASE_TITLE, 'UTF-8');
-        } catch (\Throwable $e) {
-            $aprobadoAtStr = now()->format('d/m/Y');
-        }
+        // Fecha de aprobación en texto (ej: "26 de septiembre de 2025")
+        Carbon::setLocale('es');
+        $aprobadoAt = $cna->aprobado_at ? Carbon::parse($cna->aprobado_at) : now();
+        $aprobadoAtStr = $aprobadoAt->translatedFormat('d \\de F \\de Y');
 
-        foreach ([
-            'nro_carta'    => $cna->nro_carta,
+        // Variables simples
+        $vars = [
             'NRO_CARTA'    => $cna->nro_carta,
-            'dni'          => $cna->dni,
             'DNI'          => $cna->dni,
-            'titular'      => (string)($titular ?? ''),
-            'TITULAR'      => (string)($titular ?? ''),
+            'TITULAR'      => strtoupper($titular ?? ''),
             'FECHA_PAGO'   => $fechaPago,
             'MONTO_PAGADO' => number_format((float)$cna->monto_pagado, 2),
-            'OBSERVACION'  => (string)($cna->observacion ?? ''),
+            'OBSERVACION'  => $cna->observacion ?? '',
             'APROBADO_AT'  => $aprobadoAtStr,
-        ] as $k => $v) {
-            $tp->setValue($k, $v);
+        ];
+
+        foreach ($vars as $key => $val) {
+            $tp->setValue($key, $val);
         }
 
-        // Operaciones
-        $ops = is_array($cna->operaciones)
-            ? $cna->operaciones
-            : (json_decode($cna->operaciones ?? '[]', true) ?: []);
-        $ops = array_values(array_filter(array_map('strval', $ops)));
+        // 2. Llenar tabla de Operaciones (Clonación de filas)
+        // Decodificar JSON si es necesario (el modelo lo hace, pero aseguramos array)
+        $ops = $cna->operaciones; 
+        if (is_string($ops)) $ops = json_decode($ops, true);
+        if (!is_array($ops)) $ops = [];
 
-        $byOp = collect();
-        if ($ops) {
-            $byOp = \DB::table('clientes_cuentas')
-                ->select('operacion','producto','entidad')
-                ->whereIn('operacion', $ops)
+        // Buscar detalles en Cartera
+        $carteraInfo = collect();
+        if (!empty($ops)) {
+            $carteraInfo = Cartera::whereIn('operacion', $ops)
+                ->select('operacion', 'producto', 'entidad')
                 ->get()
                 ->keyBy('operacion');
         }
 
-        $rows = max(count($ops), 1);
-        $tp->cloneRow('OPERACION', $rows);
+        // Clonar filas en el Word (variable OPERACION)
+        $count = max(count($ops), 1);
+        $tp->cloneRow('OPERACION', $count);
 
-        if ($rows === 1) {
-            $op  = $ops[0] ?? '—';
-            $row = $byOp->get($op);
-            $tp->setValue('OPERACION#1', $op ?: '—');
-            $tp->setValue('PRODUCTO#1',  $row->producto ?? '—');
-            $tp->setValue('ENTIDAD#1',   $row->entidad ?? '—');
-        } else {
-            foreach ($ops as $i => $op) {
-                $row = $byOp->get($op);
-                $n   = $i + 1;
-                $tp->setValue("OPERACION#{$n}", $op ?: '—');
-                $tp->setValue("PRODUCTO#{$n}",  $row->producto ?? '—');
-                $tp->setValue("ENTIDAD#{$n}",   $row->entidad ?? '—');
-            }
+        foreach ($ops as $i => $op) {
+            $idx  = $i + 1; // El índice en phpword empieza en 1 tras clonar (ej: OPERACION#1)
+            $info = $carteraInfo->get($op);
+
+            $tp->setValue("OPERACION#{$idx}", $op);
+            $tp->setValue("PRODUCTO#{$idx}",  $info->producto ?? '-');
+            $tp->setValue("ENTIDAD#{$idx}",   $info->entidad ?? '-');
         }
 
-        // Guardar DOCX
-        $tp->saveAs(storage_path('app/'.$docxRel));
+        // 3. Guardar DOCX
+        $tp->saveAs(storage_path("app/{$docxRel}"));
 
-        // ---------- Convertir a PDF ----------
+        // 4. Convertir a PDF (iLovePDF)
         try {
             $this->convertDocxToPdfViaIlovepdf(
-                storage_path('app/'.$docxRel),
-                storage_path('app/'.$pdfRel)
+                storage_path("app/{$docxRel}"),
+                storage_path("app/{$pdfRel}")
             );
             $cna->pdf_path = $pdfRel;
         } catch (\Throwable $e) {
-            \Log::error('Error iLovePDF DOCX→PDF: '.$e->getMessage(), ['cna_id' => $cna->id]);
-            $cna->pdf_path = null;
+            Log::error('Fallo iLovePDF: '.$e->getMessage());
+            $cna->pdf_path = null; 
         }
 
-        // Persistir rutas (y por si acaso aseguramos guardar aprobado_at existente)
         $cna->docx_path = $docxRel;
         $cna->save();
     }
 
-    /**
-     * Convierte DOCX → PDF con iLovePDF (task: officepdf).
-     * Requiere claves en config/services.php:
-     * 'ilovepdf' => ['public' => env('ILOVEPDF_PUBLIC_KEY'), 'secret' => env('ILOVEPDF_SECRET_KEY')]
-     */
     private function convertDocxToPdfViaIlovepdf(string $docxAbs, string $pdfAbs): void
     {
         $public = config('services.ilovepdf.public');
         $secret = config('services.ilovepdf.secret');
-        if (!$public || !$secret) {
-            throw new \RuntimeException('Faltan claves de iLovePDF (config/services.ilovepdf).');
-        }
 
-        $sdk  = new Ilovepdf($public, $secret);
-        $task = $sdk->newTask('officepdf'); // Office → PDF
+        if (!$public || !$secret) return; // Si no hay keys, salimos sin error (solo no genera PDF)
+
+        $ilovepdf = new Ilovepdf($public, $secret);
+        $task = $ilovepdf->newTask('officepdf');
         $task->addFile($docxAbs);
         $task->execute();
-
+        
         $outDir = dirname($pdfAbs);
-        if (!is_dir($outDir)) {
-            @mkdir($outDir, 0775, true);
-        }
-
-        // Descarga; el SDK usa el nombre original (cambia a .pdf)
         $task->download($outDir);
 
-        // Asegura nombre final exacto
-        $expected = $outDir.'/'.basename($docxAbs, '.docx').'.pdf';
-        if (!is_file($expected)) {
-            $latest = collect(glob($outDir.'/*.pdf'))
-                ->sortByDesc(fn($p) => filemtime($p))
-                ->first();
-            if ($latest) {
-                $expected = $latest;
-            }
-        }
-        if (!is_file($expected)) {
-            throw new \RuntimeException('No se pudo localizar el PDF descargado por iLovePDF.');
-        }
-        if ($expected !== $pdfAbs) {
-            @unlink($pdfAbs);
-            rename($expected, $pdfAbs);
+        // iLovePDF descarga con el nombre original pero extensión .pdf
+        $downloadedName = str_replace('.docx', '.pdf', basename($docxAbs));
+        $downloadedPath = $outDir . '/' . $downloadedName;
+
+        if (file_exists($downloadedPath)) {
+            rename($downloadedPath, $pdfAbs);
         }
     }
 }
