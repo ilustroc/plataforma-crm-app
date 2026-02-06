@@ -77,8 +77,11 @@ Route::middleware('auth')->group(function () {
         Route::get('/pagos', [ReportePagosController::class, 'index'])->name('reportes.pagos.index');
         Route::get('/pagos/export', [ReportePagosController::class, 'export'])->name('reportes.pagos.export');
         
-        Route::get('/pdp',        [ReportePromesasController::class, 'index'])->name('reportes.pdp');
-        Route::get('/pdp/export', [ReportePromesasController::class, 'export'])->name('reportes.pdp.export');
+        Route::get('/promesas', [ReportePromesasController::class, 'index'])
+            ->name('reportes.promesas.index');
+
+        Route::get('/promesas/export', [ReportePromesasController::class, 'export'])
+            ->name('reportes.promesas.export');
     });
 
     /*

@@ -114,55 +114,6 @@
       </p>
 
     </div>
-  </main>
 
-  {{-- Scripts simples para funcionalidad UI --}}
-  <script>
-    document.addEventListener('DOMContentLoaded', () => {
-        // 1. Auto-cerrar Toasts
-        const autoToasts = document.querySelectorAll('[data-autoclose]');
-        autoToasts.forEach(toast => {
-            const time = toast.getAttribute('data-autoclose') || 5000;
-            setTimeout(() => {
-                toast.style.opacity = '0';
-                toast.style.transform = 'translateX(100%)';
-                setTimeout(() => toast.remove(), 300);
-            }, time);
-        });
-
-        // 2. Toggle Password
-        const toggleBtn = document.getElementById('togglePwd');
-        const pwdInput = document.getElementById('password');
-        
-        if(toggleBtn && pwdInput) {
-            toggleBtn.addEventListener('click', () => {
-                const type = pwdInput.getAttribute('type') === 'password' ? 'text' : 'password';
-                pwdInput.setAttribute('type', type);
-                toggleBtn.classList.toggle('text-brand');
-            });
-        }
-
-        // 3. Loading state
-        const form = document.getElementById('login-form');
-        const btn = document.getElementById('submitBtn');
-        if(form && btn) {
-            form.addEventListener('submit', () => {
-                btn.disabled = true;
-                btn.querySelector('.btn-text').textContent = 'Ingresando...';
-                btn.querySelector('.spinner').classList.remove('hidden');
-            });
-        }
-
-        // 4. Detectar Bloq Mayus
-        const capsHint = document.getElementById('capsHint');
-        pwdInput?.addEventListener('keyup', (e) => {
-            if (e.getModifierState('CapsLock')) {
-                capsHint.classList.remove('hidden');
-            } else {
-                capsHint.classList.add('hidden');
-            }
-        });
-    });
-  </script>
 </body>
 </html>

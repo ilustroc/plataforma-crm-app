@@ -13,23 +13,26 @@ use Carbon\Carbon;
 
 class ReportePromesasController extends Controller
 {
-    // Tablas
-    private string $table    = 'promesas_pago';          // principal
-    private string $opsTable = 'promesa_operaciones';    // detalle (¡ojo: singular!)
+    private string $table    = 'promesas_pago'; 
+    private string $opsTable = 'promesa_operaciones';
 
     public function index(Request $r)
     {
         $qb   = $this->baseQuery($r);
         $rows = $qb->paginate(25)->withQueryString();
 
-        // Filtros para la vista
-        $from   = $r->query('from', Carbon::today()->startOfMonth()->toDateString());
-        $to     = $r->query('to',   Carbon::today()->toDateString());
+        $from   = $r->query('from', now()->startOfMonth()->toDateString());
+        $to     = $r->query('to',   now()->toDateString());
         $estado = $r->query('estado', '');
         $gestor = $r->query('gestor', '');
         $q      = $r->query('q', '');
 
-        return view('reportes.pdp', compact('rows','from','to','estado','gestor','q'));
+        if ($r->ajax() || $r->query('partial')) {
+            return view('reportes.promesas', compact('rows','from','to','estado','gestor','q'))
+                ->fragment('tabla-resultados');
+        }
+
+        return view('reportes.promesas', compact('rows','from','to','estado','gestor','q'));
     }
 
     public function export(Request $r)
@@ -41,9 +44,9 @@ class ReportePromesasController extends Controller
         $sheet = $xlsx->getActiveSheet(); $row = 1;
 
         $headers = [
-            'DOCUMENTO','CLIENTE','NIVEL 3','CONTACTO','AGENTE','OPERACION','ENTIDAD','CARTERA',
-            'FECHA GESTION','FECHA CITA','TELEFONO','OBSERVACION','MONTO PROMESA','NRO CUOTAS',
-            'FECHA PROMESA','PROCEDENCIA LLAMADA','GESTOR','CARTERA'
+            'DOCUMENTO','CLIENTE','NIVEL 3','CONTACTO','AGENTE','OPERACION','ENTIDAD',
+            'FECHA GESTION','OBSERVACION','MONTO PROMESA','NRO CUOTAS',
+            'FECHA PROMESA','GESTOR'
         ];
 
         $sheet->fromArray($headers, null, "A{$row}"); $row++;
@@ -57,74 +60,50 @@ class ReportePromesasController extends Controller
                 (string)$r->agente,
                 (string)$r->operacion,
                 (string)$r->entidad,
-                (string)$r->cartera_agente,
-                (string)$r->fecha_gestion, // Y-m-d H:i:s
-                '', // FECHA CITA
-                '', // TELEFONO
+                (string)$r->fecha_gestion,
                 (string)$r->observacion,
                 $r->monto_promesa !== null ? (float)$r->monto_promesa : '',
                 $r->nro_cuotas     !== null ? (int)$r->nro_cuotas     : '',
-                (string)$r->fecha_promesa,   // Y-m-d
-                'Web/>',
+                (string)$r->fecha_promesa,
                 (string)$r->gestor,
-                (string)$r->cartera_final,
             ], null, "A{$row}");
 
-            // DNI como texto
             $sheet->setCellValueExplicit("A{$row}", (string)$r->documento, DataType::TYPE_STRING);
-
             $row++;
         }
 
-        // Auto-size
         $lastCol = Coordinate::stringFromColumnIndex(count($headers));
         for ($c='A'; $c <= $lastCol; $c++) $sheet->getColumnDimension($c)->setAutoSize(true);
 
         $tmp = tempnam(sys_get_temp_dir(), 'xlsx_');
         (new Xlsx($xlsx))->save($tmp);
 
-        return response()->download($tmp, 'reporte_promesas_'.now()->format('Ymd_His').'.xlsx', [
-            'Content-Type'  => 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
-            'Cache-Control' => 'no-store, no-cache, must-revalidate',
-            'Pragma'        => 'no-cache',
-        ])->deleteFileAfterSend(true);
+        return response()->download($tmp, 'reporte_promesas_'.now()->format('Ymd_His').'.xlsx')
+                         ->deleteFileAfterSend(true);
     }
 
-    /**
-     * Query que devuelve UNA FILA POR OPERACIÓN con todas las columnas del layout.
-     */
     private function baseQuery(Request $r)
     {
-        if (!Schema::hasTable($this->table)) {
-            abort(500, "No existe la tabla {$this->table}.");
-        }
-
-        // LEFT JOIN al detalle: si hay múltiples operaciones => múltiples filas
         $qb = DB::table("{$this->table} as p")
             ->leftJoin("{$this->opsTable} as po", 'po.promesa_id', '=', 'p.id')
-            // operación efectiva = po.operacion (si existe) o p.operacion (legacy)
-            ->leftJoin('clientes_cuentas as cc', DB::raw('COALESCE(po.operacion, p.operacion)'), '=', 'cc.operacion')
-            // usuario que creó
+            // Join con Carteras usando COALESCE para soportar operaciones en tabla principal o detalle
+            ->leftJoin('carteras as c', DB::raw('COALESCE(po.operacion, p.operacion)'), '=', 'c.operacion')
             ->leftJoin('users as u',  'u.id',  '=', 'p.user_id')
-            // supervisor del creador
             ->leftJoin('users as su', 'su.id', '=', 'u.supervisor_id');
 
-        // Campos calculados y alias con el ORDEN exacto requerido
         $qb->selectRaw("
-            COALESCE(p.dni, cc.dni)                                      as documento,
-            COALESCE(cc.titular, '')                                     as cliente,
-            COALESCE(u.name, '')                                         as agente,
+            COALESCE(p.dni, c.documento)                                as documento,
+            COALESCE(c.nombre, '')                                      as cliente,
+            COALESCE(u.name, '')                                        as agente,
             COALESCE(po.operacion, p.operacion, '')                      as operacion,
-            COALESCE(cc.entidad, '')                                     as entidad,
-            COALESCE(cc.agente, '')                                      as cartera_agente,   -- CARTERA (1)
+            COALESCE(c.entidad, '')                                      as entidad,
             DATE_FORMAT(p.created_at, '%Y-%m-%d %H:%i:%s')               as fecha_gestion,
-            COALESCE(p.nota, '')                                         as observacion,
+            COALESCE(p.nota, '')                                        as observacion,
             CASE WHEN p.monto > 0 THEN p.monto WHEN p.tipo = 'convenio' THEN p.monto_convenio ELSE NULL END AS monto_promesa,
             CASE WHEN IFNULL(p.nro_cuotas,0) > 0 THEN p.nro_cuotas ELSE NULL END as nro_cuotas,
             DATE_FORMAT(COALESCE(p.fecha_pago, p.fecha_promesa), '%Y-%m-%d') as fecha_promesa,
-            COALESCE(su.name, '')                                        as gestor,
-            COALESCE(cc.cartera, '')                                     as cartera_final,    -- CARTERA (2)
-            p.created_at                                                 as p_created_at
+            COALESCE(su.name, '')                                       as gestor,
+            p.created_at                                                as p_created_at
         ");
 
         // ====== Filtros ======
@@ -134,37 +113,26 @@ class ReportePromesasController extends Controller
         $gestor = trim((string)$r->query('gestor',''));
         $q      = trim((string)$r->query('q',''));
 
-        // Fechas por FECHA GESTIÓN (created_at)
         if ($from) $qb->whereDate('p.created_at','>=',$from);
         if ($to)   $qb->whereDate('p.created_at','<=',$to);
 
-        // Estado por workflow_estado si existe
         if ($estado !== '' && Schema::hasColumn($this->table, 'workflow_estado')) {
             $qb->where('p.workflow_estado','like',"%{$estado}%");
         }
 
-        // Filtro Gestor (supervisor)
         if ($gestor !== '') {
-            $qb->where(function($w) use ($gestor){
-                $w->where('su.name','like',"%{$gestor}%")
-                  ->orWhere('su.email','like',"%{$gestor}%");
-            });
+            $qb->where('su.name','like',"%{$gestor}%");
         }
 
-        // Búsqueda general
         if ($q !== '') {
             $qb->where(function($w) use ($q){
                 $w->where('p.dni','like',"%{$q}%")
                   ->orWhere(DB::raw('COALESCE(po.operacion, p.operacion)'), 'like', "%{$q}%")
-                  ->orWhere('cc.titular','like',"%{$q}%")
-                  ->orWhere('cc.entidad','like',"%{$q}%")
+                  ->orWhere('c.nombre','like',"%{$q}%")
                   ->orWhere('p.nota','like',"%{$q}%");
             });
         }
 
-        // Orden
-        $qb->orderByDesc('p.created_at')->orderByDesc('p.id');
-
-        return $qb;
+        return $qb->orderByDesc('p.created_at');
     }
 }

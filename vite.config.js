@@ -35,6 +35,10 @@ export default defineConfig({
         'resources/css/reporte_pagos.css',
         'resources/js/reporte_pagos.js',
 
+        // Archivos de Reporte de Promesas
+        'resources/css/reporte_promesas.css',
+        'resources/js/reporte_promesas.js',
+
         // Archivos de Importar Pagos
         'resources/css/importar_pagos.css',
         'resources/js/importar_pagos.js',
