@@ -66,7 +66,7 @@
                             <th class="text-right">Monto</th>
                             <th class="text-center">Cuotas</th>
                             <th>Fecha Promesa</th>
-                            <th>Gestor</th>
+                            <th>Agente</th>
                         </tr>
                     </thead>
                     <tbody>
@@ -87,7 +87,7 @@
                             </td>
                             <td class="text-center text-slate-500">{{ $r->nro_cuotas ?? '-' }}</td>
                             <td class="text-nowrap font-bold text-brand">{{ $r->fecha_promesa }}</td>
-                            <td class="text-xs uppercase text-slate-500">{{ $r->gestor }}</td>
+                            <td class="text-xs uppercase text-slate-500">{{ $r->agente }}</td>
                         </tr>
                         @empty
                         <tr>
