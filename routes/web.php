@@ -3,7 +3,7 @@
 use Illuminate\Support\Facades\Route;
 
 use App\Http\Controllers\AuthController;
-use App\Http\Controllers\ClientesControllers;
+use App\Http\Controllers\ClientesController;
 use App\Http\Controllers\PanelController;
 use App\Http\Controllers\ReporteGestionesController;
 use App\Http\Controllers\ReportePagosController;
@@ -80,11 +80,11 @@ Route::middleware('auth')->group(function () {
     | - Acciones asociadas al cliente (promesas, CNA, etc.).
     */
     Route::prefix('clientes')->group(function () {
-        Route::get('/', [ClientesControllers::class, 'index'])->name('clientes.index');
-        Route::get('/{dni}', [ClientesControllers::class, 'show'])->name('clientes.show');
+        Route::get('/', [ClientesController::class, 'index'])->name('clientes.index');
+        Route::get('/{dni}', [ClientesController::class, 'show'])->name('clientes.show');
 
         // Registro de promesa desde la vista del cliente
-        Route::post('/{dni}/promesas', [ClientesControllers::class, 'storePromesa'])
+        Route::post('/{dni}/promesas', [ClientesController::class, 'storePromesa'])
             ->name('clientes.promesas.store');
 
         // Registro de solicitud CNA desde la vista del cliente
@@ -99,13 +99,11 @@ Route::middleware('auth')->group(function () {
     | Endpoints de consulta y exportación para reportes operativos.
     */
     Route::prefix('reportes')->group(function () {
-        // Gestiones
-        Route::get('/gestiones', [ReporteGestionesController::class, 'index'])->name('reportes.gestiones');
-        Route::get('/gestiones/export', [ReporteGestionesController::class, 'export'])->name('reportes.gestiones.export');
-
         // Pagos
-        Route::get('/pagos', [ReportePagosController::class, 'index'])->name('reportes.pagos.index');
-        Route::get('/pagos/export', [ReportePagosController::class, 'export'])->name('reportes.pagos.export');
+        Route::get('/pagos', [ReportePagosController::class, 'index'])
+            ->name('reportes.pagos.index');
+        Route::get('/pagos/export', [ReportePagosController::class, 'export'])
+            ->name('reportes.pagos.export');
 
         // Promesas
         Route::get('/promesas', [ReportePromesasController::class, 'index'])

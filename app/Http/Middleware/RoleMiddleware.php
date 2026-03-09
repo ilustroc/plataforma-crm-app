@@ -14,7 +14,6 @@ class RoleMiddleware
             return redirect()->route('login');
         }
 
-        // admite "administrador,sistemas" o "administrador|sistemas"
         $allowed = [];
         foreach ($roles as $chunk) {
             foreach (preg_split('/[,\|]/', $chunk) as $r) {
@@ -27,6 +26,6 @@ class RoleMiddleware
             return $next($request);
         }
 
-        abort(403); // sin permiso (NO debe ser 500)
+        abort(403);
     }
 }

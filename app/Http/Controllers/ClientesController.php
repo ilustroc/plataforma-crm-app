@@ -17,7 +17,7 @@ use App\Models\PromesaCuota;
 use App\Models\Pagos;
 use App\Models\CnaSolicitud;
 
-class ClientesControllers extends Controller
+class ClientesController extends Controller
 {
     public function show(string $dni)
     {
