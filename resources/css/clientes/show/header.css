@@ -1,0 +1,38 @@
+@layer components {
+    /* --- HEADER CLIENTE --- */
+    .client-header {
+        @apply bg-white rounded-xl border border-slate-200 shadow-sm mb-6 p-5 flex flex-col lg:flex-row lg:items-center justify-between gap-6;
+    }
+
+    .header-profile {
+        @apply flex items-center gap-4;
+    }
+
+    .header-avatar {
+        @apply h-12 w-12 shrink-0 rounded-full bg-slate-50 text-slate-500 flex items-center justify-center text-lg font-bold border border-slate-200 uppercase;
+    }
+
+    .header-info h1 {
+        @apply text-xl font-bold text-slate-800 leading-tight;
+    }
+
+    .header-meta {
+        @apply flex flex-wrap items-center gap-3 mt-1 text-sm text-slate-500;
+    }
+
+    .header-stats {
+        @apply flex items-center gap-8 border-t border-slate-100 pt-4 lg:border-t-0 lg:border-l lg:pt-0 lg:pl-8 lg:ml-auto;
+    }
+
+    .stat-item {
+        @apply flex flex-col text-right;
+    }
+
+    .stat-label {
+        @apply text-[10px] uppercase tracking-wider font-bold text-slate-400 mb-0.5;
+    }
+
+    .stat-value {
+        @apply text-lg font-bold text-slate-800 tabular-nums leading-none;
+    }
+}

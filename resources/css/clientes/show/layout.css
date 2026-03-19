@@ -1,0 +1,32 @@
+@layer components {
+    body {
+        @apply bg-[#F8FAFC];
+    }
+
+    /* --- TARJETAS DE SECCIÓN --- */
+    .section-card {
+        @apply bg-white rounded-[1.25rem] border border-slate-100 shadow-[0_2px_12px_-2px_rgba(0,0,0,0.03)] overflow-hidden mb-6;
+    }
+
+    .section-header {
+        @apply px-6 py-5 border-b border-slate-50 flex flex-col sm:flex-row sm:items-center justify-between gap-4 bg-white;
+    }
+
+    .section-title {
+        @apply text-lg font-bold text-slate-800 flex items-center gap-2.5;
+    }
+
+    /* --- SCROLLBAR --- */
+    .custom-scroll::-webkit-scrollbar {
+        height: 6px;
+        width: 6px;
+    }
+
+    .custom-scroll::-webkit-scrollbar-thumb {
+        @apply bg-slate-200 rounded-full;
+    }
+
+    .custom-scroll::-webkit-scrollbar-track {
+        @apply bg-transparent;
+    }
+}

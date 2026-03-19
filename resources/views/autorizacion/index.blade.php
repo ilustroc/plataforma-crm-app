@@ -60,9 +60,9 @@
                                 'tipo'    => $p->tipo,
                                 'fecha'   => optional($p->fecha_promesa)->format('d/m/Y'),
                                 'monto'   => $monto,
-                                'cuentas' => $p->cuentas_json,          // puede venir string JSON
+                                'cuentas' => $p->cuentas_json,
                                 'nota'    => $p->nota,
-                                'crono'   => $p->cuotas_json ?? [],      // puede venir string JSON o array
+                                'crono'   => $p->cuotas_json ?? [],
                             ];
                         @endphp
 

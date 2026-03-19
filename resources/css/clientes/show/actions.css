@@ -1,0 +1,47 @@
+@layer components {
+    /* --- BADGES --- */
+    .badge {
+        @apply inline-flex items-center px-2.5 py-0.5 rounded-full text-[10px] font-bold border uppercase tracking-wide;
+    }
+
+    .badge-info {
+        @apply bg-sky-50 text-sky-700 border-sky-200;
+    }
+
+    .badge-success {
+        @apply bg-emerald-50 text-emerald-700 border-emerald-200;
+    }
+
+    .badge-warning {
+        @apply bg-amber-50 text-amber-700 border-amber-200;
+    }
+
+    .badge-danger {
+        @apply bg-red-50 text-red-700 border-red-200;
+    }
+
+    .badge-neutral {
+        @apply bg-slate-100 text-slate-500 border-slate-200;
+    }
+
+    /* --- BOTONES --- */
+    .btn-action {
+        @apply inline-flex items-center justify-center gap-2 px-4 py-2 text-sm font-semibold rounded-xl transition-all border shadow-sm active:scale-95;
+    }
+
+    .btn-outline {
+        @apply bg-white border-slate-200 text-slate-600 hover:bg-slate-50 hover:text-slate-900 hover:border-slate-300;
+    }
+
+    .btn-primary {
+        @apply bg-brand border-transparent text-white hover:bg-[#5B1F50] hover:shadow-brand/20 hover:shadow-lg;
+    }
+
+    .btn-success {
+        @apply bg-emerald-600 border-transparent text-white hover:bg-emerald-700 hover:shadow-emerald-600/20 hover:shadow-lg;
+    }
+
+    .btn-disabled {
+        @apply opacity-50 cursor-not-allowed shadow-none bg-slate-100 text-slate-400 border-slate-200 hover:bg-slate-100 hover:shadow-none pointer-events-none;
+    }
+}
