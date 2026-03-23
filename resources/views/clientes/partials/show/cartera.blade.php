@@ -85,16 +85,14 @@
                             {{ number_format((float) $c->intereses, 2) }}
                         </td>
 
-                        <td class="text-right font-bold font-mono text-xs text-rose-600 bg-rose-50/30">
+                        <td class="text-right font-bold font-mono text-xs text-rose-600">
                             {{ number_format((float) $c->deuda_total, 2) }}
                         </td>
 
-                        <td class="text-center relative">
-                            <div class="tooltip-wrap">
+                        <td class="text-center"> <div class="tooltip-wrap">
                                 <button type="button" class="tooltip-btn">
                                     <svg class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
-                                            d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/>
+                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/>
                                     </svg>
                                 </button>
 

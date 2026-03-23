@@ -30,6 +30,10 @@
         ])
     </div>
 
+    @include('clientes.partials.show.modals.pagos', [
+        'pagos' => $pagos
+    ])
+    
     @include('clientes.partials.show.modals.propuesta', [
         'dni' => $dni,
     ])

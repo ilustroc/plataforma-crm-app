@@ -1,5 +1,4 @@
 @layer components {
-    /* --- MODALES --- */
     .modal-backdrop {
         @apply fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-md transition-opacity opacity-0 pointer-events-none flex items-center justify-center p-4;
     }
@@ -9,7 +8,7 @@
     }
 
     .modal-box {
-        @apply bg-white rounded-2xl shadow-2xl w-full max-w-2xl max-h-[90vh] overflow-hidden flex flex-col scale-95 transition-transform duration-300;
+        @apply bg-white rounded-2xl shadow-2xl w-full h-[78vh] max-h-[78vh] overflow-hidden flex flex-col min-h-0 scale-95 transition-transform duration-300;
     }
 
     .modal-backdrop.show .modal-box {
@@ -17,7 +16,7 @@
     }
 
     .modal-header {
-        @apply px-6 py-5 border-b border-slate-50 flex items-center justify-between bg-white;
+        @apply px-6 py-5 border-b border-slate-100 flex items-center justify-between bg-white;
     }
 
     .modal-body {
@@ -26,5 +25,149 @@
 
     .modal-footer {
         @apply px-6 py-4 border-t border-slate-100 bg-white flex justify-end gap-3;
+    }
+
+    .proposal-modal-box {
+        @apply h-[78vh];
+    }
+
+    .proposal-header-simple {
+        @apply py-4;
+    }
+
+    .proposal-header-left {
+        @apply flex items-start gap-3;
+    }
+
+    .proposal-header-icon-simple {
+        @apply flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-brand/10 text-brand;
+    }
+
+    .proposal-title-simple {
+        @apply text-lg font-bold text-slate-800 leading-tight;
+    }
+
+    .proposal-subtitle-simple {
+        @apply mt-1 text-sm text-slate-500;
+    }
+
+    .modal-close-btn {
+        @apply rounded-xl p-2 text-slate-400 transition-colors hover:bg-slate-100 hover:text-slate-600;
+    }
+
+    .proposal-body-simple {
+        @apply space-y-4 bg-slate-50/30;
+    }
+
+    .proposal-body-scroll {
+        @apply flex-1 min-h-0 overflow-y-auto overscroll-contain;
+    }
+
+    .proposal-block {
+        @apply rounded-2xl border border-slate-200 bg-white p-5 shadow-sm;
+    }
+
+    .proposal-block-soft {
+        @apply bg-slate-50/70;
+    }
+
+    .proposal-block-head {
+        @apply mb-4 flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between;
+    }
+
+    .proposal-block-title {
+        @apply text-sm font-bold text-slate-800;
+    }
+
+    .proposal-block-subtitle {
+        @apply mt-1 text-xs text-slate-500;
+    }
+
+    .proposal-badge-count {
+        @apply inline-flex items-center rounded-xl border border-brand/10 bg-brand/5 px-3 py-1.5 text-xs font-semibold text-brand;
+    }
+
+    .proposal-ops-list-simple {
+        @apply flex min-h-[52px] flex-wrap gap-2 rounded-xl border border-slate-200 bg-slate-50 p-3;
+    }
+
+    .proposal-form-grid {
+        @apply grid grid-cols-1 gap-4 md:grid-cols-2;
+    }
+
+    .proposal-form-grid-4 {
+        @apply lg:grid-cols-4;
+    }
+
+    .proposal-col-full {
+        @apply md:col-span-2;
+    }
+
+    .field {
+        @apply flex flex-col gap-1.5;
+    }
+
+    .field-label {
+        @apply text-[11px] font-bold uppercase tracking-wide text-slate-500;
+    }
+
+    .field-input {
+        @apply w-full rounded-xl border border-slate-200 bg-white px-4 py-2.5 text-sm text-slate-700 outline-none transition-all placeholder:text-slate-400 focus:border-brand focus:ring-4 focus:ring-brand/10;
+    }
+
+    .field-input-strong {
+        @apply font-bold text-slate-800;
+    }
+
+    .field-textarea {
+        @apply resize-y;
+    }
+
+    .field-textarea-expand {
+        @apply min-h-[110px] max-h-[260px];
+    }
+
+    .proposal-toolbar-simple {
+        @apply flex items-center justify-start;
+    }
+
+    .proposal-toolbar-btn {
+        @apply flex items-center;
+    }
+
+    .proposal-total-inline {
+        @apply text-sm font-semibold text-slate-500;
+    }
+
+    .proposal-total-inline span {
+        @apply font-bold text-brand;
+    }
+
+    .proposal-table-wrap-simple {
+        @apply overflow-hidden rounded-2xl border border-slate-200 bg-white;
+    }
+
+    .proposal-table-simple {
+        @apply w-full border-collapse text-sm;
+    }
+
+    .proposal-table-simple thead th {
+        @apply border-b border-slate-100 bg-slate-50 px-4 py-3 text-left text-[11px] font-bold uppercase tracking-wide text-slate-500;
+    }
+
+    .proposal-table-simple tbody td {
+        @apply border-b border-slate-100 px-4 py-3 text-sm text-slate-700 last:border-b-0;
+    }
+
+    .proposal-empty-row {
+        @apply py-6 text-center text-sm italic text-slate-400;
+    }
+
+    .proposal-footer-simple {
+        @apply py-3 shrink-0;
+    }
+
+    .proposal-footer-sticky {
+        @apply shrink-0;
     }
 }

@@ -4,7 +4,8 @@
     <meta charset="utf-8">
     <title>@yield('title', 'IMPULSE GO')</title>
     <meta name="viewport" content="width=device-width, initial-scale=1">
-    
+    {{-- Logotipo public/img/logotipo.png --}}
+    <link rel="icon" href="{{ asset('img/logotipo.png') }}" type="image/png">
     @vite(['resources/css/app.css', 'resources/js/app.js'])
     @stack('head')
 </head>
