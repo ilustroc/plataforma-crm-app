@@ -149,9 +149,9 @@
                         <table class="proposal-table-simple">
                             <thead>
                                 <tr>
-                                    <th>#</th>
-                                    <th>Fecha</th>
-                                    <th class="text-right">Monto</th>
+                                    <th class="text-center">#</th>
+                                    <th class="text-center">Fecha</th>
+                                    <th class="text-center">Monto</th>
                                 </tr>
                             </thead>
                             <tbody id="tblCronoBody">

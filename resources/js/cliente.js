@@ -225,8 +225,8 @@ document.addEventListener('DOMContentLoaded', () => {
             html += `
                 <tr>
                     <td class="py-2 px-3 text-center border-b border-slate-100 text-slate-500">${i}</td>
-                    <td class="py-2 px-3 text-left border-b border-slate-100 text-slate-700">${dateFmt}</td>
-                    <td class="py-2 px-3 text-right border-b border-slate-100 font-mono font-medium">S/ ${monto.toFixed(2)}</td>
+                    <td class="py-2 px-3 text-center border-b border-slate-100 text-slate-700">${dateFmt}</td>
+                    <td class="py-2 px-3 text-center border-b border-slate-100 font-mono font-medium">S/ ${monto.toFixed(2)}</td>
                 </tr>
             `;
 
